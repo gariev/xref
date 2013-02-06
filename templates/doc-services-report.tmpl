@@ -1,0 +1,19 @@
+<html>
+<link type='text/css' rel='stylesheet' href='{$root}xref.css'>
+<body>
+
+<h1>{$title} {$s->name}</h1>
+
+{include file="include-files-list.tmpl"      title="Called from"     fileList=$s->calledFrom     }
+
+{if $phpMethod}
+    <h2>PHP code:</h2>
+    <ul>
+    <li><a href='{xref_report_link reportId=php-methods itemName=$s->phpMethodName root=$root}'>{$phpMethod->name}</a>
+    </ul>
+{/if}
+
+Back to <a href='{xref_report_link reportId=$reportId root=$root}'>{$reportName}</a>
+
+</body>
+</html>

@@ -1,0 +1,45 @@
+<html>
+<head><style>{$css}</style></head>
+<body>
+<h1>XRef lint - tool to find problems in PHP source code</h1>
+
+{if $hasSource}
+    {if $report}
+
+        {if count($report)}
+            <h2>Found defects:</h2>
+            <ul>
+            {foreach from=$report item="e"}
+            <li>
+                {xref_severity_str severity=$e->severity html=true}
+                {$e->message} ({$e->tokenText}) at
+                <a href="#{$e->lineNumber}">line {$e->lineNumber}</a>
+            </li>
+            {/foreach}
+            </ul>
+        {else}
+            <h2>No problems detected</h2>
+        {/if}
+
+        <pre>{$formattedText}</pre>
+
+    {else}
+
+        {if $exceptionMessage}
+            <h2>There was a problem with source code</h2>
+            <pre>{$exceptionMessage}</pre>
+        {else}
+            <h2>PHP code not found. Make sure you included opening tag &lt;?php</h2>
+        {/if}
+
+    {/if}
+
+{/if}
+
+<form method="POST"><textarea name="source" rows="20" cols="144" >
+{$textareaContent}
+</textarea><input type=submit>
+</form>
+
+</body></html>
+

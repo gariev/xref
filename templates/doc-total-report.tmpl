@@ -1,0 +1,14 @@
+
+<html>
+<link type='text/css' rel='stylesheet' href='{$root}xref.css' />
+<body>
+
+<h1>{$reportName} ({$names|@count})</h1>
+
+<ul>
+{foreach from=$names item="name"}
+    <li><a href='{xref_report_link reportId=$reportId itemName=$name root=$root}'>{if isset($objects)}{$objects.$name->name}{else}{$name}{/if}</a>
+{/foreach}
+</ul>
+
+</body></html>

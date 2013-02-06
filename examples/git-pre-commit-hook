@@ -1,0 +1,32 @@
+#!/bin/bash
+
+##
+## This is a sample git pre-commit hook to run 
+## XRef Lint for files to be committed.
+##
+## Copy/append this file to .git/hooks/pre-commit file
+##
+
+## for some reason git closes stdin for hooks, restore it back
+## TODO: check that we are running with terminal
+exec < /dev/tty
+
+## is XRef lint installed?
+which git-xref-lint 2>&1 >/dev/null
+RETVAL=$?
+
+if [ $RETVAL == 0 ]; then 
+	git xref-lint --cached --report=warnings
+	RETVAL=$?
+
+	if [ $RETVAL != 0 ]; then
+		echo "There are defects in files to be committed, if you want to proceed anyway, press Y"
+		read ANSWER
+		if [ "$ANSWER" != "Y" ]; then
+			exit 1
+		fi
+	fi
+else
+	echo "No XRef-lint found, skipping test"
+fi
+

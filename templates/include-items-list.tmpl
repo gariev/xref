@@ -1,0 +1,8 @@
+{if count($itemNames)}
+    <h2>{$title}</h2>
+    <ul>
+    {foreach from=$itemNames item="itemName"}
+        <li><a href='{xref_report_link reportId="$reportId" itemName=$itemName root=$root}'>{$itemName}</a>
+    {/foreach}
+    </ul>
+{/if}

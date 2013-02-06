@@ -1,0 +1,29 @@
+#!/bin/sh
+
+##
+## bin/xref-ci
+##
+## This is a wrapper shell script to run xref-ci from command line
+##
+## @author Igor Gariev <gariev@hotmail.com>
+## @copyright Copyright (c) 2013 Igor Gariev
+## @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
+##
+
+if [ "@php_dir@" == @"php_dir@" ]; then
+    SCRIPTDIR=$(dirname $0)/../bin-scripts
+else
+    SCRIPTDIR="@php_dir@/XRef/bin-scripts"
+fi
+
+if [ "@php_bin@" == @"php_bin@" ]; then
+    PHP=php
+else
+    PHP="@php_bin@"
+fi
+
+if [ "$XREF_MEMORY_LIMIT" == "" ]; then
+	XREF_MEMORY_LIMIT=1G
+fi
+
+$PHP -d memory_limit=$XREF_MEMORY_LIMIT $SCRIPTDIR/xref-ci.php $@

@@ -1,0 +1,8 @@
+{if count($fileList)}
+    <h2>{$title}</h2>
+    <ul>
+    {foreach from=$fileList item="filePos"}
+        <li><a href='{xref_report_link reportId="files" itemName=$filePos->fileName root=$root lineNumber=$filePos->lineNumber}'>{$filePos->fileName}:{$filePos->lineNumber}</a>
+    {/foreach}
+    </ul>
+{/if}

@@ -1,0 +1,13 @@
+<html>
+<link type='text/css' rel='stylesheet' href='{$root}xref.css'>
+<body>
+
+<h1>{$title} {$m->name}</h1>
+
+{include file="include-files-list.tmpl"     title="Defined At"      fileList=$m->definedAt  }
+{include file="include-files-list.tmpl"     title="Called from"     fileList=$m->calledFrom }
+
+Back to <a href='{xref_report_link reportId=$reportId root=$root}'>{$reportName}</a>
+
+</body>
+</html>

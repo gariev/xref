@@ -1,0 +1,19 @@
+<html><body>
+
+<form>
+<table>
+<tr><td>Revision #1</td><td><input type="text" name="rev1" value="{$rev1}"></td></tr>
+<tr><td>Revision #2</td><td><input type="text" name="rev2" value="{$rev2}"></td></tr>
+<tr><td colspan="2"><input type="submit" value="Compare"></td></tr>
+<tr><td colspan="2">Examples of accepted revisions: HEAD, HEAD@{10 days ago}, be310bdb067e6910, origin/master, origin/svn/tags/2012-06-25-A</td></tr>
+</table>
+</form>
+
+{if count($fileErrors)}
+    {include file="include-lint-errors-list.tmpl" fileList=$fileErrors revision=$rev2}
+{else}
+    <h2>No new errors</h2>
+{/if}
+
+</body></html>
+
