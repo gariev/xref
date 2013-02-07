@@ -397,6 +397,24 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 continue;
             }
 
+            // static function variables
+            //  function foo() {
+            //      static $foo;                // <-- well, strictly speaking this variable is not intilialized,
+            //      static $bar = 10, $baz;     //  but it's declared so let's hope that author knows what's going on
+            //  }
+            if ($t->kind == T_STATIC && $pf->getMethodAt($t->index)!=null) {
+                $list = $pf->extractList($t->nextNS(), ',', ';');
+                foreach ($list as $n) {
+                    if ($n->kind != T_VARIABLE) {
+                        throw new Exception("Invalid 'static' decalaraion found: $n");
+                    }
+                    $var = $this->getOrCreateVar($n);
+                    $var->status = self::VAR_ASSIGNED;
+                    $i = $n->index;
+                }
+                continue;
+            }
+
             // fucntions that return values into passed-by-reference-arguments
             //      preg_match, preg_match_all etc
             if ($t->kind == T_STRING && array_key_exists($t->text, self::$returnByArgumentsFunction)) {
