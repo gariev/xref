@@ -6,7 +6,7 @@
  * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  */
 
-$includeDir =  ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) : "@php_dir@/Xref";
+$includeDir =  ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) : "@php_dir@/XRef";
 require_once "$includeDir/lib/interfaces.php";
 require_once "$includeDir/lib/parsers.php";
 
@@ -54,9 +54,9 @@ class XRef {
     const WARNING   = 2;
     const ERROR     = 3;
     static $severityNames = array(
-        Xref::NOTICE    => "notice",
-        Xref::WARNING   => "warning",
-        Xref::ERROR     => "error",
+        XRef::NOTICE    => "notice",
+        XRef::WARNING   => "warning",
+        XRef::ERROR     => "error",
     );
 
     /** constructor */

@@ -72,7 +72,7 @@ class XRef_Doc_PropertiesPHP extends XRef_APlugin implements XRef_IDocumentation
             if ($t->kind==T_OBJECT_OPERATOR) {
                 $t = $t->nextNS();
                 $n = $t->nextNS();
-                if ($n->kind==Xref::T_ONE_CHAR && $n->text=='(') {
+                if ($n->kind==XRef::T_ONE_CHAR && $n->text=='(') {
                     // method call: $foo->bar()
                     continue;
                 }

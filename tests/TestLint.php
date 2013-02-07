@@ -1,6 +1,6 @@
 <?php
 
-$includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/Xref";
+$includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/XRef";
 require_once "$includeDir/XRef.class.php";
 
 // Can't use nowdocs before php 5.3.0, and heredocs strings are interpolated :(

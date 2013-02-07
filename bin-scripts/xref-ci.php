@@ -13,7 +13,7 @@
  */
 
 
-$includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/Xref";
+$includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/XRef";
 require_once "$includeDir/XRef.class.php";
 require_once "$includeDir/lib/ci-tools.php";
 
@@ -24,7 +24,7 @@ if (XRef::needHelp() || count($arguments)) {
 }
 
 $incremental= XRef::getConfigValue("ci.incremental", false);
-$xref       = new Xref();
+$xref       = new XRef();
 $xref->loadPluginGroup("lint");
 $scm        = $xref->getSourceCodeManager();
 $storage    = $xref->getStorageManager();

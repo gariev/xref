@@ -36,7 +36,7 @@ function XRef_createErrorsDigest($errorList) {
 }
 
 // returns list of errors found in file, either from
-// disk-cached file or from Xref parser/lint
+// disk-cached file or from XRef parser/lint
 function XRef_getErrorsList(XRef $xref, $file, $rev) {
     $content = $xref->getSourceCodeManager()->getFileContent($rev, $file);
 

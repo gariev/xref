@@ -113,7 +113,7 @@ CSS
             }
 
             $text = htmlspecialchars($token->text);
-            if ($token->kind == Xref::T_ONE_CHAR) {
+            if ($token->kind == XRef::T_ONE_CHAR) {
                 $ret .= $text;
             } else {
                 $span_class = array_key_exists($token->kind, XRef::$tokenNames)

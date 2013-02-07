@@ -34,7 +34,7 @@ Basic installation
 
     pear install ./XRef-x.x.x.tgz
 
-Alternatively, you can just unpack the archive and add Xref/bin directory to your executable path.
+Alternatively, you can just unpack the archive and add XRef/bin directory to your executable path.
 
 Any of the above will give you working command-line lint tool xref-lint (or xref-lint.bat on Windows platform).
 

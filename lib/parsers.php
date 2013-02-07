@@ -39,7 +39,7 @@ class XRef_Parser_PHP implements XRef_IFileParser {
             }
         } // foreach token
 
-        return new XRef_ParsedFile($tokens, $filename, Xref::FILETYPE_PHP);
+        return new XRef_ParsedFile($tokens, $filename, XRef::FILETYPE_PHP);
     }
 
     public function getSupportedFileExtensions() {
@@ -146,7 +146,7 @@ class XRef_Parser_AS3 extends XRef_Parser_PHP {
                 } elseif ($kind==T_STRING) {
                     switch ($text) {
                         case "package":
-                            $t[0] = Xref::T_PACKAGE;
+                            $t[0] = XRef::T_PACKAGE;
                             break;
                         case "import":
                             $t[0] = XRef::T_IMPORT;
@@ -181,7 +181,7 @@ class XRef_Parser_AS3 extends XRef_Parser_PHP {
             } // if token is (kind, text)
         } // foreach token
 
-        return new XRef_ParsedFile($tokens, $filename, Xref::FILETYPE_AS3);
+        return new XRef_ParsedFile($tokens, $filename, XRef::FILETYPE_AS3);
     }
 
     public function getSupportedFileExtensions() {
@@ -219,7 +219,7 @@ class XRef_ParsedFile implements XRef_IParsedFile {
         $index = 0;
         foreach ($tokens as $native_token) {
             if (is_string($native_token)) {
-                $kind = Xref::T_ONE_CHAR;
+                $kind = XRef::T_ONE_CHAR;
                 $text = $native_token;
             } else {
                 list($kind, $text) = $native_token;
@@ -245,7 +245,7 @@ class XRef_ParsedFile implements XRef_IParsedFile {
         }
 
         $this->packages =
-            $this->extractNamedStatements(Xref::T_PACKAGE);
+            $this->extractNamedStatements(XRef::T_PACKAGE);
     }
 
     public function getFileType() {
