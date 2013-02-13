@@ -50,10 +50,12 @@ class XRef {
     );
 
     // Enums: lint severity levels
+    const FATAL     = -1;   // e.g. can't parse file
     const NOTICE    = 1;
     const WARNING   = 2;
     const ERROR     = 3;
     static $severityNames = array(
+        XRef::FATAL     => "fatal",
         XRef::NOTICE    => "notice",
         XRef::WARNING   => "warning",
         XRef::ERROR     => "error",
@@ -629,6 +631,17 @@ class XRef {
     private static $needHelp;
     private static $verbose;
 
+    // optionsList: array of arrays (shortOpt, longOpt, usage, description)
+    private static $optionsList = array(
+        array('c:', 'config=',    '-c, --config=FILE',    'Path to config file'),
+        array('v',  'verbose',    '-v, --verbose',        'Be noisy'),
+        array('h',  'help',       '-h, --help',           'Print this help and exit'),
+    );
+
+    public static function registerCmdOption($shortName, $longName, $usage, $desc) {
+        self::$optionsList[] = array($shortName, $longName, $usage, $desc);
+    }
+
     /**
      * Parses command line-arguments and returns found options/arguments.
      * TODO: allow scripts to pass their own option specifications
@@ -644,11 +657,17 @@ class XRef {
             return array(array(), array());
         }
 
+        $shortOptionsList = array();    // array('h', 'v', 'c:')
+        $longOptionsList = array();     // array('help', 'verbose', 'config=')
+        foreach (self::$optionsList as $o) {
+            $shortOptionsList[] = $o[0];
+            $longOptionsList[] = $o[1];
+        }
+
         // TODO: write a better command-line parser
         require_once 'Console/Getopt.php';
-
         $getopt = new Console_Getopt();
-        $getoptResult = $getopt->getopt( $getopt->readPHPArgv(), "hvc:", array("help", "verbose", "config=") );
+        $getoptResult = $getopt->getopt( $getopt->readPHPArgv(), implode('', $shortOptionsList), $longOptionsList);
         if (PEAR::isError($getoptResult)) {
             throw new Exception('Error: ' . $getoptResult->getMessage());
         }
@@ -666,9 +685,11 @@ class XRef {
         }
 
         // force long option names
-        foreach (array('c' => 'config', 'h' => 'help', 'v' => 'verbose') as $short => $long) {
-            if (isset($options[$short])) {
-                $options[$long] = $options[$short];
+        foreach (self::$optionsList as $o) {
+            $s = preg_replace('/\W/', '', $o[0]); // remove ':' and '=' specificators
+            $l = preg_replace('/\W/', '', $o[1]);
+            if (isset($options[$s])) {
+                $options[$l] = $options[$s];
             }
         }
 
@@ -705,9 +726,10 @@ class XRef {
         echo "Usage:\n";
         echo "  $usageString\n";
         echo "Options:\n";
-        echo "  -c, --config=FILE   Path to config file\n";
-        echo "  -v, --verbose       Be noisy\n";
-        echo "  -h, --help          Print this help and exit\n";
+        foreach (self::$optionsList as $o) {
+            list($shortName, $longName, $usage, $desc) = $o;
+            echo sprintf("  %-20s %s\n", $usage, $desc);
+        }
         echo "Config file:\n";
         echo "  $configFile\n";
         echo "See also: $pathToReadMe\n";
@@ -722,6 +744,10 @@ class XRef {
             self::$verbose = isset($options['verbose']) && $options['verbose'];
         }
         return self::$verbose;
+    }
+
+    public static function setVerbose($verbose) {
+        self::$verbose = $verbose;
     }
 
     /*----------------------------------------------------------------

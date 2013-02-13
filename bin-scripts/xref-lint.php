@@ -15,6 +15,7 @@ $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@ph
 require_once("$includeDir/XRef.class.php");
 
 // command-line arguments
+XRef::registerCmdOption('o:', "output=", '-o, --output=TYPE', "either 'text' (default) or 'json'");
 list ($options, $arguments) = XRef::getCmdOptions();
 if (XRef::needHelp()) {
     XRef::showHelpScreen(
@@ -24,6 +25,9 @@ if (XRef::needHelp()) {
     exit(1);
 }
 
+//
+// report-level:  errors, warnings or notices
+//
 $reportLevel = XRef::NOTICE;
 $r = XRef::getConfigValue("lint.report-level", "notice");
 if ($r == "errors" || $r == "error") {
@@ -36,6 +40,20 @@ if ($r == "errors" || $r == "error") {
     die("unknown error reporting level: $r");
 }
 
+//
+// output-format: text or json
+//
+$outputFormat = 'text';
+if (isset($options['output'])) {
+    $outputFormat = $options['output'];
+}
+if ($outputFormat != 'text' && $outputFormat != 'json') {
+    die("unknown output format: $outputFormat");
+}
+
+//
+// color: on/off/auto, for text output to console only
+//
 $color = XRef::getConfigValue("lint.color", '');
 if ($color=="auto") {
     $color = function_exists('posix_isatty') && posix_isatty(STDOUT);
@@ -63,6 +81,8 @@ $numberOfNotices    = 0;
 $numberOfWarnings   = 0;
 $numberOfErrors     = 0;
 
+$jsonOutput = array();
+
 // main loop over all files
 foreach ($xref->getFiles() as $filename => $ext) {
     try {
@@ -84,22 +104,46 @@ foreach ($xref->getFiles() as $filename => $ext) {
         }
 
         if (count($report)) {
-            echo("File: $filename\n");
-            foreach ($report as $r) {
-                $lineNumber     = $r->lineNumber;
-                $tokenText      = $r->tokenText;
-                $severityStr    = XRef::$severityNames[ $r->severity ];
-                $line = sprintf("    line %4d: %-8s: %s (%s)", $lineNumber, $severityStr, $r->message, $tokenText);
-                if ($color) {
-                    $line = $colorMap{$severityStr} . $line . $colorMap{"_off"};
+            if ($outputFormat=='text') {
+                echo("File: $filename\n");
+                foreach ($report as $r) {
+                    $lineNumber     = $r->lineNumber;
+                    $tokenText      = $r->tokenText;
+                    $severityStr    = XRef::$severityNames[ $r->severity ];
+                    $line = sprintf("    line %4d: %-8s: %s (%s)", $lineNumber, $severityStr, $r->message, $tokenText);
+                    if ($color) {
+                        $line = $colorMap{$severityStr} . $line . $colorMap{"_off"};
+                    }
+                    echo($line . "\n");
                 }
-                echo($line . "\n");
+            } else {
+                foreach ($report as $r) {
+                    $lineNumber     = $r->lineNumber;
+                    $tokenText      = $r->tokenText;
+                    $severityStr    = XRef::$severityNames[ $r->severity ];
+                    $jsonOutput[] = array(
+                        'fileName'      => $filename,
+                        'lineNumber'    => $r->lineNumber,
+                        'tokenText'     => $r->tokenText,
+                        'severityStr'   => $severityStr,
+                        'message'       => $r->message,
+                    );
+                }
             }
         }
 
         $pf->release();
     } catch (Exception $e) {
-        echo "Can't parse file '$filename':" . $e->getMessage() . "\n";
+        if ($outputFormat=='text') {
+            echo "Can't parse file '$filename':" . $e->getMessage() . "\n";
+        } else {
+            $jsonOutput[] = array(
+                'fileName'      => $filename,
+                'lineNumber'    => 1,
+                'severityStr'   => XRef::FATAL,
+                'message'       => $e->getMessage(),
+            );
+        }
     }
 }
 
@@ -110,6 +154,10 @@ if (XRef::verbose()) {
     echo("Errors:               $numberOfErrors\n");
     echo("Warnings:             $numberOfWarnings\n");
     echo("Notices:              $numberOfNotices\n");
+}
+
+if ($outputFormat=='json') {
+    echo json_encode($jsonOutput); // JSON_PRETTY_PRINT is not available before php 5.4 :(
 }
 
 if ($numberOfErrors+$numberOfWarnings > 0) {
