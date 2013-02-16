@@ -25,8 +25,11 @@ $textareaContent = '// put source code here';
 $report = null;
 $exceptionMessage = null;
 $formattedText = null;
+$checkGlobalScope = XRef::getConfigValue("lint.check-global-scope", false);
 
 if (isset($_REQUEST["source"])) {
+    $checkGlobalScope = isset($_REQUEST["check-global-scope"]) && $_REQUEST["check-global-scope"];
+    XRef::setConfigValue("lint.check-global-scope", $checkGlobalScope);
     try {
         $parsedFile = $xref->getParsedFile("unknown.php", "php", $_REQUEST["source"]);
         if (count($parsedFile->getTokens()) > 1) {
@@ -48,6 +51,7 @@ echo $xref->fillTemplate('lint-web.tmpl', array(
     'exceptionMessage'  => $exceptionMessage,
     'report'            => $report,
     'css'               => $css,
+    'checkGlobalScope'  => $checkGlobalScope,
 ));
 // vim: tabstop=4 expandtab
 

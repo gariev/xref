@@ -117,8 +117,6 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         //end of generated code
     );
 
-    protected $checkGlobalScope = false;
-
     public function __construct() {
         // super global variables
         $superGlobals = array(
@@ -142,9 +140,6 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             $function_name = array_shift($params);
             self::$returnByArgumentsFunction[$function_name] = $params;
         }
-
-        // to check or not to check variables in the global scope
-        $this->checkGlobalScope = XRef::getConfigValue("lint.check-global-scope", true);
     }
 
 
@@ -237,6 +232,10 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         $this->report = array();
         $dropScopeAt = -1;  // index of the token where current scope ends
         $this->addScope(-1);
+
+        // to check or not to check variables in the global scope
+        // variables in local scope (inside functions) will always be checked
+        $checkGlobalScope = XRef::getConfigValue("lint.check-global-scope", true);
 
         //
         // Part 1.
@@ -537,7 +536,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
 
                 // skip varibales in the global scope, because it's often polluted by vars
                 // included from inlcuded/required files
-                if ($this->checkGlobalScope==false && count($this->stackOfScopes)==1) {
+                if ($checkGlobalScope==false && count($this->stackOfScopes)==1) {
                     $skipVariable = true;
                 }
 

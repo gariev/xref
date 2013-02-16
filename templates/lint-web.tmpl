@@ -38,7 +38,12 @@
 
 <form method="POST"><textarea name="source" rows="20" cols="144" >
 {$textareaContent}
-</textarea><input type=submit>
+</textarea>
+<br>
+<label for="lint.check-global-scope"><abbr title="This setting highly depends on kind of your PHP project. If you heavily use variables defined in included files, deselect this option. If you are not using global vars except PHP globals/superglobals, check it.">Check variables defined in global scope</abbr></label>
+<input type="checkbox" id="check-global-scope" name="check-global-scope" {if $checkGlobalScope}checked{/if}>
+<br>
+<input type=submit>
 </form>
 
 </body></html>

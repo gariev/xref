@@ -87,6 +87,8 @@ class XRef_Doc_SourceFileDisplay extends XRef_APlugin implements XRef_IDocumenta
                 .error      {color: red; }
                 .warning    {color: orange; }
                 .notice     {color: black; }
+
+                abbr        {border-bottom-style: dashed; border-bottom-width: 1px; border-bottom-color: blue; }
 CSS
     ; }
 

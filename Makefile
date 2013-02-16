@@ -5,6 +5,9 @@ all:
 	@echo " clean"
 
 test:
+	## self-test:
+	bin/xref-lint
+	## unittests
 	phpunit tests/*
 
 package: clean package.xml
