@@ -32,9 +32,12 @@ INSTALLATION
 Basic installation
 ------------------
 
-    pear install ./XRef-x.x.x.tgz
+    curl -o XRef-stable.tgz https://xref-lint.net/releases/XRef-stable.tgz
+    pear install ./XRef-stable.tgz
 
-Alternatively, you can just unpack the archive and add XRef/bin directory to your executable path.
+Alternatively, you can get the source code and add its 'bin' directory to your executable path:
+    git clone git@github.com:gariev/xref.git
+    export PATH=$PATH:xref/bin
 
 Any of the above will give you working command-line lint tool xref-lint (or xref-lint.bat on Windows platform).
 
