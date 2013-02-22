@@ -434,8 +434,25 @@ class XRef {
         return $link;
     }
 
-    // input: $pf IParsedFile object
-    // output: array of XRef_CodeDefect objects
+    /**
+     * Affects what kind of defects the lint plugins will report.
+     *
+     * @param int $reportLevel - one of constants XRef::NOTICE, XRef::WARNING or XRef::ERROR
+     * @return void
+     */
+    public function setLintReportLevel($reportLevel) {
+        $plugins = $this->getPlugins("XRef_ILintPlugin");
+        foreach ($plugins as $pluginId => $plugin) {
+            $plugin->setReportLevel($reportLevel);
+        }
+    }
+
+    /**
+     * Runs all registered lint plugins for the given parsed file.
+     *
+     * @param XRef_IParsedFile $pf - parsed file object
+     * @return array of XRef_CodeDefect objects
+     */
     public function getLintReport(XRef_IParsedFile $pf) {
         $report = array();
 

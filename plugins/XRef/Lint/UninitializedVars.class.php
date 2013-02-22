@@ -5,6 +5,30 @@
 * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
 */
 
+
+//
+// Strict vs. relaxed mode:
+//  <?php
+//      include "foo.php";          // relaxed mode - no one knows what's inside foo.php
+//      if (isset($x)) ...          // ok, we know now that there may be variable named $x
+//      function bar($a, $b) {      // strict mode - new scope
+//          if (isset($y)) ...;     // error - there's no way $y can be here
+//          extract($a);            // relaxed mode from here till end of the scope
+//          $$b = 1;                // also turn relaxed mode
+//          if (empty($z))          // ok, we are in relaxed mode
+//      }
+//
+//  In short:
+//      - Global scope starts in relaxed mode, functions scope starts with strict.
+//      - Use of extract() or $$var or include/require triggers relaxed mode.
+//      - Use of isset($unknown_var) or empty($unknown_var) is error in strict mode
+//        and "declaration" of $unknown_var in relaxed mode.
+//
+//      - TODO: make any conditional expression with a variable "declare" this
+//        variable in relaxed mode (?), like
+//          if (trim($unknownVar) != '') // now $unknownVar is known in this scope
+//
+
 class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlugin {
     protected $reportId             = "lint-uninitialized-vars";
     protected $reportName           = "Lint (use of uninitialized vars)";
@@ -122,6 +146,8 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         $superGlobals = array(
             '$GLOBALS', '$_REQUEST', '$_GET', '$_POST',
             '$_FILES', '$_ENV', '$_SERVER', '$_COOKIE', '$_SESSION',
+            '$HTTP_RAW_POST_DATA',
+            '$http_response_header', '$php_errormsg',
             // let's pretend here that $this is always defined,
             // the other lint plugin checks context of $this usage
             '$this',
@@ -129,7 +155,10 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         self::$knownSuperglobals = array_fill_keys($superGlobals, true);
 
         // global variables
-        $globals = array_merge( array('$argv', '$argc'), XRef::getConfigValue("lint.globals-vars", array()) );
+        $globals = array_merge(
+            array('$argv', '$argc'),
+            XRef::getConfigValue("lint.globals-vars", array())
+        );
         self::$knownGlobals  = array_fill_keys($globals, true);
 
         // functions that can assign value to variables passed by reference
@@ -142,7 +171,6 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         }
     }
 
-
     public function getName() {
         return $this->reportName;
     }
@@ -153,6 +181,9 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
     const VAR_ASSIGNED = 1;
     const VAR_USED = 2;
     const VAR_UNKNOWN = 0;
+
+    const MODE_STRICT = 1;
+    const MODE_RELAXED = 2;
 
     protected $reportLevel = XRef::WARNING;
     public function setReportLevel($reportLevel) {
@@ -174,11 +205,11 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
     //                                  // nested functions ...
     protected $stackOfScopes = array(); // array of stdObjects
 
-    protected function addScope($prevScope, $isInstanceMethod=false) {
+    protected function addScope($prevScope, $mode) {
         $this->stackOfScopes[] = (object) array(
-            "vars"              => array(),
-            "prevScope"         => $prevScope,
-            "isInstanceMethod"  => $isInstanceMethod,
+            "vars"      => array(),
+            "prevScope" => $prevScope,
+            "mode"      => $mode,
         );
     }
     protected function getCurrentScope() {
@@ -231,38 +262,101 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         $this->stackOfScopes = array();
         $this->report = array();
         $dropScopeAt = -1;  // index of the token where current scope ends
-        $this->addScope(-1);
+        $this->addScope(-1, self::MODE_RELAXED);
 
         // to check or not to check variables in the global scope
         // variables in local scope (inside functions) will always be checked
         $checkGlobalScope = XRef::getConfigValue("lint.check-global-scope", true);
 
-        //
-        // Part 1.
-        //
-        // variables that are being assigned a value:
-        //  1. direct assignement: $foo = expr
-        //  2. loop var:    foreach (array() as $foo)
-        //  3. parameter of a function:  function bar($foo)
-        //  4. catch(Exception $err)
-        //  5. Array autovivification: $foo['index']
-        //  6. Scalar autovivification: $count++
-        //  7. superglobals
-        //  8. list($foo) = array();
-        //  9. globals: global $foo;
-        // 10. functions that modify arguments:
-        //      int preg_match ( string $pattern , string $subject [, array &$matches ...])
-        $tokens = $pf->getTokens();
+        $switch_to_relaxed_scope_at = -1;   // token position, after which there is relaxed mode
+        $token_caused_mode_switch = null;   // token that caused the switch, e.g. "extract"
 
+        $tokens = $pf->getTokens();
         // hate PHP 5.2: no loop labels allowed
         // TOKEN:
         for ($i=0; $i<count($tokens); ++$i) {
             $t = $tokens[$i];
 
+            //
+            // Switch from strict mode to relaxed?
+            //
+            // use of extract() or $$foo notation
+            // trick is: the mode should be switched AFTER the statement, e.g.
+            //  function foo() { extract($foo); echo $bar; }
+            // $foo must be declared (still in strict scope); $bar - not (in relaxed mode)
+
+            // use of extract()
+            if ($t->kind == T_STRING && $t->text == 'extract') {
+                $n = $t->nextNS(); // next non-space token
+                if ($n->text == '(') {
+                    $token_caused_mode_switch = $t;
+                    $switch_to_relaxed_scope_at = $pf->getIndexOfPairedBracket( $n->index );
+                    continue;
+                }
+            }
+            // $$var notation in assignement.
+            // Non-assignement (read) operations doesn't cause mode switch
+            //      $$foo =
+            //      $$bar["baz"] =
+            // TODO: other forms of assignement? $$foo++; ?
+            if ($t->text == '$') {
+                $n = $t->nextNS(); // next non-space token
+                if ($n->kind==T_VARIABLE) {
+                    $nn = $n->nextNS();
+                    while ($nn->text == '[') {
+                        // quick forward to closing ']'
+                        $nn = $pf->getTokenAt( $pf->getIndexOfPairedBracket($nn->index) );
+                    }
+                    if ($nn->text == '=') {
+                        $token_caused_mode_switch = $n;
+                        $s = self::skipTillText($n, ';');           // find the end of the statement
+                        $switch_to_relaxed_scope_at = $s->index;    // and switch to relaxed mode from there
+                    }
+                }
+            }
+            // include/require statements
+            // if you use them inside functions, well, it's impossible to make any assertions about your code.
+            if ($t->kind==T_INCLUDE || $t->kind==T_REQUIRE || $t->kind==T_INCLUDE_ONCE || $t->kind==T_REQUIRE_ONCE) {
+                $s = self::skipTillText($t, ';');               // find the end of the statement
+                if ($s) {
+                    $token_caused_mode_switch = $t;
+                    $switch_to_relaxed_scope_at = $s->index;    // and switch to relaxed mode from there
+                }
+            }
+            // switch the mode, actually
+            if (isset($token_caused_mode_switch) && $i >= $switch_to_relaxed_scope_at) {
+                $scope = $this->getCurrentScope();
+                if ($scope->mode != self::MODE_RELAXED) {
+                    $scope->mode = self::MODE_RELAXED;
+                    $this->addDefect($token_caused_mode_switch, XRef::NOTICE, "Can't reliable detect var usage from here");
+                }
+                $switch_to_relaxed_scope_at = -1;
+                unset($token_caused_mode_switch);
+            }
+
+            //
+            // Part 1.
+            //
+            // Find "declared" or "known" variables.
+            // Variable is "known" in following cases:
+            //  1. value is assigned to the variable: $foo = expr
+            //  2. loop var:    foreach (array() as $foo)
+            //  3. parameter of a function:  function bar($foo)
+            //  4. catch(Exception $err)
+            //  5. Array autovivification: $foo['index']
+            //  6. Scalar autovivification: $count++, $text .=
+            //  7. superglobals
+            //  8. list($foo) = array();
+            //  9. globals: global $foo;
+            // 10. functions that modify arguments:
+            //      int preg_match ( string $pattern , string $subject [, array &$matches ...])
+            // 11. test for existence of var in "relaxed" mode: isset($foo), empty($bar)
+
             // $foo =
             // $foo[...] =
             // $foo[...][...] =
             // $foo++
+            // $foo .=
             // exclude class variables: public $foo = 1;
             // special case: allow declarations of variables with undefined value: $foo;
             if ($t->kind==T_VARIABLE) {
@@ -302,7 +396,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                     continue;
                 }
 
-                if ($n->kind==T_INC || $n->kind==T_DEC || $p->kind==T_INC || $p->kind==T_DEC) {
+                if ($n->kind==T_INC || $n->kind==T_DEC || $p->kind==T_INC || $p->kind==T_DEC || $n->kind==T_CONCAT_EQUAL) {
                     if (!$this->checkVar($t)) {
                         if ($isArray) {
                             // $foo["bar"]++
@@ -310,6 +404,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                             $this->addDefect($t, XRef::WARNING, "Array autovivification");
                         } else {
                             // $foo++
+                            // $text .=
                             $this->addDefect($t, XRef::WARNING, "Scalar autovivification");
                         }
 
@@ -344,8 +439,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 $var->status = self::VAR_ASSIGNED;
 
                 $n = $nn->nextNS();
-                // what is the name of "=>" token?
-                if ($n->text == "=>") {
+                if ($n->kind == T_DOUBLE_ARROW) {
                     $nn = $n->nextNS();
                     if ($nn->text == '&') {
                         $nn = $nn->nextNS();
@@ -370,13 +464,8 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             // function asdf(&$foo)
             // here a new scope frame is created
             if ($t->kind==T_FUNCTION) {
-                $isInsideInsanseMethod = ($pf->getClassAt($t->index)!=null && $t->prevNS()->kind != T_STATIC);
-                $this->addScope($dropScopeAt, $isInsideInsanseMethod);
-                $n = $t->nextNS();
-                while ($n->text != "(") {
-                    $n = $n->nextNS();
-                }
-
+                $this->addScope($dropScopeAt, self::MODE_STRICT);
+                $n = self::skipTillText($t->nextNS(), '(');
                 $closingBraketIndex = $pf->getIndexOfPairedBracket($n->index);
                 while ($n->index != $closingBraketIndex) {
                     $n = $n->nextNS();
@@ -401,12 +490,19 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             }
             if ($i==$dropScopeAt) {
                 $currentScope = $this->removeScope();
+                $dropScopeAt = $currentScope->prevScope;
+
+                //
+                // the notice below is unreliable:
+                //  if a variable is inside loop, it can be used on next iterations of the loop
+                // another TODO: report about vars ouside of loops only
+                /*
                 foreach ($currentScope->vars as $varName => $var) {
                     if ($var->status != self::VAR_USED && !$var->isRefParam && !$var->isCatchVar && !in_array($varName, self::$knownSuperglobals) && !$var->isGlobal) {
                         $this->addDefect($var->token, XRef::NOTICE, "Value of variable is not used");
                     }
                 }
-                $dropScopeAt = $currentScope->prevScope;
+                */
             }
 
             // catch (Exception $foo)
@@ -454,19 +550,39 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 continue;
             }
 
-            // globals
+            // globals:
+            //      global $foo;     // makes the variable $foo known
+            //      global $$bar;    // uh-oh, the var $bar must be known and relaxed mode afterwards
+            //
             // TODO: check that the variable does exist at global level
             // TODO: link this var to the var at global level
             if ($t->kind == T_GLOBAL) {
                 $n = $t->nextNS();
                 while (true) {
-                    if (!$n->kind==T_VARIABLE) {
+                    if ($n->kind==T_VARIABLE) {
+                        $var = $this->getOrCreateVar($n);
+                        $var->isGlobal = true;
+                        $var->status = self::VAR_ASSIGNED;
+                        $n = $n->nextNS();
+                    } elseif ($n->text=='$') {
+                        $n = $n->nextNS();
+                        if ($n->kind==T_VARIABLE) {
+                            // check that this var is declared
+                            if (!$this->checkVar($n)) {
+                                $this->addDefect($n, XRef::ERROR, "Use of non-defined variable");
+                            }
+                            // turn the relaxed mode on starting from the next statement
+                            $s = self::skipTillText($n, ';');
+                            $token_caused_mode_switch = $n;
+                            $switch_to_relaxed_scope_at = $s->index;
+                        } else {
+                            throw new Exception("Invalid 'global' decalaraion found: $nn");
+                        }
+                        $n = $n->nextNS();
+                    } else {
                         throw new Exception("Invalid 'global' decalaraion found: $n");
                     }
-                    $var = $this->getOrCreateVar($n);
-                    $var->isGlobal = true;
-                    $var->status = self::VAR_ASSIGNED;
-                    $n = $n->nextNS();
+
                     if ($n->text==',') {
                         $n = $n->nextNS();
                         continue; // next variable in list
@@ -498,7 +614,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 continue;
             }
 
-            // fucntions that return values into passed-by-reference-arguments
+            // functions that return values into passed-by-reference-arguments
             //      preg_match, preg_match_all etc
             if ($t->kind == T_STRING && array_key_exists($t->text, self::$returnByArgumentsFunction)) {
                 $n = $t->nextNS();
@@ -515,6 +631,34 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                             }
                             $var = $this->getOrCreateVar($n);
                             $var->status = self::VAR_ASSIGNED;
+                        }
+                    }
+                }
+            }
+
+            // test for variable in relaxed mode only:
+            //      if (isset($variable)) ...   // this makes $variable "known" in relaxed mode
+            //      if (!empty($variable)) ...
+            // No expressions as function argument:
+            //      isset( $foo["bar"] ); // doesn't make $foo "declared", it must exist or this is an error
+            if ($t->kind==T_ISSET || $t->kind==T_EMPTY) {
+                $n = $t->nextNS();
+                if ($n && $n->text=='(') {
+                    $nn = $n->nextNS();
+                    if ($nn && $nn->kind==T_VARIABLE) {
+                        $nnn = $nn->nextNS();
+                        if ($nnn && $nnn->text==')') {
+                            // ok, this is a simple expression with a variable inside function call
+                            $scope = $this->getCurrentScope();
+                            if ($scope->mode==self::MODE_RELAXED) {
+                                // mark this variable as "known" in relaxed mode
+                                $var = $this->getOrCreateVar($nn);
+                                $var->status = self::VAR_ASSIGNED;
+                            } else {
+                                // skip till the end of statement in strict mode
+                                $i = $nnn->index;
+                                continue;
+                            }
                         }
                     }
                 }
@@ -541,7 +685,12 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 }
 
                 if (!$skipVariable && !$this->checkVar($t)) {
-                    $this->addDefect($t, XRef::ERROR, "Use of non-defined variable");
+                    $scope = $this->getCurrentScope();
+                    if ($scope->mode == self::MODE_STRICT) {
+                        $this->addDefect($t, XRef::ERROR, "Use of non-defined variable");
+                    } else {
+                        $this->addDefect($t, XRef::WARNING, "Possible use of non-defined variable");
+                    }
                     $var = $this->getOrCreateVar($t);
                     $var->status = self::VAR_USED; // mark it as used to report every var only once
                 }
@@ -561,6 +710,21 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
 
         return $this->report;
     }
+
+    // input: start token, text value
+    // output: first token that follows the start token and equals to the given text
+    // Helpful to find end-of-the statement (terminated by ';') of the start token
+    private static function skipTillText($token, $text) {
+        while ($token) {
+            if ($token->text == $text) {
+                return $token;
+            }
+            $token = $token->nextNS();
+        }
+        return null;
+    }
+
+
 }
 
 // vim: tabstop=4 expandtab

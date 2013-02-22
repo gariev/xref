@@ -15,7 +15,8 @@ $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@ph
 require_once("$includeDir/XRef.class.php");
 
 // command-line arguments
-XRef::registerCmdOption('o:', "output=", '-o, --output=TYPE', "either 'text' (default) or 'json'");
+XRef::registerCmdOption('o:', "output=",        '-o, --output=TYPE',    "either 'text' (default) or 'json'");
+XRef::registerCmdOption('r:', "report-level=",  '-r, --report-level=',  "either 'error', 'warning' or 'notice'");
 list ($options, $arguments) = XRef::getCmdOptions();
 if (XRef::needHelp()) {
     XRef::showHelpScreen(
@@ -28,16 +29,22 @@ if (XRef::needHelp()) {
 //
 // report-level:  errors, warnings or notices
 //
-$reportLevel = XRef::NOTICE;
-$r = XRef::getConfigValue("lint.report-level", "notice");
+$reportLevel = XRef::WARNING;
+if (isset($options['reportlevel'])) {
+    $r = $options['reportlevel'];
+} else {
+    $r = XRef::getConfigValue("lint.report-level", "warning");
+}
 if ($r == "errors" || $r == "error") {
     $reportLevel = XRef::ERROR;
 } elseif ($r == "warnings" || $r == "warning") {
     $reportLevel = XRef::WARNING;
-} elseif ($r == "notice") {
+} elseif ($r == "notice" || $r == "notices") {
     $reportLevel = XRef::NOTICE;
+} elseif (is_numeric($r)) {
+    $reportLevel = (int) $r;
 } else {
-    die("unknown error reporting level: $r");
+    throw new Exception("unknown value for config var 'lint.report-level': $r");
 }
 
 //
@@ -67,6 +74,7 @@ $colorMap = array(
 
 $xref = new XRef();
 $xref->loadPluginGroup("lint");
+$xref->setLintReportLevel($reportLevel);
 if (count($arguments)) {
     foreach ($arguments as $path) {
         $xref->addPath($path);

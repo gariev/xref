@@ -427,9 +427,16 @@ class XRef_ParsedFile implements XRef_IParsedFile {
             $result[] = $t;
             while ($t->text != $separatorString && $t->text != $terminatorString) {
                 // advance to the next separator,
-                // and fast forward to matching ")", if needed
                 if ($t->text == '(') {
+                    // fast forward to matching ")", if needed
                     $t = $this->getTokenAt( $this->getIndexOfPairedBracket( $t->index ) );
+                }
+                if ($t->text=='"') {
+                    // trick: strings with variables in them are several tokens, scan till the end of the string
+                    $t = $t->nextNS();
+                    while ($t->text != '"') {
+                        $t = $t->nextNS();
+                    }
                 }
                 $t = $t->nextNS();
             }
@@ -457,7 +464,11 @@ class XRef_ParsedFile implements XRef_IParsedFile {
     }
 
     public function getIndexOfPairedBracket($index) {
-        return $this->pairedBrackets[$index];
+        if (isset($this->pairedBrackets[$index])) {
+            return $this->pairedBrackets[$index];
+        } else {
+            throw new Exception("No matching bracket for index $index");
+        }
     }
 }
 
