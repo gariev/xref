@@ -48,13 +48,14 @@ function XRef_getErrorsList(XRef $xref, $file, $rev) {
     $storage = $xref->getStorageManager();
     $sha1sum = sha1($content);
     $data = $storage->restoreData("lint", $sha1sum);
-    if (isset($data)) {
+    $xrefVersion = XRef::version();
+    if (isset($data) && isset($data["xrefVersion"]) && $data["xrefVersion"]==$xrefVersion) {
         return $data["errors"];
     } else {
         $parsedFile = $xref->getParsedFile($file, "php", $content);
         $errors = $xref->getLintReport($parsedFile);
         $parsedFile->release();
-        $data = array("errors" => $errors, "file" => $file, "rev" => $rev);
+        $data = array("errors" => $errors, "file" => $file, "rev" => $rev, "xrefVersion" => $xrefVersion);
         $storage->saveData("lint", $sha1sum, $data);
         return $errors;
     }
