@@ -8,7 +8,7 @@ test:
 	## self-test:
 	bin/xref-lint
 	## unittests
-	phpunit tests/*
+	phpunit tests
 
 package: clean package.xml
 	dos2unix bin/*

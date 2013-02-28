@@ -9,3 +9,9 @@ Version 0.1.3
 - lint: json output
 - web-tools: fix for servers with "magic_quotes" turned on
 - lint: "static" variables declarations inside function makes them declared
+
+
+Version 0.1.4
+==============
+- lint: better support for functions that take variables by reference and initialize them
+

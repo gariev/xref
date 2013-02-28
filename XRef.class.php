@@ -67,7 +67,7 @@ class XRef {
     }
 
     public static function version() {
-        return "0.1.3";
+        return "0.1.4";
     }
 
     /*----------------------------------------------------------------
@@ -594,7 +594,7 @@ class XRef {
                 'XRef_Lint_StaticThis',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
             ),
-            'lint.check-global-scope' => false, // TODO: which value is better by default?
+            'lint.check-global-scope' => true,
             'ci.source-code-manager'  => 'XRef_SourceCodeManager_Git',
 
         );
