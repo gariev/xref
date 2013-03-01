@@ -19,6 +19,9 @@ class XRef_Parser_PHP implements XRef_IFileParser {
         // especially namespace foo\bar;
         $tokens = @token_get_all($file_content);
 
+        // compat mode: parse PHP 5.3+ code in old PHP 5.2 rte :(
+        $namespace_compat_mode = false;
+
         foreach ($tokens as &$t) {
             if (!is_string($t)) {
                 list ($kind, $text) = $t;
@@ -33,11 +36,60 @@ class XRef_Parser_PHP implements XRef_IFileParser {
                         case "FALSE":
                             $t[0] = XRef::T_FALSE;
                             break;
+                        case "USE":
+                            // compat mode: in PHP 5.3 rte use is reserved word and should be T_USE, not T_STRING
+                            $t[0] = T_USE;
+                            break;
+                        case "NAMESPACE":
+                            // compat mode: we'll need a second pass to insert missed namespace separators
+                            $t[0] = T_NAMESPACE;
+                            $namespace_compat_mode = true;
+                            break;
                         default:
                     }
                 }
             }
         } // foreach token
+
+        // without this unset(), in PHP 5.2, $t would still reference the last element of $tokens array,
+        // which will be overwriteen by the next loop
+        unset($t);
+
+        if ($namespace_compat_mode) {
+            // special pass to insert "\" namespace separator dropped by PHP 5.2 executable
+            // e.g. in "namespace foo\bar";
+            $tmp_array = array();
+            $is_inside_namespace_decl = false;
+            $is_before_first_ns_element = true;
+
+            foreach ($tokens as $t) {
+                if ($is_inside_namespace_decl) {
+                    if (!is_string($t)) {
+                        list ($kind, $text) = $t;
+                        if ($kind==T_STRING) {
+                            if ($is_before_first_ns_element) {
+                                $is_before_first_ns_element = false;
+                            } else {
+                                $tmp_array[] = array(T_NS_SEPARATOR, '\\');
+                            }
+                        }
+                    } elseif ($t==';') {
+                        $is_inside_namespace_decl = false;
+                    }
+                } else {
+                    if (!is_string($t)) {
+                        list ($kind, $text) = $t;
+                        if ($kind==T_NAMESPACE) {
+                            $is_inside_namespace_decl = true;
+                            $is_before_first_ns_element = true;
+                        }
+                    }
+                }
+                $tmp_array[] = $t;
+            }
+
+            $tokens = $tmp_array;
+        }
 
         return new XRef_ParsedFile($tokens, $filename, XRef::FILETYPE_PHP);
     }

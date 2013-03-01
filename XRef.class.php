@@ -35,6 +35,16 @@ class XRef {
     const T_FALSE       = 65010;
     const T_REGEXP      = 65011; // regexp literal for AS3
 
+    // compat mode
+    // it's possible to some extend parse PHP 5.3+ code in PHP 5.2 runtime
+    // however, have to define missing constants
+    static $compatMode = false;
+    static $compatConstants = array(
+        "T_NAMESPACE"       => 65100,
+        "T_NS_SEPARATOR"    => 65101,
+        "T_USE"             => 65102,
+    );
+
     static $tokenNames = array(
         XRef::T_PACKAGE     => "T_PACKAGE",
         XRef::T_NULL        => "T_NULL",
@@ -64,6 +74,15 @@ class XRef {
     /** constructor */
     public function __construct() {
         spl_autoload_register(array($this, "autoload"), true);
+
+        // compat mode
+        foreach (self::$compatConstants as $name => $value) {
+            if (!defined($name)) {
+                define($name, $value);
+                self::$tokenNames[$value] = $name;
+                self::$compatMode = true;
+            }
+        }
     }
 
     public static function version() {
