@@ -198,6 +198,23 @@ class UndefinedVarsLintTest extends BaseLintTest {
         $this->checkPhpCode($testPhpCode, $expectedDefects);
      }
 
+    public function testNestedFunctions() {
+        $testPhpCode = '
+        <?php
+            function foo($x) {
+                $y = 10;
+                $f = function ($z) use ($x, $y) {
+                    return $z * ($x + $y);
+                    echo $i;
+                };
+            }
+        ';
+        $expectedDefects = array(
+            array('$i', 7,  XRef::ERROR),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+
+    }
 
 }
 

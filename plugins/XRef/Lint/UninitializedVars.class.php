@@ -390,25 +390,78 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             }
 
             // function &asdf($foo, $bar = array())
-            // function asdf(&$foo)
+            // function asdf(&$foo);
+            // function ($x) use ($y) ...
             // here a new scope frame is created
             if ($t->kind==T_FUNCTION) {
                 $this->addScope($dropScopeAt, self::MODE_STRICT);
-                $n = self::skipTillText($t->nextNS(), '(');
-                $closingBraketIndex = $pf->getIndexOfPairedBracket($n->index);
-                while ($n->index != $closingBraketIndex) {
+                $n = $t->nextNS();
+                if ($n->text=='&') {
                     $n = $n->nextNS();
-                    if ($n->kind == T_VARIABLE) {
-                        $var = $this->getOrCreateVar($n);
-                        $var->status = self::VAR_ASSIGNED;
-                        $var->isRefParam = ($n->prevNS()->text == '&'); // parameter passed by reference
-                    }
+                }
+                $is_closure = true;
+                if ($n->kind==T_STRING) {
+                    $is_closure = false;
+                    $n = $n->nextNS();
                 }
 
+                // list of arguments
+                if ($n->text != '(') {
+                    throw new Exception("Invalid function decl found: $n instead of '('");
+                }
+                $index_of_opening_parenthesis = $n->index;
+                $args = $pf->extractList($n->nextNS());
+                foreach ($args as $arg) {
+                    $pass_by_reference = false;
+                    if ($arg->kind == T_STRING || $arg->kind == T_ARRAY) {
+                        // this is a type of argument! TODO: keep this info
+                        $arg = $arg->nextNS();
+                    }
+                    if ($arg->text == '&') {
+                        $pass_by_reference = true;
+                        $arg = $arg->nextNS();
+                    }
+                    if ($arg->kind == T_VARIABLE) {
+                        $var = $this->getOrCreateVar($arg);
+                        $var->status = self::VAR_ASSIGNED;
+                        $var->isRefParam = $pass_by_reference; // parameter passed by reference
+                    } else {
+                        throw new Exception("Invalid function decl found: $n instead of ')'");
+                    }
+                }
+                $n = $pf->getTokenAt( $pf->getIndexOfPairedBracket($index_of_opening_parenthesis) );
                 $n = $n->nextNS();
+
+                // optional list of exported variables into anonymous function (closure)
+                if ($is_closure && $n->kind==T_USE) {
+                    $n = $n->nextNS();
+                    if ($n->text != '(') {
+                        throw new Exception("Invalid function decl found: $n instead of '('");
+                    }
+                    $index_of_opening_parenthesis = $n->index;
+                    $args = $pf->extractList($n->nextNS());
+                    foreach ($args as $arg) {
+                        $pass_by_reference = false;
+                        if ($arg->text == '&') {
+                            $pass_by_reference = true;
+                            $arg = $arg->nextNS();
+                        }
+                        if ($arg->kind == T_VARIABLE) {
+                            // TODO: check that this variable existst at outer scope!
+                            $var = $this->getOrCreateVar($arg);
+                            $var->status = self::VAR_ASSIGNED;
+                            $var->isRefParam = $pass_by_reference; // parameter passed by reference
+                        } else {
+                            throw new Exception("Invalid function decl found: $n instead of ')'");
+                        }
+                    }
+                    $n = $pf->getTokenAt( $pf->getIndexOfPairedBracket($index_of_opening_parenthesis) );
+                    $n = $n->nextNS();
+                }
+
                 if ($n->text == ';') {
                     // declaration only or absctract function: function foo();
-                    $this->removeScope(); // empty scope with parameters names at most
+                    $this->removeScope(); // empty scope with parameters names
                 } elseif ($n->text == '{') {
                     $dropScopeAt = $pf->getIndexOfPairedBracket( $n->index );
                 } else {
