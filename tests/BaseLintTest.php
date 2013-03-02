@@ -26,7 +26,12 @@ class BaseLintTest extends PHPUnit_Framework_TestCase {
         $report = $this->xref->getLintReport($pf);
         $pf->release();
 
-        $this->assertTrue(count($report)==count($expectedDefectsList));
+        $countFound = count($report);
+        $countExpected = count($expectedDefectsList);
+        $this->assertTrue(
+            $countFound == $countExpected,
+            "Wrong number of errors: found=$countFound, expected=$countExpected"
+        );
         for ($i=0; $i<count($report); ++$i) {
             $foundDefect = $report[$i];
             list($tokenText, $lineNumber, $severity) = $expectedDefectsList[$i];

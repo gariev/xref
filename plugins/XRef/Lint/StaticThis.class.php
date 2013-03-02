@@ -41,6 +41,14 @@ class XRef_Lint_StaticThis extends XRef_APlugin implements XRef_ILintPlugin {
 
         $this->report = array();
 
+        // special case: if file has no declarations of function/classes, it can be included into
+        // body of some instance method, then use of $this is legit.
+        // see also: joomla code.
+        $allow_this_in_global_scope = false;
+        if (count($pf->getClasses())==0 && count($pf->getMethods())==0) {
+            $allow_this_in_global_scope = true;
+        }
+
         // TOKEN:
         $tokens = $pf->getTokens();
         for ($i=0; $i<count($tokens); ++$i) {
@@ -73,7 +81,11 @@ class XRef_Lint_StaticThis extends XRef_APlugin implements XRef_ILintPlugin {
 
             // if we found $this anywhere else, this is an error
             if ($t->text == '$this') {
-                $this->addDefect($t, XRef::ERROR, "\$this is used outside of instance method");
+                if ($allow_this_in_global_scope) {
+                    $this->addDefect($t, XRef::WARNING, "Possible use of \$this is global scope");
+                } else {
+                    $this->addDefect($t, XRef::ERROR, "\$this is used outside of instance method");
+                }
             }
 
         } // end of TOKEN loop
