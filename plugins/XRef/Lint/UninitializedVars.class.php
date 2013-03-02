@@ -530,17 +530,27 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             //      static $foo;                // <-- well, strictly speaking this variable is not intilialized,
             //      static $bar = 10, $baz;     //  but it's declared so let's hope that author knows what's going on
             //  }
+            // other usage of "static" keyword:
+            //  $foo = new static();
+            //  $foo = new static;
+            //  $foo = static::methodName();
             if ($t->kind == T_STATIC && $pf->getMethodAt($t->index)!=null) {
-                $list = $pf->extractList($t->nextNS(), ',', ';');
-                foreach ($list as $n) {
-                    if ($n->kind != T_VARIABLE) {
-                        throw new Exception("Invalid 'static' decalaraion found: $n");
+                $n = $t->nextNS();
+                $p = $t->prevNS();
+                if ($n->kind != T_DOUBLE_COLON && $p->kind != T_NEW) {
+                    $list = $pf->extractList($n, ',', ';');
+                    foreach ($list as $n) {
+                        if ($n->kind == T_VARIABLE) {
+                            $var = $this->getOrCreateVar($n);
+                            $var->status = self::VAR_ASSIGNED;
+                            $i = $n->index;
+                        } else {
+                            // oops?
+                            throw new Exception("Invalid 'static' decalaraion found: $n");
+                        }
                     }
-                    $var = $this->getOrCreateVar($n);
-                    $var->status = self::VAR_ASSIGNED;
-                    $i = $n->index;
+                    continue;
                 }
-                continue;
             }
 
             //
@@ -584,7 +594,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                                     }
                                     if ($n->kind != T_VARIABLE) {
                                         // TODO: add other valid lvalues here, like $array["index"] or $object->field
-                                        throw new Exception("Unexpected return variable found: $n");
+                                        $this->addDefect($n, XRef::ERROR, "Possible attemps to pass non-variable by reference");
                                     }
                                     $var = $this->getOrCreateVar($n);
                                     $var->status = self::VAR_ASSIGNED;
@@ -780,6 +790,11 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         $pf_methods = $pf->getMethods();
         foreach ($pf_methods as $m) {
             $function_name = $m->name;
+            if ($function_name=='__construct') {
+                // constructors are too different from regular functions/methods
+                // in decl/usage syntax
+                continue;
+            }
             $t = $pf->getTokenAt( $m->nameStartIndex );
             $n = $t->nextNS();
             if ($n->text == '(') {

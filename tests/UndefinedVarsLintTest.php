@@ -39,11 +39,11 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 echo $explicit_defect2;                                 // error
             }
         ';
-        $exceptedDefects = array(
+        $expectedDefects = array(
             array('$explicit_defect1', 16, XRef::WARNING),
             array('$explicit_defect2', 32, XRef::ERROR),
         );
-        $this->checkPhpCode($testPhpCode, $exceptedDefects);
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
     }
 
     public function testGlobals() {
@@ -143,7 +143,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
 
         ';
 
-        $exceptedDefects = array(
+        $expectedDefects = array(
             array('$input',                 6,  XRef::ERROR),
             array('$array',                 7,  XRef::ERROR),
             array('$var3',                  11, XRef::ERROR),
@@ -156,8 +156,47 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$unknown_var',           31, XRef::WARNING),
             array('$unknown_var_in_expression', 32, XRef::WARNING),
         );
-        $this->checkPhpCode($testPhpCode, $exceptedDefects);
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
     }
+
+    // test to check constructs like
+    //  function foo () {
+    //      static $foo, $bar = 1, $baz;
+    //  }
+    // as well as other static constructs
+    public function testStaticDecl () {
+        $testPhpCode = '
+            <?php
+
+            function foo () {
+                static $foo;                    // ok
+                static $bar, $baz;              // ok
+                static $qux = 10, $qaz, $qix=1; // ok
+
+                echo $foo, $bar + $baz;         // ok
+                echo $qux, $qaz + $qix;         // ok
+                echo $i;                        // error
+            }
+
+            class Bar {
+                public function bar () {
+                    if (is_subclass_of(static::$instance, "Foo")) { // ok
+                        return static::baz();                       // ok
+                    } else {
+                        return new static(25);                      // ok
+                    }
+                    return new static;
+                }
+            }
+            echo $foo;                          // error
+        '
+        ;
+        $expectedDefects = array(
+            array('$i',     11,  XRef::ERROR),
+            array('$foo',   24,  XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+     }
 
 
 }
