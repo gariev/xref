@@ -413,8 +413,8 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 $args = $pf->extractList($n->nextNS());
                 foreach ($args as $arg) {
                     $pass_by_reference = false;
-                    if ($arg->kind == T_STRING || $arg->kind == T_ARRAY) {
-                        // this is a type of argument! TODO: keep this info
+                    list($type, $arg) = self::parseType($arg);
+                    if ($arg->isSpace()) {
                         $arg = $arg->nextNS();
                     }
                     if ($arg->text == '&') {
@@ -493,8 +493,14 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 if ($n->text != '(') {
                     throw new Exception("$n found instead of '('");
                 }
-                $n = $n->nextNS(); // class name?
-                $n = $n->nextNS(); //
+                $n = $n->nextNS();
+                list($type, $n) = self::parseType($n);
+                if (count($type)==0) {
+                    throw new Exception("No exception type found ($n)");
+                }
+                if ($n->isSpace()) {
+                    $n = $n->nextNS();
+                }
                 if ($n->kind == T_VARIABLE) {
                     $var = $this->getOrCreateVar($n);
                     $var->status = self::VAR_ASSIGNED;
@@ -872,6 +878,23 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             $functions[$function_name] = $params;
         }
         return $functions;
+    }
+
+    private static function parseType($token) {
+        // types:               array | ClassName | string | int | bool
+        // namespaced types:    \string | foo\bar | \foo\bar
+        // note: when parsing namespaces in PHP 5.2, "\" will be lost
+        $type = array();
+        if ($token->kind == T_ARRAY) {
+            $type[] = $token;
+            $token = $token->next();
+        } else {
+            while ($token->kind == T_STRING || $token->kind == T_NS_SEPARATOR) {
+                $type[] = $token;
+                $token = $token->next(); // not nextNS()!
+            }
+        }
+        return array($type, $token);
     }
 }
 

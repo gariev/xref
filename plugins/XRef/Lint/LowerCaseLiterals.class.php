@@ -47,6 +47,17 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
         for ($i=0; $i<count($tokens); ++$i) {
             $t = $tokens[$i];
 
+            // skip namespaces declarations and imports:
+            // namespace foo\bar;
+            // use foo\bar as foobar;
+            if ($t->kind == T_NAMESPACE || $t->kind == T_USE) {
+                do {
+                    $t = $t->nextNS();
+                } while ($t->text != ';');
+                $i = $t->index;
+                continue;
+            }
+
             // skip class names completely
             // class Foo extends Bar implements Baz, Qux
             if ($t->kind==T_CLASS || $t->kind==T_INTERFACE) {
@@ -57,41 +68,55 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
                 continue;
             }
 
+            if ($t->kind == T_INSTANCEOF || $t->kind == T_NEW) {
+                // ok, class name:
+                // $foo instanceof Foo
+                // $foo = new Foo;
+                do {
+                    $t = $t->nextNS();
+                } while ($t->kind==T_STRING || $t->kind==T_NS_SEPARATOR);
+                $i = $t->index;
+                continue;
+            }
+
             if ($t->kind == T_STRING) {
                 if ($t->text == strtoupper($t->text)) {
                     // ok, all-uppercase, SOME_CONSTANT, I hope
                     continue;
                 }
 
+                // skip all fully-quilified names (names with namespaces), if any
+                // Foo\Bar\Baz
                 $n = $t->nextNS();
+                while ($n->kind == T_STRING || $n->kind==T_NS_SEPARATOR) {
+                    $n = $n->nextNS();
+                }
+
                 if ($n->text == '(') {
                     // ok, function call: Foo(...)
+                    $i = $n->index;
                     continue;
                 }
                 if ($n->kind == T_DOUBLE_COLON) {
                     // ok, class name: foo::$something
+                    $i = $n->index;
                     continue;
                 }
 
+                // some kind of variable declared with class?
+                // catch (Foo $x);
+                // function bar(Foo\Bar &$x)
                 if ($n->text=='&') {
                     $n = $n->nextNS();
                 }
                 if ($n->kind==T_VARIABLE) {
-                    // ok, some kind of variable declared with class:
-                    // catch (Foo $x);
-                    // function bar(Foo &$x)
+                    $i = $n->index;
                     continue;
                 }
 
                 $p = $t->prevNS();
                 if ($p->kind == T_DOUBLE_COLON || $p->kind==T_OBJECT_OPERATOR) {
                     // ok, static or instance member: $bar->foo, Bar::foo
-                    continue;
-                }
-                if ($p->kind == T_INSTANCEOF || $p->kind == T_NEW) {
-                    // ok, class name:
-                    // $foo instanceof Foo
-                    // $foo = new Foo;
                     continue;
                 }
 
