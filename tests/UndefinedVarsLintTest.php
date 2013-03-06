@@ -202,15 +202,45 @@ class UndefinedVarsLintTest extends BaseLintTest {
         $testPhpCode = '
         <?php
             function foo($x) {
-                $y = 10;
-                $f = function ($z) use ($x, $y) {
-                    return $z * ($x + $y);
-                    echo $i;
+                $y = 10;                                // ok
+                $f = function ($z) use ($x, $y) {       // ok
+                    return $z * ($x + $y);              // ok
+                    echo $i;                            // error
                 };
+                echo $z;                                // error
+                echo $i;                                // error
+                echo $x, $y;                            // ok
             }
         ';
         $expectedDefects = array(
             array('$i', 7,  XRef::ERROR),
+            array('$z', 9,  XRef::ERROR),
+            array('$i', 10,  XRef::ERROR),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+    }
+
+    public function testRelaxedMode() {
+        $testPhpCode = '
+        <?php
+            function foo($x) {
+                echo $y;            // error
+                $$x = "foo";        // relaxed mode starts here
+                echo $z;            // warning
+            }
+            function bar() {
+                global $i;
+                echo $i;            // ok
+                echo $j;            // error
+                $$i["key"] = "foo"; // relaxed mode starts here
+                echo $z;            // warning
+            }
+         ';
+        $expectedDefects = array(
+            array('$y', 4,  XRef::ERROR),
+            array('$z', 6,  XRef::WARNING),
+            array('$j', 11,  XRef::ERROR),
+            array('$z', 13,  XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 

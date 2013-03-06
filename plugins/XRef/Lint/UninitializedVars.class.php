@@ -235,6 +235,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                     while ($nn->text == '[') {
                         // quick forward to closing ']'
                         $nn = $pf->getTokenAt( $pf->getIndexOfPairedBracket($nn->index) );
+                        $nn = $nn->nextNS();
                     }
                     if ($nn->text == '=') {
                         $token_caused_mode_switch = $n;

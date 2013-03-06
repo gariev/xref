@@ -16,9 +16,9 @@ class BaseLintTest extends PHPUnit_Framework_TestCase {
 
     protected function checkFoundDefect($foundDefect, $tokenText, $lineNumber, $severity) {
         $descr = print_r($foundDefect, true);   // TODO
-        $this->assertTrue($foundDefect->tokenText==$tokenText,      $descr);
-        $this->assertTrue($foundDefect->lineNumber==$lineNumber,    $descr);
-        $this->assertTrue($foundDefect->severity==$severity,        $descr);
+        $this->assertTrue($foundDefect->tokenText==$tokenText,      "Invalid token:\n$descr");
+        $this->assertTrue($foundDefect->lineNumber==$lineNumber,    "Invalid line number:\n$descr");
+        $this->assertTrue($foundDefect->severity==$severity,        "Invalid severity:\n$descr");
     }
 
     protected function checkPhpCode($phpCode, $expectedDefectsList) {
