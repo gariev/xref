@@ -140,9 +140,9 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             "mode"      => $mode,
         );
     }
-    protected function getCurrentScope() {
-        if (count($this->stackOfScopes)>0) {
-            return $this->stackOfScopes[ count($this->stackOfScopes)-1 ];
+    protected function getScope($depth=0) {
+        if (count($this->stackOfScopes)>$depth) {
+            return $this->stackOfScopes[ count($this->stackOfScopes)-$depth-1 ];
         } else {
             return null;
         }
@@ -152,11 +152,11 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
     }
 
 
-    protected function getOrCreateVar($token) {
+    protected function getOrCreateVar($token, $scopeDepth=0) {
         $varName = $token->text;
-        $currentScope = $this->stackOfScopes[ count($this->stackOfScopes)-1 ];
-        if (!isset($currentScope->vars[$varName])) {
-            $currentScope->vars[$varName] = (object) array(
+        $scope = $this->getScope($scopeDepth);
+        if (!isset($scope->vars[$varName])) {
+            $scope->vars[$varName] = (object) array(
                 "status"     => self::VAR_UNKNOWN,
                 "token"      => $token,
                 "isRefParam" => false, // paramenter of fuction passed by reference: function foo(&$bar)
@@ -164,19 +164,19 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 "isGlobal"   => false,
             );
         } else {
-            $currentScope->vars[$varName]->token = $token;
+            $scope->vars[$varName]->token = $token;
         }
-        return $currentScope->vars[$varName];
+        return $scope->vars[$varName];
     }
 
-    protected function checkVar($token) {
+    protected function checkVar($token, $scopeDepth=0) {
         $varName = $token->text;
         if (isset(self::$knownSuperglobals[$varName])) {
             return true;
         } else if (count($this->stackOfScopes)==1 && isset(self::$knownGlobals[$varName])) {
             return true;
         } else {
-            $currentScope = $this->getCurrentScope();
+            $currentScope = $this->getScope($scopeDepth);
             return isset($currentScope->vars[$varName]);
         }
     }
@@ -255,7 +255,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             }
             // switch the mode, actually
             if (isset($token_caused_mode_switch) && $i >= $switch_to_relaxed_scope_at) {
-                $scope = $this->getCurrentScope();
+                $scope = $this->getScope();
                 if ($scope->mode != self::MODE_RELAXED) {
                     $scope->mode = self::MODE_RELAXED;
                     $this->addDefect($token_caused_mode_switch, XRef::NOTICE, "Can't reliable detect var usage from here");
@@ -448,7 +448,19 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                             $arg = $arg->nextNS();
                         }
                         if ($arg->kind == T_VARIABLE) {
-                            // TODO: check that this variable existst at outer scope!
+                            // check that this variable existst at outer scope
+                            if (!$this->checkVar($arg, 1)) {
+                                $scope = $this->getScope(1);
+                                if ($scope->mode == self::MODE_STRICT) {
+                                    $this->addDefect($arg, XRef::ERROR, "Use of non-defined variable");
+                                } else {
+                                    $this->addDefect($arg, XRef::WARNING, "Possible use of non-defined variable");
+                                }
+                                $var = $this->getOrCreateVar($arg, 1);
+                                $var->status = self::VAR_ASSIGNED;
+                            }
+
+                            // create variable at current scope
                             $var = $this->getOrCreateVar($arg);
                             $var->status = self::VAR_ASSIGNED;
                             $var->isRefParam = $pass_by_reference; // parameter passed by reference
@@ -560,7 +572,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                             if (!$this->checkVar($n)) {
                                 $this->addDefect($n, XRef::ERROR, "Use of non-defined variable");
                             }
-                            // turn the relaxed mode on starting from the next statement
+                            // turn the relaxed mode on beginning of the next statement
                             $s = self::skipTillText($n, ';');
                             $token_caused_mode_switch = $n;
                             $switch_to_relaxed_scope_at = $s->index;
@@ -696,7 +708,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                         $nnn = $nn->nextNS();
                         if ($nnn && $nnn->text==')') {
                             // ok, this is a simple expression with a variable inside function call
-                            $scope = $this->getCurrentScope();
+                            $scope = $this->getScope();
                             if ($scope->mode==self::MODE_RELAXED) {
                                 // mark this variable as "known" in relaxed mode
                                 $var = $this->getOrCreateVar($nn);
@@ -732,7 +744,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 }
 
                 if (!$skipVariable && !$this->checkVar($t)) {
-                    $scope = $this->getCurrentScope();
+                    $scope = $this->getScope();
                     if ($scope->mode == self::MODE_STRICT) {
                         $this->addDefect($t, XRef::ERROR, "Use of non-defined variable");
                     } else {
