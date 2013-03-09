@@ -108,8 +108,10 @@ class UndefinedVarsLintTest extends BaseLintTest {
             function foo () {
                 // internal functions
                 preg_match("#pattern#", "string-to-be-mateched", $matches);     // ok
+                preg_match("#pattern#", "string-to-be-mateched", null);         // error (non-var pass by ref)
                 preg_grep("pattern", $input);                                   // error
                 sort($array);                                                   // error
+                sort( array(1,2,3) );                                           // error (non-var pass by ref)
 
                 // locally-defined functions
                 local_function_with_pass_by_reference_argument2(1, $var2);      // ok
@@ -125,8 +127,10 @@ class UndefinedVarsLintTest extends BaseLintTest {
 
                 // internal functions
                 preg_match("#pattern#", "string-to-be-mateched", $matches);     // ok
+                preg_match("#pattern#", "string-to-be-mateched", null);         // error (non-var pass by ref)
                 preg_grep("pattern", $input);                                   // warning
                 sort($array);                                                   // warning
+                sort( array(1,2,3) );                                           // error (non-var pass by ref)
 
                 // locally-defined functions
                 local_function_with_pass_by_reference_argument2(1, $var2);      // ok
@@ -144,17 +148,21 @@ class UndefinedVarsLintTest extends BaseLintTest {
         ';
 
         $expectedDefects = array(
-            array('$input',                 6,  XRef::ERROR),
-            array('$array',                 7,  XRef::ERROR),
-            array('$var3',                  11, XRef::ERROR),
-            array('$unknown_var',           14, XRef::WARNING),
-            array('$unknown_var_in_expression', 15, XRef::ERROR),
+            array('null',                   6,  XRef::ERROR),
+            array('$input',                 7,  XRef::ERROR),
+            array('$array',                 8,  XRef::ERROR),
+            array('array',                  9,  XRef::ERROR),
+            array('$var3',                  13, XRef::ERROR),
+            array('$unknown_var',           16, XRef::WARNING),
+            array('$unknown_var_in_expression', 17, XRef::ERROR),
 
-            array('$input',                 23,  XRef::WARNING),
-            array('$array',                 24,  XRef::WARNING),
-            array('$var3',                  28, XRef::WARNING),
-            array('$unknown_var',           31, XRef::WARNING),
-            array('$unknown_var_in_expression', 32, XRef::WARNING),
+            array('null',                   25,  XRef::ERROR),
+            array('$input',                 26,  XRef::WARNING),
+            array('$array',                 27,  XRef::WARNING),
+            array('array',                  28,  XRef::ERROR),
+            array('$var3',                  32, XRef::WARNING),
+            array('$unknown_var',           35, XRef::WARNING),
+            array('$unknown_var_in_expression', 36, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
     }

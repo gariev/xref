@@ -74,6 +74,13 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
      */
     private $userFunctions = array();
 
+    /**
+     * array( "function_name" => true ) with list of functions that do takes
+     * arguments by reference but don't initialize them, i.e. it must exist already,
+     * e.g. sort( &$array )
+     */
+    protected static $internalFunctionsThatDoesntInitializePassedByReferenceParams = array();
+
     public function __construct() {
         // super global variables
         $superGlobals = array(
@@ -95,7 +102,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         self::$knownGlobals  = array_fill_keys($globals, true);
 
         if (!self::$internalFunctions) {
-            self::$internalFunctions = & self::get_internal_php_functions();
+            self::initialize_internal_php_function_list();
         }
     }
 
@@ -178,6 +185,19 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         } else {
             $currentScope = $this->getScope($scopeDepth);
             return isset($currentScope->vars[$varName]);
+        }
+    }
+
+    protected function checkVarAndAddDefectIfMissing($token, $forceWarning=false, $scopeDepth=0) {
+        if (!$this->checkVar($token, $scopeDepth)) {
+            $scope = $this->getScope($scopeDepth);
+            if ($scope->mode == self::MODE_RELAXED || $forceWarning) {
+                $this->addDefect($token, XRef::WARNING, "Possible use of non-defined variable");
+            } else {
+                $this->addDefect($token, XRef::ERROR, "Use of non-defined variable");
+            }
+            $var = $this->getOrCreateVar($token, $scopeDepth);
+            $var->status = self::VAR_ASSIGNED;
         }
     }
 
@@ -449,17 +469,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                         }
                         if ($arg->kind == T_VARIABLE) {
                             // check that this variable existst at outer scope
-                            if (!$this->checkVar($arg, 1)) {
-                                $scope = $this->getScope(1);
-                                if ($scope->mode == self::MODE_STRICT) {
-                                    $this->addDefect($arg, XRef::ERROR, "Use of non-defined variable");
-                                } else {
-                                    $this->addDefect($arg, XRef::WARNING, "Possible use of non-defined variable");
-                                }
-                                $var = $this->getOrCreateVar($arg, 1);
-                                $var->status = self::VAR_ASSIGNED;
-                            }
-
+                            $this->checkVarAndAddDefectIfMissing($arg, false, 1);
                             // create variable at current scope
                             $var = $this->getOrCreateVar($arg);
                             $var->status = self::VAR_ASSIGNED;
@@ -569,9 +579,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                         $n = $n->nextNS();
                         if ($n->kind==T_VARIABLE) {
                             // check that this var is declared
-                            if (!$this->checkVar($n)) {
-                                $this->addDefect($n, XRef::ERROR, "Use of non-defined variable");
-                            }
+                            $this->checkVarAndAddDefectIfMissing($n);
                             // turn the relaxed mode on beginning of the next statement
                             $s = self::skipTillText($n, ';');
                             $token_caused_mode_switch = $n;
@@ -626,11 +634,24 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             }
 
             //
-            // Functions that return values into passed-by-reference-arguments,
+            // Functions that cat return values into passed-by-reference-arguments,
             //  e.g. preg_match, preg_match_all etc.
             //
+            //  foo($x);
+            //  Foo::foo($x);
+            //  $foo->foo($x);
+            //
+            // Checks for known functions:
+            //  1. if function doesn't accept parameters by reference ( not function foo(&$x) )
+            //      and can't therefore initialize a passed variable, check that the variable exists,
+            //      otherwise, report an error
+            //  2. if function does accept &$vars, check that variable, not an expression is
+            //       actually passed
+            //  3. if function does accept params-by-reference, but does not intialize them
+            //      (e.g. sort()), check that variable existst
+            //
             // Unknown (user-defined) functions can accept vars by reference too,
-            // but we don't know about them, so just produce a varning
+            // but we don't know about them, so just produce a warning
             //
             // Summary:
             //      known_function_that_assign_variable($unknown_var);          // ok               (processed here)
@@ -642,7 +663,9 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 $n = $t->nextNS();
                 if ($n->text == '(') {
                     $arguments = $pf->extractList($n->nextNS());
-                    $function_name = $t->text;  // TODO: differentiate between function and method names
+                    // TODO: differentiate between function and method names
+                    // use fully-qulified funtion/method names
+                    $function_name = $t->text;
                     $is_known_function = false;
 
                     if (array_key_exists($function_name, $this->userFunctions)) {
@@ -664,12 +687,21 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                                     if ($n->text == '&') {
                                         $n = $n->nextNS();
                                     }
-                                    if ($n->kind != T_VARIABLE) {
+
+                                    if ($n->kind == T_VARIABLE) {
+                                        if (isset(self::$internalFunctionsThatDoesntInitializePassedByReferenceParams[$function_name])) {
+                                            // if the function takes parameters by reference, but they must be defined prior to that
+                                            // (e.g. sort), than check that this var exists
+                                            $this->checkVarAndAddDefectIfMissing($n);
+                                        } else {
+                                            // otherwise, just note that this var will be initialized by this method call
+                                            $var = $this->getOrCreateVar($n);
+                                            $var->status = self::VAR_ASSIGNED;
+                                        }
+                                    } else {
                                         // TODO: add other valid lvalues here, like $array["index"] or $object->field
                                         $this->addDefect($n, XRef::ERROR, "Possible attemps to pass non-variable by reference");
                                     }
-                                    $var = $this->getOrCreateVar($n);
-                                    $var->status = self::VAR_ASSIGNED;
                                 }
                             }
                         }
@@ -682,12 +714,12 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                             if ($n->text == '&') {
                                 $n = $n->nextNS();
                             }
-                            if ($n->kind == T_VARIABLE && !$this->checkVar($n)) {
+                            if ($n->kind == T_VARIABLE) {
                                 $nn = $n->nextNS();
                                 if ($nn->text==',' || $nn->text==')') {
-                                    $this->addDefect($n, XRef::WARNING, "Possible use of non-defined variable");
-                                    $var = $this->getOrCreateVar($n);
-                                    $var->status = self::VAR_ASSIGNED;
+                                    // single variable - check that it exists but if not issue a warning only,
+                                    // cause it can be initialized by this unknown funciton
+                                    $this->checkVarAndAddDefectIfMissing($n, true);
                                 }
                             }
                         }
@@ -743,15 +775,8 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                     $skipVariable = true;
                 }
 
-                if (!$skipVariable && !$this->checkVar($t)) {
-                    $scope = $this->getScope();
-                    if ($scope->mode == self::MODE_STRICT) {
-                        $this->addDefect($t, XRef::ERROR, "Use of non-defined variable");
-                    } else {
-                        $this->addDefect($t, XRef::WARNING, "Possible use of non-defined variable");
-                    }
-                    $var = $this->getOrCreateVar($t);
-                    $var->status = self::VAR_USED; // mark it as used to report every var only once
+                if (!$skipVariable) {
+                    $this->checkVarAndAddDefectIfMissing($t);
                 }
             }
         } // end of "for each token" loop
@@ -783,11 +808,12 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         return null;
     }
 
-    // returns the list of internal php function with their arguments that they can initialize
-    // see self::$internalFunctions
-    private static function &get_internal_php_functions() {
-        $functions = array();
-
+    // initialize:
+    //  1. self::$internalFunctions
+    //      - the list of internal php function with their arguments that can be passed by reference
+    //  2. self::$internalFunctionsThatDoesntInitializePassedByReferenceParams
+    //
+    private static function initialize_internal_php_function_list() {
         //
         // use PHP introspection to get all known functions
         //
@@ -811,21 +837,11 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                     }
                 }
             }
-            $functions[$function_name] = (count($ref_params_list)) ? $ref_params_list : null;
+            self::$internalFunctions[$function_name] = (count($ref_params_list)) ? $ref_params_list : null;
         }
 
-        // then, override some of them:
-        //  1. some functions take pass-by-reference params but they don't initialize them,
-        //     the params must already exist, e.g. bool sort ( array &$array [, int $sort_flags] )
-        //  2. some functions are defined in extensions that the given PHP runtime may miss
-        $remove_list = array(
-            'array_multisort', 'array_pop', 'array_push', 'array_shift', 'array_splice', 'array_unshift',
-            'array_walk', 'array_walk_recursive', 'arsort', 'asort', 'call_user_method',
-            'call_user_method_array', 'current', 'each', 'end', 'extract', 'key', 'krsort', 'ksort',
-            'mb_convert_variables', 'natcasesort', 'natsort', 'next', 'openssl_csr_new', 'pos', 'prev',
-            'reset', 'rsort', 'settype', 'shuffle', 'sort', 'uasort', 'uksort', 'usort', 'xml_set_object',
-        );
-
+        // add functions that are defined in extensions that the given PHP runtime may miss
+        // e.g. my dev box misses apc extension
         $override_list = array(
             "apc_fetch"               => array(1),
             'apc_dec'                 => array(2),
@@ -846,13 +862,20 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             "pcntl_wait"              => array(0),
         );
 
-        foreach ($remove_list as $function_name) {
-            $functions[$function_name] = null;
-        }
         foreach ($override_list as $function_name => $args) {
-            $functions[$function_name] = $args;
+            self::$internalFunctions[$function_name] = $args;
         }
-        return $functions;
+
+        //  some functions take pass-by-reference params but they don't initialize them,
+        //  the params must already exist, e.g. bool sort ( array &$array [, int $sort_flags] )
+        $exceptionList = array(
+            'array_multisort', 'array_pop', 'array_push', 'array_shift', 'array_splice', 'array_unshift',
+            'array_walk', 'array_walk_recursive', 'arsort', 'asort', 'call_user_method',
+            'call_user_method_array', 'current', 'each', 'end', 'extract', 'key', 'krsort', 'ksort',
+            'mb_convert_variables', 'natcasesort', 'natsort', 'next', 'openssl_csr_new', 'pos', 'prev',
+            'reset', 'rsort', 'settype', 'shuffle', 'sort', 'uasort', 'uksort', 'usort', 'xml_set_object',
+        );
+        self::$internalFunctionsThatDoesntInitializePassedByReferenceParams = array_fill_keys($exceptionList, true);
     }
 
     private static function &get_user_functions($pf) {
