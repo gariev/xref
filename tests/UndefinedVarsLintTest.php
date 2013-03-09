@@ -165,6 +165,65 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$unknown_var_in_expression', 36, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
+
+        $testPhpCode = '
+        <?php
+            class Foo {
+                public function preg_match() {}
+                public function sort(&$x)    {}
+
+                public function bar() {
+                    $this->preg_match("", "", $x);      // error: method preg_match dont initialize vars
+                    Foo::preg_match("", "", $y);        // error
+                    self::preg_match("", "", $z);       // error
+                    preg_match("", "", $ok);            // ok, this is internal preg_match
+
+                    $this->sort($a);                    // ok
+                    Foo::sort($b);                      // ok
+                    self::sort($c);                     // ok
+                    sort($d);                           // error - internal sort doesnt intialize vars
+                }
+            }
+
+            function test () {
+                Foo::preg_match("", "", $i);                // error
+                preg_match("", "", $j);                     // ok
+                $foo = new SomeClass();
+                $foo->preg_match("", "", $k);               // warning: this is unknown preg_match
+
+                Foo::sort($l);                              // ok
+                sort($m);                                   // error, internal sort
+                $foo->sort($n);                             // warning, unknown sort
+            }
+
+            Foo::preg_match("", "", $i);                // warning (global relaxed scope, otherwise - error)
+            preg_match("", "", $j);                     // ok
+            $foo = new SomeClass();
+            $foo->preg_match("", "", $k);               // warning: this is unknown preg_match
+
+            Foo::sort($l);                              // ok
+            sort($m);                                   // warning, internal sort
+            $foo->sort($n);                             // warning, unknown sort
+        '
+        ;
+        $expectedDefects = array(
+            array('$x', 8,   XRef::ERROR),
+            array('$y', 9,   XRef::ERROR),
+            array('$z', 10,  XRef::ERROR),
+            array('$d', 16,  XRef::ERROR),
+
+            array('$i', 21,  XRef::ERROR),
+            array('$k', 24,  XRef::WARNING),
+            array('$m', 27,  XRef::ERROR),
+            array('$n', 28,  XRef::WARNING),
+
+            array('$i', 31,  XRef::WARNING),
+            array('$k', 34,  XRef::WARNING),
+            array('$m', 37,  XRef::WARNING),
+            array('$n', 38,  XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+
     }
 
     // test to check constructs like

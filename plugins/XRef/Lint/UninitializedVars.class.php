@@ -663,9 +663,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 $n = $t->nextNS();
                 if ($n->text == '(') {
                     $arguments = $pf->extractList($n->nextNS());
-                    // TODO: differentiate between function and method names
-                    // use fully-qulified funtion/method names
-                    $function_name = $t->text;
+                    $function_name = self::getFullyQualifiedFunctionName($pf, $t);
                     $is_known_function = false;
 
                     if (array_key_exists($function_name, $this->userFunctions)) {
@@ -890,6 +888,10 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 // in decl/usage syntax
                 continue;
             }
+            $current_class_name = $pf->getClassAt( $m->nameStartIndex );
+            if ($current_class_name) {
+                $function_name = $current_class_name . '::' . $function_name;
+            }
             $t = $pf->getTokenAt( $m->nameStartIndex );
             $n = $t->nextNS();
             if ($n->text == '(') {
@@ -931,6 +933,37 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             }
         }
         return array($type, $token);
+    }
+
+    // Foo::bar()       --> "Foo::bar"
+    // $this->bar()     --> "Foo::bar" or "?::bar" (outside of known class def)
+    // self::bar()      --> "Foo::bar" or "?::bar" (outside of known class def)
+    // $someVar->bar()  --> "?::bar"
+    // bar()            --> "bar"
+    private static function getFullyQualifiedFunctionName($pf, $token) {
+        $function_name = $token->text;
+        $p = $token->prevNS();
+        $pp = $p->prevNS();
+        $current_class_name = $pf->getClassAt( $token->index );
+
+        if ($p->kind == T_OBJECT_OPERATOR) {
+            if ($pp->text == '$this') {
+                if ($current_class_name) {
+                    return $current_class_name . "::" . $function_name;
+                }
+            }
+            return "?::" . $function_name;
+        } elseif ($p->kind == T_DOUBLE_COLON) {
+            if ($pp->text == 'self') {
+                if ($current_class_name) {
+                    return $current_class_name . "::" . $function_name;
+                }
+                return "?::" . $function_name;
+            } else {
+                return $pp->text . "::" . $function_name;
+            }
+        }
+        return $function_name;
     }
 }
 
