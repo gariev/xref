@@ -86,7 +86,7 @@ class XRef {
     }
 
     public static function version() {
-        return "0.1.4";
+        return "0.1.5";
     }
 
     /*----------------------------------------------------------------

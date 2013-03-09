@@ -10,8 +10,14 @@ Version 0.1.3
 - web-tools: fix for servers with "magic_quotes" turned on
 - lint: "static" variables declarations inside function makes them declared
 
-
 Version 0.1.4
 ==============
 - lint: better support for functions that take variables by reference and initialize them
 
+Version 0.1.5
+==============
+- lint: PHP 5.3+ features (namespaces, anonymous functions)
+- lint: new error "Possible attemps to pass non-variable by reference"
+
+
+-
