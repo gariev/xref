@@ -179,6 +179,9 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 $arg2 = $arg1;
             }
 
+            sort( array(1,2,3) );                                               // error (non-var pass by ref)
+            sort( Foo::$bar );                                                  // ok
+
         ';
 
         $expectedDefects = array(
@@ -197,6 +200,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$var3',                  32, XRef::WARNING),
             array('$unknown_var',           35, XRef::WARNING),
             array('$unknown_var_in_expression', 36, XRef::WARNING),
+
+            array('array',                  43,  XRef::ERROR),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
