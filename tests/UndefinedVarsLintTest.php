@@ -80,6 +80,40 @@ class UndefinedVarsLintTest extends BaseLintTest {
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
     }
 
+    public function testAutovivification() {
+        $testPhpCode = '
+        <?php
+            function foo () {
+                echo $i;                // error
+                $j = 10;
+                echo $j;                // ok
+
+                $line++;                // warning  - autovivification of scalar
+                echo $line;             // ok
+                $x += 10;               // warning
+                $y .= " ";              // warning
+
+                $a["foo"] = 10;         // warning - autovivification of array
+                print_r($a);            // ok
+                $b[$x][$y] .= "<br>";   // warning
+                $b[$z]++;               // error on $z
+            }
+        '
+        ;
+        $exceptedDefects = array(
+            array('$i', 4, XRef::ERROR),
+            array('$line', 8, XRef::WARNING),
+            array('$x', 10, XRef::WARNING),
+            array('$y', 11, XRef::WARNING),
+            array('$a', 13, XRef::WARNING),
+            array('$b', 15, XRef::WARNING),
+            array('$z', 16, XRef::ERROR),
+        );
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
+
+
+    }
+
     public function testVariablesAssignedByFunctions () {
 
         // function that can assign values to variables passed by reference:

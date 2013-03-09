@@ -346,7 +346,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                     continue;
                 }
 
-                if ($n->kind==T_INC || $n->kind==T_DEC || $p->kind==T_INC || $p->kind==T_DEC || $n->kind==T_CONCAT_EQUAL) {
+                if ($n->kind==T_INC || $n->kind==T_DEC || $p->kind==T_INC || $p->kind==T_DEC || $n->kind==T_CONCAT_EQUAL || $n->kind==T_PLUS_EQUAL) {
                     if (!$this->checkVar($t)) {
                         if ($isArray) {
                             // $foo["bar"]++
