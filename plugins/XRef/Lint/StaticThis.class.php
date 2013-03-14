@@ -66,6 +66,15 @@ class XRef_Lint_StaticThis extends XRef_APlugin implements XRef_ILintPlugin {
                 $n = $pf->getTokenAt( $pf->getIndexOfPairedBracket($n->index) );
 
                 $n = $n->nextNS();
+                if ($n->kind == T_USE) {
+                    $n = $n->nextNS();
+                    if ($n->text != '(') {
+                        throw new Exception();
+                    }
+                    $n = $pf->getTokenAt( $pf->getIndexOfPairedBracket($n->index) );
+                    $n = $n->nextNS();
+                }
+
                 if ($n->text == ';') {
                     // declaration only or absctract function: function foo();
                     // do nothing, skip main loop to the next token

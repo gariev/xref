@@ -363,6 +363,22 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$q', 13,  XRef::ERROR),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
+
+        $testPhpCode = '
+        <?php
+            class Foo {
+                public static function bar($arg) {
+                    $closure = function($v) use ($arg) {
+                        return $v * $arg;
+                    };
+                    return $closure(1);
+                }
+            }
+        '
+        ;
+        $expectedDefects = array();
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+
     }
 
     public function testRelaxedMode() {
