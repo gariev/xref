@@ -53,14 +53,14 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
             if ($t->kind == T_NAMESPACE || $t->kind == T_USE) {
                 do {
                     $t = $t->nextNS();
-                } while ($t->text != ';');
+                } while ($t->text != ';' && $t->text != '{' );
                 $i = $t->index;
                 continue;
             }
 
             // skip class names completely
             // class Foo extends Bar implements Baz, Qux
-            if ($t->kind==T_CLASS || $t->kind==T_INTERFACE) {
+            if ($t->kind==T_CLASS || $t->kind==T_INTERFACE || $t->kind==T_TRAIT) {
                 do {
                     $t = $t->nextNS();
                 } while ($t->text != ';' && $t->text != '{');

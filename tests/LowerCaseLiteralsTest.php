@@ -40,6 +40,38 @@ class LowerCaseLiteralsTest extends BaseLintTest {
             array('ExpectedWarning', 11, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
-    }
+
+        $testPhpCode = '
+        <?php
+            namespace foo\bar {
+                use bar\foo as anotherFoo;          // ok
+                function foo( \bar\foo\baz $x ) {}  // ok
+                \Foo\Bar::baz();                    // ok
+                $foo = new \Foo\Bar\Baz();          // ok
+                $foo->bar();                        // ok
+                echo Foo::$bar;                     // ok
+            }
+            namespace \baz\qux {                    // ok
+                echo \Foo\Bar::$bar;                // ok
+                echo ExpectedWarning;               // warning
+            }
+        ';
+
+        $exceptedDefects = array(
+            array('ExpectedWarning', 13, XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
+     }
+
+    public function testTraits() {
+        $testPhpCode = '
+        <?php
+            trait Foo {
+            }
+        ';
+        $exceptedDefects = array(
+        );
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
+     }
 }
 

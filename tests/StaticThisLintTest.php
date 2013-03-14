@@ -68,5 +68,19 @@ class StaticThisLintTest extends BaseLintTest {
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
     }
+
+    public function testTraits() {
+        $testPhpCode = '
+        <?php
+            trait Foo {
+                function bar () {
+                    echo $this->foo;        // ok
+                }
+            }
+        ';
+        $exceptedDefects = array(
+        );
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
+     }
 }
 

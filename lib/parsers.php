@@ -45,6 +45,9 @@ class XRef_Parser_PHP implements XRef_IFileParser {
                             $t[0] = T_NAMESPACE;
                             $namespace_compat_mode = true;
                             break;
+                        case 'TRAIT':
+                            $t[0] = T_TRAIT;
+                            break;
                         default:
                     }
                 }
@@ -285,8 +288,12 @@ class XRef_ParsedFile implements XRef_IParsedFile {
         $this->matchBrackets();
 
         // find out classes and function boundaries
-        $this->classes =
-            array_merge($this->extractNamedStatements(T_CLASS), $this->extractNamedStatements(T_INTERFACE));
+        $this->classes = array_merge(
+            $this->extractNamedStatements(T_CLASS),
+            $this->extractNamedStatements(T_INTERFACE),
+            $this->extractNamedStatements(T_TRAIT)
+        );
+
         $this->methods =
             $this->extractNamedStatements(T_FUNCTION);
 

@@ -43,6 +43,7 @@ class XRef {
         "T_NAMESPACE"       => 65100,
         "T_NS_SEPARATOR"    => 65101,
         "T_USE"             => 65102,
+        "T_TRAIT"           => 65103,
     );
 
     static $tokenNames = array(
