@@ -318,10 +318,10 @@ class UndefinedVarsLintTest extends BaseLintTest {
             }
 
             class Bar {
-                public function bar () {
+                public function bar ($arg) {
                     if (is_subclass_of(static::$instance, "Foo")) { // ok
                         return static::baz();                       // ok
-                    } else {
+                    } elseif ($arg instanceof static) {             // ok
                         return new static(25);                      // ok
                     }
                     return new static;

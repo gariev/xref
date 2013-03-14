@@ -613,11 +613,12 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             // other usage of "static" keyword:
             //  $foo = new static();
             //  $foo = new static;
+            //  $foo instanceof staic
             //  $foo = static::methodName();
             if ($t->kind == T_STATIC && $pf->getMethodAt($t->index)!=null) {
                 $n = $t->nextNS();
                 $p = $t->prevNS();
-                if ($n->kind != T_DOUBLE_COLON && $p->kind != T_NEW) {
+                if ($n->kind != T_DOUBLE_COLON && $p->kind != T_NEW && $p->kind != T_INSTANCEOF) {
                     $list = $pf->extractList($n, ',', ';');
                     foreach ($list as $n) {
                         if ($n->kind == T_VARIABLE) {
