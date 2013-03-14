@@ -245,6 +245,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
             $foo->sort($n);                             // warning, unknown sort
         '
         ;
+
         $expectedDefects = array(
             array('$x', 8,   XRef::ERROR),
             array('$y', 9,   XRef::ERROR),
@@ -260,6 +261,38 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$k', 34,  XRef::WARNING),
             array('$m', 37,  XRef::WARNING),
             array('$n', 38,  XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+
+        //
+        XRef::setConfigValue(
+            'lint.init-by-reference',
+            array(
+                "foo,0",
+                "Foo::bar,1",
+                "?::baz,0,1"
+            )
+        );
+        $testPhpCode = '
+        <?php
+            function t() {
+                foo($x);                    // ok
+                foo($y, $z);                // error on $z
+
+                Foo::bar(1, $a);            // ok
+                Foo::bar($b, $c);           // error on $b
+
+                $x->baz($i, $j);            // ok
+                $x->foo->baz($k, $l, $m);   // error on $m
+
+            }
+        '
+        ;
+
+        $expectedDefects = array(
+            array('$z', 5,   XRef::ERROR),
+            array('$b', 8,   XRef::ERROR),
+            array('$m', 11,   XRef::ERROR),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
