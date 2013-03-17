@@ -855,6 +855,8 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
 
         // add functions that are defined in extensions that the given PHP runtime may miss
         // e.g. my dev box misses apc extension
+        // array_multisort is another exception - it may pass several args by reference, but
+        // only the first one is guaranteed
         $override_list = array(
             "apc_fetch"               => array(1),
             'apc_dec'                 => array(2),
@@ -873,6 +875,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             'numfmt_parse_currency'   => array(2, 3),
             'pcntl_waitpid'           => array(1),
             "pcntl_wait"              => array(0),
+            "array_multisort"         => array(0),
         );
 
         foreach ($override_list as $function_name => $args) {

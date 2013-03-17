@@ -265,6 +265,19 @@ class UndefinedVarsLintTest extends BaseLintTest {
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
         //
+        $testPhpCode = '
+        <?php
+            $arraysort = array();
+            array_multisort($arraysort, SORT_ASC);  // ok, no error on second arg
+            echo $expectedError;
+        '
+        ;
+        $expectedDefects = array(
+            array('$expectedError', 5,   XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+
+        //
         XRef::setConfigValue(
             'lint.init-by-reference',
             array(
