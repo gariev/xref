@@ -4,7 +4,7 @@ require_once dirname(__FILE__) . "/BaseLintTest.php";
 
 class LowerCaseLiteralsTest extends BaseLintTest {
 
-   public function NONtestLiteral() {
+   public function testBasicLiteral() {
         $testPhpCode = '
         <?php
             echo time;                                  // warning
@@ -70,6 +70,23 @@ class LowerCaseLiteralsTest extends BaseLintTest {
             }
         ';
         $exceptedDefects = array(
+        );
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
+    }
+
+    public function testClassConstants() {
+        $testPhpCode = '
+        <?php
+            class Foo {
+                const bar = 1;      // ok
+                const Baz = 2;      // ok
+            }
+            echo Foo::bar;          // ok
+            echo Foo::Baz;          // ok
+            echo ExpectedWarning;   // warning
+        ';
+        $exceptedDefects = array(
+            array('ExpectedWarning', 9, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
      }

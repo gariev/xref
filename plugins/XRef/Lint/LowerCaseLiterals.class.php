@@ -120,6 +120,12 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
                     continue;
                 }
 
+                if ($p->kind == T_CONST) {
+                    // ok, explicit constant declaration:
+                    // class Enum { const Varain1 = 1; }
+                    continue;
+                }
+
                 // declare(ticks=1) ?
                 if ($t->text=='ticks' || $t->text=='encoding') {
                     if ($p->text == '(') {
