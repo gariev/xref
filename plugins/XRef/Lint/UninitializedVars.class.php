@@ -469,10 +469,20 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                         }
                         if ($arg->kind == T_VARIABLE) {
                             // check that this variable existst at outer scope
-                            $this->checkVarAndAddDefectIfMissing($arg, false, 1);
+                            // however, if it's passed by reference, it can be created by the closure:
+                            //      $foo = function () using (&$x) { $x = 1; };
+                            //      $foo(); // now we have $x here
+                            if (!$pass_by_reference) {
+                                $this->checkVarAndAddDefectIfMissing($arg, false, 1);
+                            } else {
+                                $var = $this->getOrCreateVar($arg, 1);
+                                $var->status = self::VAR_ASSIGNED;  // not quite true -
+                                                                    // if it is assigned or not depends on body of the closure
+                            }
                             // create variable at current scope
                             $var = $this->getOrCreateVar($arg);
-                            $var->status = self::VAR_ASSIGNED;
+                            $var->status = self::VAR_ASSIGNED;      // not true - if it's passed by ref and doesn't exist in outer scope,
+                                                                    // it has no value yet
                             $var->isRefParam = $pass_by_reference; // parameter passed by reference
                         } else {
                             throw new Exception("Invalid function decl found: $n instead of ')'");

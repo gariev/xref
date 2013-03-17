@@ -363,9 +363,10 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 echo $i;                                // error
                 echo $x, $y;                            // ok
 
-                $g = function ($p) use (&$q) {          // error - no $q in outer scope
-                    return $p * $q;                     // ok
+                $g = function ($p) use (&$q) {          // ok - $q will be created
+                    $q = $p;                            // ok
                 };
+                $g();                                   // creates $q
                 echo $q;                                // ok, dont report $q twice
             }
         ';
@@ -373,7 +374,6 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$i', 7,  XRef::ERROR),
             array('$z', 9,  XRef::ERROR),
             array('$i', 10,  XRef::ERROR),
-            array('$q', 13,  XRef::ERROR),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
