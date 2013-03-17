@@ -99,11 +99,16 @@ class XRef_Lint_StaticThis extends XRef_APlugin implements XRef_ILintPlugin {
 
             // similar error: self is used ouside of class declaration
             // however, self:: is allowed in static methods
-            if (($t->text == 'self' || $t->text == 'parent')  && !$pf->getClassAt($t->index)) {
-                if ($allow_this_in_global_scope) {
-                    $this->addDefect($t, XRef::WARNING, "Possible use of 'self/parent' is global scope");
-                } else {
-                    $this->addDefect($t, XRef::ERROR, "'self/parent' is used outside of class scope");
+            // also, allow $object->parent
+            if (($t->text == 'self' || $t->text == 'parent') && !$pf->getClassAt($t->index)) {
+                $n = $t->nextNS();
+                $p = $t->prevNS();
+                if ($n->text == '::' || $p->kind == T_NEW || $p->kind == T_INSTANCEOF) {
+                    if ($allow_this_in_global_scope) {
+                        $this->addDefect($t, XRef::WARNING, "Possible use of 'self/parent' is global scope");
+                    } else {
+                        $this->addDefect($t, XRef::ERROR, "'self/parent' is used outside of class scope");
+                    }
                 }
             }
 
