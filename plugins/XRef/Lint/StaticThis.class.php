@@ -91,9 +91,19 @@ class XRef_Lint_StaticThis extends XRef_APlugin implements XRef_ILintPlugin {
             // if we found $this anywhere else, this is an error
             if ($t->text == '$this') {
                 if ($allow_this_in_global_scope) {
-                    $this->addDefect($t, XRef::WARNING, "Possible use of \$this is global scope");
+                    $this->addDefect($t, XRef::WARNING, "Possible use of '\$this' is global scope");
                 } else {
-                    $this->addDefect($t, XRef::ERROR, "\$this is used outside of instance method");
+                    $this->addDefect($t, XRef::ERROR, "'\$this' is used outside of instance method");
+                }
+            }
+
+            // similar error: self is used ouside of class declaration
+            // however, self:: is allowed in static methods
+            if (($t->text == 'self' || $t->text == 'parent')  && !$pf->getClassAt($t->index)) {
+                if ($allow_this_in_global_scope) {
+                    $this->addDefect($t, XRef::WARNING, "Possible use of 'self/parent' is global scope");
+                } else {
+                    $this->addDefect($t, XRef::ERROR, "'self/parent' is used outside of class scope");
                 }
             }
 

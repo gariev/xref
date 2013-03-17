@@ -33,9 +33,13 @@ class StaticThisLintTest extends BaseLintTest {
         $testPhpCode = '
         <?php
             echo $this->foo;
+            self::foo();
+            parent::foo();
         ';
         $exceptedDefects = array(
-            array('$this', 3, XRef::WARNING),
+            array('$this',  3, XRef::WARNING),
+            array('self',   4, XRef::WARNING),
+            array('parent', 5, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
     }
@@ -46,27 +50,40 @@ class StaticThisLintTest extends BaseLintTest {
         echo $this->foo;        // error
         function foo () {
             echo $this->foo;    // error
+            echo self::foo();   // error
+            echo parent::foo(); // error
         }
         class Bar {
             $this->bar;         // error
             public static function foo() {
                 $this;          // error
+                self::foo();    // ok
+                parent::foo();  // ok
             }
             public function bar() {
+                self::$foo;     // ok
+                parent::bar();  // ok
                 $this;          // ok
             }
         }
         echo $this->lastTime(); // error
+        echo self::$foo;        // error
+        echo parent::bar();     // error
         ';
 
         $exceptedDefects = array(
             array('$this', 3, XRef::ERROR),
             array('$this', 5, XRef::ERROR),
-            array('$this', 8, XRef::ERROR),
+            array('self',  6, XRef::ERROR),
+            array('parent',7, XRef::ERROR),
             array('$this', 10, XRef::ERROR),
-            array('$this', 16, XRef::ERROR),
+            array('$this', 12, XRef::ERROR),
+            array('$this', 22, XRef::ERROR),
+            array('self',  23, XRef::ERROR),
+            array('parent',24, XRef::ERROR),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
+
     }
 
     public function testTraits() {
