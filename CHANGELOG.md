@@ -17,7 +17,13 @@ Version 0.1.4
 Version 0.1.5
 ==============
 - lint: PHP 5.3+ features (namespaces, anonymous functions)
-- lint: new error "Possible attemps to pass non-variable by reference"
+- lint: new error "Possible attempt to pass non-variable by reference"
+
+Version 0.1.6
+==============
+- lint: PHP 5.4+ features (traits)
+- lint: new error "Use of self:: or parent:: outside of class scope"
 
 
+-
 -

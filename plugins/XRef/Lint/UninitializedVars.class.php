@@ -722,7 +722,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
 
                                         // TODO: add other valid lvalues here, like $array["index"] or $object->field
                                         if (!$is_class_variable) {
-                                            $this->addDefect($n, XRef::ERROR, "Possible attemps to pass non-variable by reference");
+                                            $this->addDefect($n, XRef::ERROR, "Possible attempt to pass non-variable by reference");
                                         }
                                     }
                                 }
