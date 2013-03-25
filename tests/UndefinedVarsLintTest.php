@@ -397,6 +397,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
     public function testRelaxedMode() {
         $testPhpCode = '
         <?php
+            echo $globalScopeVar;  // warning - in relaxed mode
             function foo($x) {
                 echo $y;            // error
                 $$x = "foo";        // relaxed mode starts here
@@ -409,12 +410,29 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 $$i["key"] = "foo"; // relaxed mode starts here
                 echo $z;            // warning
             }
+            function baz() {
+                echo $a;            // error
+                include "foo.php";  // relaxed mode starts here
+                echo $b;            // warning
+            }
+            function qux() {
+                echo $c;            // error
+                eval "\$d = 1";     //
+                echo $d;            // warning
+            }
+            echo $anotherGlobalScopeVar;  // warning - in relaxed mode
          ';
         $expectedDefects = array(
-            array('$y', 4,  XRef::ERROR),
-            array('$z', 6,  XRef::WARNING),
-            array('$j', 11,  XRef::ERROR),
-            array('$z', 13,  XRef::WARNING),
+            array('$globalScopeVar', 3,  XRef::WARNING),
+            array('$y', 5,  XRef::ERROR),
+            array('$z', 7,  XRef::WARNING),
+            array('$j', 12,  XRef::ERROR),
+            array('$z', 14,  XRef::WARNING),
+            array('$a', 17,  XRef::ERROR),
+            array('$b', 19,  XRef::WARNING),
+            array('$c', 22,  XRef::ERROR),
+            array('$d', 24,  XRef::WARNING),
+            array('$anotherGlobalScopeVar', 26,  XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 

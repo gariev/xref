@@ -243,6 +243,13 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                     continue;
                 }
             }
+            // use of eval();
+            if ($t->kind == T_EVAL) {
+                $n = self::skipTillText($t, ';');
+                $token_caused_mode_switch = $t;
+                $switch_to_relaxed_scope_at = $n->index;
+                continue;
+            }
             // $$var notation in assignement.
             // Non-assignement (read) operations doesn't cause mode switch
             //      $$foo =
