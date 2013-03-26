@@ -435,8 +435,69 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$anotherGlobalScopeVar', 26,  XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
-
     }
 
+    public function testLoops() {
+        $testPhpCode = '
+        <?php
+            function foo() {            // implementation of implode :)
+                foreach ($foo as $f)    // error for $foo
+                {
+                    if ($t) {           // $t is ok, because of loop
+                        $t .= ";" . $f;
+                    } else {
+                        $t = $f;
+                    }
+
+                    echo $u;            // error, $u is not initalized till the end of loop
+                }
+                echo $v;                // error
+            }
+
+            function bar() {
+                do {
+                    $x = 10;
+                    echo $a["foo"];     // ok
+                    $a = array();
+
+                    $b["foo"]++;        // warning about autovivification
+                    $c["foo"] = 1;      // warning about autovivification
+
+                    $d["foo"] = 1;
+                    $d = array();       // ok
+                } while ($x > 0 && $y>0);// $x is ok, $y is error
+            }
+
+            function baz() {
+                while (true) {
+                    if (second_iteration()) {
+                        $i++;                   // ok
+                    } else {
+                        $i = 0;
+                    }
+
+                    unset($j);                  // ok
+                    $j = 0;
+
+                    $k++;                       // ok
+                    $k = 0;
+
+                    $l++;                       // warning
+                }
+            }
+        '
+        ;
+
+        $expectedDefects = array(
+            array('$foo',   4,  XRef::ERROR),
+            array('$u',     12, XRef::ERROR),
+            array('$v',     14, XRef::ERROR),
+            array('$b',     23, XRef::WARNING),
+            array('$c',     24, XRef::WARNING),
+            array('$y',     28, XRef::ERROR),
+            array('$l',     45, XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+    }
 }
 

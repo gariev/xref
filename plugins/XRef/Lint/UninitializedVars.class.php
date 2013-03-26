@@ -74,6 +74,12 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
      */
     private $userFunctions = array();
 
+
+    /** loop management: allow a variable to be used in loop before it is assigned */
+    private $loop_starts_at = -1;
+    private $loop_ends_at = -1;
+    private $loop_variables = array();
+
     /**
      * array( "function_name" => true ) with list of functions that do takes
      * arguments by reference but don't initialize them, i.e. it must exist already,
@@ -188,16 +194,28 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         }
     }
 
-    protected function checkVarAndAddDefectIfMissing($token, $forceWarning=false, $scopeDepth=0) {
+    protected function checkVarAndAddDefectIfMissing($token, $forceWarning=false, $scopeDepth=0, $message=null) {
         if (!$this->checkVar($token, $scopeDepth)) {
             $scope = $this->getScope($scopeDepth);
-            if ($scope->mode == self::MODE_RELAXED || $forceWarning) {
-                $this->addDefect($token, XRef::WARNING, "Possible use of non-defined variable");
-            } else {
-                $this->addDefect($token, XRef::ERROR, "Use of non-defined variable");
+            $severity = ($scope->mode == self::MODE_RELAXED || $forceWarning) ? XRef::WARNING : XRef::ERROR;
+            if (!$message) {
+                $message = ($severity == XRef::WARNING) ?
+                    "Possible use of non-defined variable" : "Use of non-defined variable";
             }
-            $var = $this->getOrCreateVar($token, $scopeDepth);
-            $var->status = self::VAR_ASSIGNED;
+            if ($this->loop_ends_at > 0) {
+                // special "inside-loop" mode: don't report the missing variable
+                // till the end of the loop, since
+                // assign/use pattern can be out of lexical order inside of loops
+                $variable_name = $token->text;
+                if (!isset( $this->loop_variables[$variable_name] )) {
+                    $this->loop_variables[$variable_name] = array($token, $severity, $message);
+                }
+            } else {
+                $this->addDefect($token, $severity, $message);
+                // create this var to report the error only once
+                $var = $this->getOrCreateVar($token, $scopeDepth);
+                $var->status = self::VAR_ASSIGNED;
+            }
         }
     }
 
@@ -219,6 +237,10 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
 
         $switch_to_relaxed_scope_at = -1;   // token position, after which there is relaxed mode
         $token_caused_mode_switch = null;   // token that caused the switch, e.g. "extract"
+
+        $this->loop_starts_at = -1;
+        $this->loop_ends_at = -1;
+        $this->loop_variables = array();
 
         $tokens = $pf->getTokens();
         // hate PHP 5.2: no loop labels allowed
@@ -291,6 +313,60 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                 unset($token_caused_mode_switch);
             }
 
+            // loops:
+            // in loop, a variable can be tested first, and then assigned and this in not an error:
+            //      foreach                             // on parsing this line, $this->loop_starts_at will be set
+            //          ($items as $item)
+            //      {                                   // here $this->loop_ends_at will be set as marker
+            //                                          // that we are inside of the loop
+            //          if (isset($total)) {
+            //              $total += $item->cost;
+            //          } else {
+            //              $total = $item->cost;
+            //          }
+            //      }                                   // here the loop scope will be dropped and all
+            //                                          // missing vars will be added to report
+            //
+            if ($this->loop_ends_at > 0) {
+                // end the loop scope?
+                if ($t->index >= $this->loop_ends_at) {
+                    // mark all variables that were used but not initialized
+                    // inside the loop as defects
+                    foreach ($this->loop_variables as $variable_name => $v) {
+                        list($token, $severity, $message) = $v;
+                        if (!$this->checkVar($token)) {
+                            $this->addDefect($token, $severity, $message);
+                            $var = $this->getOrCreateVar($token);
+                            $var->status = self::VAR_ASSIGNED;
+                        }
+                    }
+                    $this->loop_starts_at = -1;
+                    $this->loop_ends_at = -1;
+                    $this->loop_variables = array();
+                }
+            } else {
+                if ($this->loop_starts_at > 0) {
+                    if ($t->index >= $this->loop_starts_at) {
+                        $this->loop_ends_at = $pf->getIndexOfPairedBracket( $this->loop_starts_at );
+                    }
+                } else {
+                    // start a new loop scope?
+                    // for, foreach, while, do ... while
+                    if ($t->kind == T_FOR || $t->kind == T_FOREACH || $t->kind == T_DO || $t->kind == T_WHILE) {
+                        $n = $t->nextNS();
+                        // skip condition, may be missing if token is T_DO
+                        if ($n->text == '(') {
+                            $n = $pf->getTokenAt( $pf->getIndexOfPairedBracket( $n->index ) );
+                            $n = $n->nextNS();
+                        }
+                        // is there a block or a single statement as loop's body?
+                        if ($n->text == '{') {
+                            $this->loop_starts_at = $n->index;
+                        }
+                    }
+                }
+            }
+
             //
             // Part 1.
             //
@@ -335,43 +411,32 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
                     continue;
                 }
 
-                $isArray = false;
+                $is_array = false;
                 while ($n->text == '[') {
                     // quick forward to closing ']'
                     $n = $pf->getTokenAt( $pf->getIndexOfPairedBracket($n->index) );
                     $n = $n->nextNS();
-                    $isArray = true;
+                    $is_array = true;
                 }
 
                 if ($n->text == '=') {
-                    if (!$this->checkVar($t) && $isArray) {
-                        // array autovivification;
-                        $this->addDefect($t, XRef::WARNING, "Array autovivification");
+                    if ($is_array && !$this->checkVar($t)) {
+                        // array autovivification?
+                        $this->checkVarAndAddDefectIfMissing($t, true, 0, "Array autovivification");
+                    } else {
+                        $var = $this->getOrCreateVar($t);
+                        $var->status = self::VAR_ASSIGNED;
                     }
-                    $var = $this->getOrCreateVar($t);
-                    $var->status = self::VAR_ASSIGNED;
                     continue;
                 }
 
                 if ($n->kind==T_INC || $n->kind==T_DEC || $p->kind==T_INC || $p->kind==T_DEC || $n->kind==T_CONCAT_EQUAL || $n->kind==T_PLUS_EQUAL) {
-                    if (!$this->checkVar($t)) {
-                        if ($isArray) {
-                            // $foo["bar"]++
-                            // array autovivification;
-                            $this->addDefect($t, XRef::WARNING, "Array autovivification");
-                        } else {
-                            // $foo++
-                            // $text .=
-                            $this->addDefect($t, XRef::WARNING, "Scalar autovivification");
-                        }
-
-                        $var = $this->getOrCreateVar($t);
-                        $var->status = self::VAR_ASSIGNED;
-                        continue;
-                    }
+                    $message = ($is_array) ? "Array autovivification" : "Scalar autovivification";
+                    $this->checkVarAndAddDefectIfMissing($t, true, 0, $message);
+                    continue;
                 }
 
-                if ($n->text == ';' && !$isArray) {
+                if ($n->text == ';' && !$is_array) {
                     if ($p && ($p->text==';' || $p->text=='{')) {
                         $this->addDefect($t, XRef::NOTICE, "Empty declaration-like statement");
                         $var = $this->getOrCreateVar($t);
@@ -513,18 +578,6 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
             if ($i==$dropScopeAt) {
                 $currentScope = $this->removeScope();
                 $dropScopeAt = $currentScope->prevScope;
-
-                //
-                // the notice below is unreliable:
-                //  if a variable is inside loop, it can be used on next iterations of the loop
-                // another TODO: report about vars ouside of loops only
-                /*
-                foreach ($currentScope->vars as $varName => $var) {
-                    if ($var->status != self::VAR_USED && !$var->isRefParam && !$var->isCatchVar && !in_array($varName, self::$knownSuperglobals) && !$var->isGlobal) {
-                        $this->addDefect($var->token, XRef::NOTICE, "Value of variable is not used");
-                    }
-                }
-                */
             }
 
             // catch (Exception $foo)
@@ -814,14 +867,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         if (count($this->stackOfScopes)!=1) {
             throw new Exception("internal error: size of stack = " . count($this->stackOfScopes) . ", " . $pf->getFileName());
         }
-
         $currentScope = $this->removeScope();
-        foreach ($currentScope->vars as $varName => $var) {
-            if ($var->status != self::VAR_USED && !in_array($varName, self::$knownSuperglobals)) {
-                $this->addDefect($var->token, XRef::NOTICE, "Value of variable is not used");
-            }
-        }
-
         return $this->report;
     }
 
