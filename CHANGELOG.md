@@ -24,6 +24,10 @@ Version 0.1.6
 - lint: PHP 5.4+ features (traits)
 - lint: new error "Use of self:: or parent:: outside of class scope"
 
+Version 0.1.7
+==============
+- lint: accuracy improvements:
+    - out-of-order assignment/usage of variables in loops
+    - allowing lower/mixed-case constants defined in the same file
+    - eval triggers relaxed mode now
 
--
--
