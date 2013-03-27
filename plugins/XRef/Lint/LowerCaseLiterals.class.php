@@ -41,7 +41,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
         // lower/mixed-case string literals:
         // for (foo=0; $foo<10; )
         // $bar[x]  - is it $bar['x'] or $bar[$x] ?
-        $seenStrings = array(); // report every literal once per file, don't be noisy
+        $seen_strings = array(); // report every literal once per file, don't be noisy
 
         $tokens = $pf->getTokens();
         for ($i=0; $i<count($tokens); ++$i) {
@@ -92,6 +92,24 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
                     $n = $n->nextNS();
                 }
 
+                // add constants defined in this file to list of known strings and don't report them
+                //  define('foo', <expression>)
+                if ($t->text == 'define') {
+                    if ($n->text == '(') {
+                        $nn = $n->nextNS();
+                        if ($nn->kind == T_CONSTANT_ENCAPSED_STRING) {
+                            $string = $nn->text;
+                            $nn = $nn->nextNS();
+                            if ($nn->text == ',' && strlen($string) > 2) {
+                                // remove the first and the last quotes
+                                $string = substr($string, 1, strlen($string)-2);
+                                $seen_strings[ $string ] = 1;
+                                continue;
+                            }
+                        }
+                    }
+                }
+
                 if ($n->text == '(') {
                     // ok, function call: Foo(...)
                     $i = $n->index;
@@ -137,10 +155,11 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
                     }
 
                 }
-                if (array_key_exists($t->text, $seenStrings)) {
+
+                if (array_key_exists($t->text, $seen_strings)) {
                     continue;
                 }
-                $seenStrings[ $t->text ] = 1;
+                $seen_strings[ $t->text ] = 1;
 
                 $this->addDefect($t, XRef::WARNING, "Mixed/Lower-case unquoted string literal");
             }
