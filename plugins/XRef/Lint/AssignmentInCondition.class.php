@@ -5,7 +5,7 @@
  * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  */
 
-class XRef_Lint_AssignementInCondition extends XRef_APlugin implements XRef_ILintPlugin {
+class XRef_Lint_AssignmentInCondition extends XRef_APlugin implements XRef_ILintPlugin {
     protected $reportId             = "lint-assignemnet-in-condition";
     protected $reportName           = "Lint (assignement in condition)";
     protected $supportedFileType    = XRef::FILETYPE_PHP;
