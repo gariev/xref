@@ -612,6 +612,7 @@ class XRef {
                 'XRef_Lint_UninitializedVars',
                 'XRef_Lint_LowerCaseLiterals',
                 'XRef_Lint_StaticThis',
+                'XRef_Lint_AssignmentInCondition',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
             ),
             'lint.check-global-scope' => true,
