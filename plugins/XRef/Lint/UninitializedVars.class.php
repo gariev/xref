@@ -992,7 +992,7 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         // format of each config entry (arguments positions starts with 1):
         // init-by-reference[]  =   <function-name>,<position-of-param1>,<position-of-param2...>
         foreach (XRef::getConfigValue("lint.init-by-reference", array()) as $str) {
-            $params = split(",", $str);
+            $params = explode(",", $str);
             $function_name = array_shift($params);
             $functions[$function_name] = $params;
         }
