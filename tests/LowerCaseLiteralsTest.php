@@ -111,6 +111,33 @@ class LowerCaseLiteralsTest extends BaseLintTest {
             array('asdf', 12, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
+    }
+
+    public function testConstants() {
+        $testPhpCode = '
+        <?php
+            const foo = 1;          // ok
+            echo foo;               // ok
+
+            const bar = 2, baz = 3; // ok
+            echo bar;               // ok
+            echo baz;               // ok
+
+            const a = b;            // warning (b)
+            echo a;                 // ok
+
+            class Foo {
+                const c = 1;        // ok
+                const d = true, e = 2*2; //ok
+            }
+            echo Foo::c;            // ok
+            echo c;                 // warning c
+        ';
+        $exceptedDefects = array(
+            array('b', 10, XRef::WARNING),
+            array('c', 18, XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
      }
 }
 

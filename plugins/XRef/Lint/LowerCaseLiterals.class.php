@@ -43,9 +43,16 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
         // $bar[x]  - is it $bar['x'] or $bar[$x] ?
         $seen_strings = array(); // report every literal once per file, don't be noisy
 
+        // list of token indexes that contains allowed string literals
+        $ignore_tokens = array();
+
         $tokens = $pf->getTokens();
         for ($i=0; $i<count($tokens); ++$i) {
             $t = $tokens[$i];
+
+            if (isset($ignore_tokens[$i])) {
+                continue;
+            }
 
             // skip namespaces declarations and imports:
             // namespace foo\bar;
@@ -78,6 +85,27 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
                 $i = $t->index;
                 continue;
             }
+
+            if ($t->kind == T_CONST) {
+                // const foo = 1, bar = 2;
+                $list = $pf->extractList($t->nextNS(), ',', ';');
+                foreach ($list as $token) {
+                    if ($token->kind != T_STRING) {
+                        throw new Exception($token);
+                    }
+                    // ignore foo and bar in this declaration
+                    $ignore_tokens[ $token->index ] = 1;
+
+                    // and add their names to list of known constants,
+                    // unless they are class constants and
+                    // will be prefixed by class name when used
+                    if (! $pf->getClassAt($token->index)) {
+                        $seen_strings[ $token->text ] = 1;
+                    }
+                }
+                continue;
+            }
+
 
             if ($t->kind == T_STRING) {
                 if ($t->text == strtoupper($t->text)) {
@@ -135,12 +163,6 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
                 $p = $t->prevNS();
                 if ($p->kind == T_DOUBLE_COLON || $p->kind==T_OBJECT_OPERATOR) {
                     // ok, static or instance member: $bar->foo, Bar::foo
-                    continue;
-                }
-
-                if ($p->kind == T_CONST) {
-                    // ok, explicit constant declaration:
-                    // class Enum { const Varain1 = 1; }
                     continue;
                 }
 
