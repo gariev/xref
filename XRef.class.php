@@ -555,8 +555,8 @@ class XRef {
     /**
      * @return array - the key/value pairs read from config file
      */
-    public static function &getConfig() {
-        if (self::$config) {
+    public static function &getConfig($forceReload = false) {
+        if (self::$config && !$forceReload) {
             return self::$config;
         }
 
@@ -625,6 +625,31 @@ class XRef {
             }
         }
 
+        // override values with -d command-line option
+        list($options, $arguments) = self::getCmdOptions();
+        if (isset($options["define"])) {
+            foreach ($options["define"] as $d) {
+                list($k, $v) = explode("=", $d, 2);
+                if ($v) {
+                    if ($v=="true" || $v=="on") {
+                        $v = true;
+                    } elseif ($v=="false" || $v=="off") {
+                        $v = false;
+                    }
+                }
+
+                if (isset($config[$k]) && is_array($config[$k])) {
+                    if ($v) {
+                        $config[$k][] = $v;
+                    } else {
+                        $config[$k] = array();
+                    }
+                } else {
+                    $config[$k] = $v;
+                }
+            }
+        }
+
         self::$config = $config;
         return self::$config;
     }
@@ -671,41 +696,60 @@ class XRef {
 
     // optionsList: array of arrays (shortOpt, longOpt, usage, description)
     private static $optionsList = array(
-        array('c:', 'config=',    '-c, --config=FILE',    'Path to config file'),
-        array('v',  'verbose',    '-v, --verbose',        'Be noisy'),
-        array('h',  'help',       '-h, --help',           'Print this help and exit'),
+        array('c:', 'config=',  '-c, --config=FILE',    'Path to config file',          false),
+        array('v',  'verbose',  '-v, --verbose',        'Be noisy',                     false),
+        array('h',  'help',     '-h, --help',           'Print this help and exit',     false),
+        array('d:', 'define=',  '-d, --define key=val', 'Override config file values',  true),
     );
 
-    public static function registerCmdOption($shortName, $longName, $usage, $desc) {
-        self::$optionsList[] = array($shortName, $longName, $usage, $desc);
+    public static function registerCmdOption($shortName, $longName, $usage, $desc, $isArray = false) {
+        self::$optionsList[] = array($shortName, $longName, $usage, $desc, $isArray);
     }
 
     /**
      * Parses command line-arguments and returns found options/arguments.
-     * TODO: allow scripts to pass their own option specifications
+     *
+     *  input (for tests only, by default it takes real comman-line option list):
+     *      array("scriptname.php", "--help", "-d", "foo=bar", "--config=xref.ini", "filename.php")
+     *
+     *  output:
+     *      array(
+     *          array( "help" => true, "define" => array("foo=bar"), "config" => "xref.ini"),
+     *          array( "filename.php" )
+     *      );
      *
      * @return tuple(array $commandLineOptions, array $commandLineArguments)
      */
-    public static function getCmdOptions() {
-        if (self::$options) {
-            return array(self::$options, self::$arguments);
+    public static function getCmdOptions( $testArgs = null ) {
+
+        if (is_null($testArgs)) {
+            if (self::$options) {
+                return array(self::$options, self::$arguments);
+            }
+
+            if (php_sapi_name() != 'cli') {
+                return array(array(), array());
+            }
         }
 
-        if (php_sapi_name() != 'cli') {
-            return array(array(), array());
-        }
-
-        $shortOptionsList = array();    // array('h', 'v', 'c:')
-        $longOptionsList = array();     // array('help', 'verbose', 'config=')
+        $shortOptionsList = array();    // array( 'h', 'v', 'c:' )
+        $longOptionsList = array();     // array( 'help', 'verbose', 'config=' )
+        $renameMap = array();           // array( 'h' => 'help', 'c' => 'config' )
+        $isArrayMap = array();          // array( 'help' => false, 'define' => true, )
         foreach (self::$optionsList as $o) {
             $shortOptionsList[] = $o[0];
             $longOptionsList[] = $o[1];
+            $short = preg_replace('/\W/', '', $o[0]); // remove ':' and '=' from specificators
+            $long = preg_replace('/\W/', '', $o[1]);
+            $renameMap[ $short ] = $long;
+            $isArrayMap[ $long ] = $o[4];
         }
 
         // TODO: write a better command-line parser
         require_once 'Console/Getopt.php';
         $getopt = new Console_Getopt();
-        $getoptResult = $getopt->getopt( $getopt->readPHPArgv(), implode('', $shortOptionsList), $longOptionsList);
+        $args = ($testArgs) ? $testArgs : $getopt->readPHPArgv();
+        $getoptResult = $getopt->getopt( $args, implode('', $shortOptionsList), $longOptionsList);
         if (PEAR::isError($getoptResult)) {
             throw new Exception('Error: ' . $getoptResult->getMessage());
         }
@@ -719,15 +763,19 @@ class XRef {
                 $v = true;
             }
             $k = preg_replace('#^\-+#', '', $k);
-            $options[$k] = $v;
-        }
 
-        // force long option names
-        foreach (self::$optionsList as $o) {
-            $s = preg_replace('/\W/', '', $o[0]); // remove ':' and '=' specificators
-            $l = preg_replace('/\W/', '', $o[1]);
-            if (isset($options[$s])) {
-                $options[$l] = $options[$s];
+            // force long option names
+            if (isset($renameMap[$k])) {
+                $k = $renameMap[$k];
+            }
+
+            if ($isArrayMap[$k]) {
+                if (!isset($options[$k])) {
+                    $options[$k] = array();
+                }
+                $options[$k][] = $v;
+            } else {
+                $options[$k] = $v;
             }
         }
 
