@@ -15,6 +15,7 @@ class AssignmentInConditionTest extends BaseLintTest {
 
             if ($fh = fopen("file", "w")) ; // ok
             if ($ch = curl_init());         // ok
+            if (someFunc($firstParam = 1)); // ok
         ';
         $exceptedDefects = array(
             array('null',   5, XRef::WARNING),

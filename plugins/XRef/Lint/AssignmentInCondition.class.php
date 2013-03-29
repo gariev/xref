@@ -58,6 +58,17 @@ class XRef_Lint_AssignmentInCondition extends XRef_APlugin implements XRef_ILint
                 $last_index = $pf->getIndexOfPairedBracket( $n->index );
                 while ($n->index < $last_index) {
                     $n = $n->nextNS();
+
+                    // skip function/method calls inside 'if' statements
+                    //      if (someFunc($paramName = value)) ...
+                    if ($n->text == '(') {
+                        $p = $n->prevNS();
+                        if ($p->kind == T_STRING) {
+                            $n = $pf->getTokenAt( $pf->getIndexOfPairedBracket( $n->index ) );
+                            continue;
+                        }
+                    }
+
                     if ($n->text == '=') {
                         $n = $n->nextNS();
                         $nn = $n->nextNS();
