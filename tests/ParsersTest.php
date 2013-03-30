@@ -99,6 +99,65 @@ class TestParsers extends PHPUnit_Framework_TestCase {
             }
         }
         $this->assertTrue($is_nested_function_found);
+        $pf->release();
+    }
 
+    public function testNamespacesAndTraits() {
+
+        //
+        // correctly parse namespaces and traits statements, even in compat mode
+        //
+        $testPhpCode =
+        '
+            <?php
+            namespace foo;
+            trait Foo { }
+        ';
+        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $tokens = $pf->getTokens();
+
+        $is_namespace_found = false;
+        $is_trait_found = false;
+        foreach ($tokens as $t) {
+            if ($t->kind==T_NAMESPACE) {
+                $is_namespace_found = true;
+            }
+            if ($t->kind==T_TRAIT) {
+                $is_trait_found = true;
+            }
+        }
+        $this->assertTrue($is_namespace_found);
+        $this->assertTrue($is_trait_found);
+        $pf->release();
+
+        //
+        // namespaces and traits are not reserved word!
+        //
+        $testPhpCode =
+        '
+            <?php
+            class Foo {
+                public function bar() {
+                    echo $this->namespace;
+                    $this->trait += $this->namespace;
+                }
+            }
+        ';
+        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $tokens = $pf->getTokens();
+
+        $is_namespace_found = false;
+        $is_trait_found = false;
+        foreach ($tokens as $t) {
+            if ($t->kind==T_NAMESPACE) {
+                $is_namespace_found = true;
+            }
+            if ($t->kind==T_TRAIT) {
+                $is_trait_found = true;
+            }
+        }
+        $this->assertTrue(!$is_namespace_found);
+        $this->assertTrue(!$is_trait_found);
+        $pf->release();
     }
 }

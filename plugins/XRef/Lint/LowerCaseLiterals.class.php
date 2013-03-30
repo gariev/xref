@@ -108,8 +108,14 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
 
 
             if ($t->kind == T_STRING) {
-                if ($t->text == strtoupper($t->text)) {
+                $str_upper = strtoupper($t->text);
+                if ($t->text == $str_upper) {
                     // ok, all-uppercase, SOME_CONSTANT, I hope
+                    continue;
+                }
+
+                // PHP predefined constants?
+                if ($str_upper == "TRUE" || $str_upper == "FALSE" || $str_upper == "NULL") {
                     continue;
                 }
 

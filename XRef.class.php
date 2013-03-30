@@ -38,7 +38,7 @@ class XRef {
     // compat mode
     // it's possible to some extend parse PHP 5.3+ code in PHP 5.2 runtime
     // however, have to define missing constants
-    static $compatMode = false;
+    public static $compatMode = array();
     static $compatConstants = array(
         "T_NAMESPACE"       => 65100,
         "T_NS_SEPARATOR"    => 65101,
@@ -81,7 +81,13 @@ class XRef {
             if (!defined($name)) {
                 define($name, $value);
                 self::$tokenNames[$value] = $name;
-                self::$compatMode = true;
+                self::$compatMode[$name] = true;
+            } elseif (token_name(constant($name))=="UNKNOWN") {
+                // oops, someone (e.g. phpunit) but not PHP core
+                // has defined this constant
+                // don't define it again to prevent "redefine" warning
+                self::$tokenNames[ constant($name) ] = $name;
+                self::$compatMode[$name] = true;
             }
         }
     }

@@ -138,6 +138,28 @@ class LowerCaseLiteralsTest extends BaseLintTest {
             array('c', 18, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
+    }
+
+    public function testPredefinedConstants() {
+        $testPhpCode = '
+        <?php
+            if (true) ;                 // ok
+            if (false);                 // ok
+            if (null);                  // ok
+            if (True || fAlse || Null); // ok
+
+            function true() {           // its ok in PHP :(
+                return false;
+            }
+
+            class Foo {
+                const NULL = "myNull";  // thats ok too :(
+            }
+
+            echo Foo::NULL;
+        ';
+        $exceptedDefects = array();
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
      }
 }
 

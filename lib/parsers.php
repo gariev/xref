@@ -22,40 +22,36 @@ class XRef_Parser_PHP implements XRef_IFileParser {
         // compat mode: parse PHP 5.3+ code in old PHP 5.2 rte :(
         $namespace_compat_mode = false;
 
-        foreach ($tokens as &$t) {
-            if (!is_string($t)) {
-                list ($kind, $text) = $t;
-                if ($kind==T_STRING) {
-                    switch (strtoupper($text)) {
-                        case "NULL":
-                            $t[0] = XRef::T_NULL;
-                            break;
-                        case "TRUE":
-                            $t[0] = XRef::T_TRUE;
-                            break;
-                        case "FALSE":
-                            $t[0] = XRef::T_FALSE;
-                            break;
-                        case "USE":
-                            // compat mode: in PHP 5.3 rte use is reserved word and should be T_USE, not T_STRING
-                            $t[0] = T_USE;
-                            break;
-                        case "NAMESPACE":
-                            // compat mode: we'll need a second pass to insert missed namespace separators
-                            $t[0] = T_NAMESPACE;
-                            $namespace_compat_mode = true;
-                            break;
-                        case 'TRAIT':
-                            $t[0] = T_TRAIT;
-                            break;
-                        default:
+        if (XRef::$compatMode) {
+            $count = count($tokens);
+            for ($i=0; $i<$count; ++$i) {
+                $t = & $tokens[$i];
+                if (!is_string($t)) {
+                    list ($kind, $text) = $t;
+                    if ($kind==T_STRING) {
+                        $strtoupper = strtoupper($text);
+                        if ($strtoupper == 'USE') {
+                            if (isset(XRef::$compatMode["T_USE"])) {
+                                // compat mode: in PHP 5.3 rte use is reserved word and should be T_USE, not T_STRING
+                                $t[0] = T_USE;
+                            }
+                        } elseif ($strtoupper == 'NAMESPACE') {
+                            if (isset(XRef::$compatMode["T_NAMESPACE"]) && self::isAtStartOfExpression($tokens, $i)) {
+                                $t[0] = T_NAMESPACE;
+                                $namespace_compat_mode = true;
+                            }
+                        } elseif ($strtoupper == 'TRAIT') {
+                            if (isset(XRef::$compatMode["T_TRAIT"]) && self::isAtStartOfExpression($tokens, $i)) {
+                                $t[0] = T_TRAIT;
+                            }
+                        }
                     }
                 }
             }
         } // foreach token
 
-        // without this unset(), in PHP 5.2, $t would still reference the last element of $tokens array,
-        // which will be overwriteen by the next loop
+        // without this unset(), in PHP 5.2 $t will still reference the last element of $tokens array,
+        // which may be overwriteen by the next loop
         unset($t);
 
         if ($namespace_compat_mode) {
@@ -75,8 +71,12 @@ class XRef_Parser_PHP implements XRef_IFileParser {
                             } else {
                                 $tmp_array[] = array(T_NS_SEPARATOR, '\\');
                             }
+                        } elseif ($kind==T_WHITESPACE || $kind==T_COMMENT || $kind==T_DOC_COMMENT) {
+                            // nop
+                        } else {
+                            $is_inside_namespace_decl = false;
                         }
-                    } elseif ($t==';') {
+                    } else {
                         $is_inside_namespace_decl = false;
                     }
                 } else {
@@ -99,6 +99,26 @@ class XRef_Parser_PHP implements XRef_IFileParser {
 
     public function getSupportedFileExtensions() {
         return array("php");
+    }
+
+    // returns true if token at position $i is a first token
+    // of an expression, i.e. if it follows ';', '}', (end of previous expression or block)
+    // or '{' (start of the new block) or php opening tag
+    private static function isAtStartOfExpression(&$tokens, $i) {
+        // backtracking
+        for ($j = $i-1; $j>=0; --$j) {
+            $t = $tokens[$j];
+            if (is_string($t)) {
+                return ($t == ';' || $t == '}' || $t == '{');
+            } else {
+                list ($kind, $text) = $t;
+                if ($kind==T_WHITESPACE || $kind==T_COMMENT || $kind==T_DOC_COMMENT) {
+                    continue;
+                }
+                return $kind==T_OPEN_TAG;
+            }
+            return false;
+        }
     }
 }
 

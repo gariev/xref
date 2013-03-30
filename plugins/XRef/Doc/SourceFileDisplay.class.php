@@ -124,7 +124,24 @@ CSS
                 if ($span_class=='UNKNOWN') {
                     $span_class = $token->kind;
                 }
-                if (!strstr($text, "\n")) {
+
+                // special classes for php predefined constants
+                if ($token->kind == T_STRING) {
+                   $str_upper = strtoupper($token->text);
+                    switch (strtoupper($token->text)) {
+                        case "NULL":
+                            $span_class=='T_NULL';
+                            break;
+                        case "TRUE":
+                            $span_class=='T_TRUE';
+                            break;
+                        case "FALSE":
+                            $span_class=='T_FALSE';
+                            break;
+                    }
+                }
+
+                if (strpos($text, "\n") === false) {
                     // no new lines, simple
                     $ret .= "<span class='$span_class'>$text</span>";
                 } else {
