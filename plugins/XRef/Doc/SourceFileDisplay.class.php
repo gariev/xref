@@ -11,16 +11,12 @@ class XRef_Doc_SourceFileDisplay extends XRef_APlugin implements XRef_IDocumenta
     const LINE_NUMBER_FORMAT = "<a id='%d'>%5d   ";
     const REPORT_ID = "files";
 
+    public function __construct() {
+        parent::__construct(self::REPORT_ID, "List of all files");
+    }
+
     // set of all file names
     protected $fileList = array();
-
-    public function getName() {
-        return "List of all files";
-    }
-
-    public function getId() {
-        return self::REPORT_ID;
-    }
 
     public function generateTotalReport() {
         sort($this->fileList);

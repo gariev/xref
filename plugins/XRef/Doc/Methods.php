@@ -17,23 +17,13 @@ class XRef_Plugin_Methods_Method {
 
 // this class is marked abstract to prevent instantiation; it implements all methods, however
 abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumentationPlugin {
-    protected $reportId     = "php-methods";
-    protected $reportName   = "PHP methods and functions";
     protected $isCaseSensitive = false; // php methods are case-insensitive
     protected $supportedFileType = XRef::FILETYPE_PHP;
 
-    protected function __construct($reportId, $reportName, $isCaseSensitive, $supportedFileType) {
-        $this->reportId = $reportId;
-        $this->reportName = $reportName;
+    public function __construct($reportId, $reportName, $isCaseSensitive, $supportedFileType) {
+        parent::__construct($reportId, $reportName);
         $this->isCaseSensitive = $isCaseSensitive;
         $this->supportedFileType = $supportedFileType;
-    }
-
-    public function getName() {
-        return $this->reportName;
-    }
-    public function getId() {
-        return $this->reportId;
     }
 
     // map: method name --> XRef_Plugin_Methods_Method objects

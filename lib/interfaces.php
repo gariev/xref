@@ -286,16 +286,61 @@ interface XRef_ILintPlugin extends XRef_IPlugin {
  * Abstract class, can be used as base class for other plugins
  */
 abstract class XRef_APlugin implements XRef_IPlugin {
+    /** reference to main XRef class object */
     protected $xref;
+    /** string, uniq id of the plugin */
+    protected $reportId;
+    /** string, text description of the plugin */
+    protected $reportName;
+
+    /**
+     * Plugin classes must implement defualt constructor (constructor without params)
+     * and call parent constructor with params
+     */
+    public function __construct($reportId, $reportName) {
+        if (!$reportId || !$reportName) {
+            throw new Exception("Child class must call parent constructor with arguments");
+        }
+        $this->reportId = $reportId;
+        $this->reportName = $reportName;
+    }
     public function setXRef(XRef $xref) {
         $this->xref = $xref;
     }
-
+    public function getName() {
+        return $this->reportName;
+    }
+    public function getId() {
+        return $this->reportId;
+    }
     // returns array("report name" => "url", ...)
     public function getReportLink() {
-        return array($this->getname() => $this->getId().".html");
+        return array($this->getName() => $this->getId().".html");
     }
 }
+
+/**
+ * Abstract class, can be used as base class for Lint plugins
+ */
+abstract class XRef_ALintPlugin extends XRef_APlugin implements XRef_ILintPlugin {
+    public function __construct($reportId, $reportName) {
+        parent::__construct($reportId, $reportName);
+    }
+
+    protected $reportLevel = XRef::WARNING;
+    public function setReportLevel($reportLevel) {
+        $this->reportLevel = $reportLevel;
+    }
+
+    // array of XRef_CodeDefect objects
+    protected $report = array();
+    protected function addDefect($token, $defectLevel, $message) {
+        if ($defectLevel >= $this->reportLevel) {
+            $this->report[] = new XRef_CodeDefect($token, $defectLevel, $message);
+        }
+    }
+}
+
 
 /**
  * Interface for persistent storage used by XRef CI server

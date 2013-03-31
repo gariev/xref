@@ -8,15 +8,10 @@
  */
 
 class XRef_Doc_LintReport extends XRef_APlugin implements XRef_IDocumentationPlugin {
-    protected $reportId             = "php-lint";
-    protected $reportName           = "Lint report";
     protected $supportedFileType    = XRef::FILETYPE_PHP;
 
-    public function getName() {
-        return $this->reportName;
-    }
-    public function getId() {
-        return $this->reportId;
+    public function __construct() {
+        parent::__construct("php-lint", "Lint report");
     }
 
     // array: $filename --> array($filepos, defectLevel, $message)

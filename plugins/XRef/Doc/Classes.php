@@ -26,21 +26,11 @@ class XRef_Plugin_Classes_Class {
 }
 
 class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlugin {
-    protected $reportId = "php-classes";
-    protected $reportName = "List of PHP classes";
     protected $supportedFileType = XRef::FILETYPE_PHP;
 
-    protected function __construct($reportId, $reportName, $supportedFileType) {
-        $this->reportId = $reportId;
-        $this->reportName = $reportName;
+    public function __construct($reportId, $reportName, $supportedFileType) {
+        parent::__construct($reportId, $reportName);
         $this->supportedFileType = $supportedFileType;
-    }
-
-    public function getName() {
-        return $this->reportName;
-    }
-    public function getId() {
-        return $this->reportId;
     }
 
     // map: class/interface name --> XRef_Plugin_Classes_Class object

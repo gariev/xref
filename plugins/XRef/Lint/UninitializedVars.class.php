@@ -50,10 +50,7 @@
 //      parsing of current file                 // overwrite or not?
 //
 
-
-class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlugin {
-    protected $reportId             = "lint-uninitialized-vars";
-    protected $reportName           = "Lint (use of uninitialized vars)";
+class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
     protected $supportedFileType    = XRef::FILETYPE_PHP;
 
     /** known superglobals: array('$_SEREVR' => true, ...); */
@@ -88,6 +85,8 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
     protected static $internalFunctionsThatDoesntInitializePassedByReferenceParams = array();
 
     public function __construct() {
+        parent::__construct("lint-uninitialized-vars", "Lint (use of uninitialized vars)");
+
         // super global variables
         $superGlobals = array(
             '$GLOBALS', '$_REQUEST', '$_GET', '$_POST',
@@ -112,33 +111,12 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
         }
     }
 
-    public function getName() {
-        return $this->reportName;
-    }
-    public function getId() {
-        return $this->reportId;
-    }
-
     const VAR_ASSIGNED = 1;
     const VAR_USED = 2;
     const VAR_UNKNOWN = 0;
 
     const MODE_STRICT = 1;
     const MODE_RELAXED = 2;
-
-    protected $reportLevel = XRef::WARNING;
-    public function setReportLevel($reportLevel) {
-        $this->reportLevel = $reportLevel;
-    }
-
-    // array of XRef_CodeDefect objects
-    protected $report = array();
-
-    protected function addDefect($token, $defectLevel, $message) {
-        if ($defectLevel >= $this->reportLevel) {
-            $this->report[] = new XRef_CodeDefect($token, $defectLevel, $message);
-        }
-    }
 
     // for each scope, there is an array with list of declared variables
     // $foo = 1;                        // global scope
@@ -163,7 +141,6 @@ class XRef_Lint_UninitializedVars extends XRef_APlugin implements XRef_ILintPlug
     protected function removeScope() {
         return array_pop($this->stackOfScopes);
     }
-
 
     protected function getOrCreateVar($token, $scopeDepth=0) {
         $varName = $token->text;

@@ -13,15 +13,10 @@ class XRef_Plugin_Constants_Constant {
 }
 
 class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationPlugin {
-    protected $reportId             = "php-constants";
-    protected $reportName           = "List of PHP class constants";
     protected $supportedFileType    = XRef::FILETYPE_PHP;
 
-    public function getName() {
-        return $this->reportName;
-    }
-    public function getId() {
-        return $this->reportId;
+    public function __construct() {
+        parent::__construct("php-constants", "List of PHP class constants");
     }
 
     // map: const name ("class::const") --> XRef_Plugin_Constants_Constant object

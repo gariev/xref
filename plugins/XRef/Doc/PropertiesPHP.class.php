@@ -13,15 +13,10 @@ class XRef_Plugin_Properties_Property {
 }
 
 class XRef_Doc_PropertiesPHP extends XRef_APlugin implements XRef_IDocumentationPlugin {
-    protected $reportId             = "php-properties";
-    protected $reportName           = "List of properties of PHP classes";
     protected $supportedFileType    = XRef::FILETYPE_PHP;
 
-    public function getName() {
-        return $this->reportName;
-    }
-    public function getId() {
-        return $this->reportId;
+    public function __construct() {
+        parent::__construct("php-properties", "List of properties of PHP classes");
     }
 
     // map: property name --> XRef_Plugin_Properties_Property object

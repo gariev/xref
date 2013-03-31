@@ -5,31 +5,13 @@
  * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  */
 
-class XRef_Lint_AssignmentInCondition extends XRef_APlugin implements XRef_ILintPlugin {
-    protected $reportId             = "lint-assignemnet-in-condition";
-    protected $reportName           = "Lint (assignement in condition)";
+class XRef_Lint_AssignmentInCondition extends XRef_ALintPlugin {
+
+    public function __construct() {
+        parent::__construct("lint-assignemnet-in-condition", "Lint (assignement in condition)");
+    }
+
     protected $supportedFileType    = XRef::FILETYPE_PHP;
-
-    public function getName() {
-        return $this->reportName;
-    }
-    public function getId() {
-        return $this->reportId;
-    }
-
-    protected $reportLevel = XRef::WARNING;
-    public function setReportLevel($reportLevel) {
-        $this->reportLevel = $reportLevel;
-    }
-
-    // array of XRef_CodeDefect objects
-    protected $report = array();
-
-    protected function addDefect($token, $defectLevel, $message) {
-        if ($defectLevel >= $this->reportLevel) {
-            $this->report[] = new XRef_CodeDefect($token, $defectLevel, $message);
-        }
-    }
 
     public function getReport(XRef_IParsedFile $pf) {
         if ($pf->getFileType() != $this->supportedFileType) {

@@ -14,17 +14,11 @@ class XRef_Doc_Services_Service {
 
 class XRef_Doc_Services extends XRef_APlugin implements XRef_IDocumentationPlugin {
 
+    public function __construct() {
+        parent::__construct("services", "List of services (ActionScript --> PHP)");
+    }
+
     protected $services = array();
-
-    protected $reportId = "services";
-    protected $reportName = "List of services (ActionScript --> PHP)";
-
-    public function getName() {
-        return $this->reportName;
-    }
-    public function getId() {
-        return $this->reportId;
-    }
 
     protected function getOrCreate($name, $php_method_name) {
         if (!array_key_exists($name, $this->services)) {
