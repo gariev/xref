@@ -160,6 +160,18 @@ class LowerCaseLiteralsTest extends BaseLintTest {
         ';
         $exceptedDefects = array();
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
+    }
+
+    public function testLabels() {
+        $testPhpCode = '
+        <?php
+            goto my_label;
+            $x = 1;
+            my_label:
+            echo $x;
+        ';
+        $exceptedDefects = array();
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
      }
 }
 

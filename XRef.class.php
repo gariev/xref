@@ -44,6 +44,7 @@ class XRef {
         "T_NS_SEPARATOR"    => 65101,
         "T_USE"             => 65102,
         "T_TRAIT"           => 65103,
+        "T_GOTO"            => 65104,
     );
 
     static $tokenNames = array(

@@ -44,6 +44,10 @@ class XRef_Parser_PHP implements XRef_IFileParser {
                             if (isset(XRef::$compatMode["T_TRAIT"]) && self::isAtStartOfExpression($tokens, $i)) {
                                 $t[0] = T_TRAIT;
                             }
+                        } elseif ($strtoupper == 'GOTO') {
+                            if (isset(XRef::$compatMode["T_GOTO"])) {
+                                $t[0] = T_GOTO;
+                            }
                         }
                     }
                 }

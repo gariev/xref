@@ -154,6 +154,11 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
                     $i = $n->index;
                     continue;
                 }
+                if ($n->text == ':') {
+                    // ok, label (e.g. goto foo; foo: ...);
+                    $i = $n->index;
+                    continue;
+                }
 
                 // some kind of variable declared with class?
                 // catch (Foo $x);
@@ -169,6 +174,10 @@ class XRef_Lint_LowerCaseLiterals extends XRef_APlugin implements XRef_ILintPlug
                 $p = $t->prevNS();
                 if ($p->kind == T_DOUBLE_COLON || $p->kind==T_OBJECT_OPERATOR) {
                     // ok, static or instance member: $bar->foo, Bar::foo
+                    continue;
+                }
+                if ($p->kind == T_GOTO) {
+                    // ok, label for goto
                     continue;
                 }
 

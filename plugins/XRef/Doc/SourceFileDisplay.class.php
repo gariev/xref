@@ -74,7 +74,7 @@ class XRef_Doc_SourceFileDisplay extends XRef_APlugin implements XRef_IDocumenta
                     { font-weight: bold; }
                 .T_ABSTRACT, .T_AS, .T_BREAK, .T_CASE, .T_CATCH, .T_CLASS, .T_CLASS_C, .T_CONST,
                 .T_CONTINUE, .T_DECLARE, .T_DEFAULT, .T_DO, .T_ELSE, .T_ELSE, .T_EXTENDS,
-                .T_FINAL, .T_FOR, .T_FOREACH, .T_FUNCTION, .T_GLOBAL, .T_IF, .T_IMPLEMENTS,
+                .T_FINAL, .T_FOR, .T_FOREACH, .T_FUNCTION, .T_GLOBAL, .T_GOTO, .T_IF, .T_IMPLEMENTS,
                 .T_INTERFACE, .T_NAMESPACE, .T_NEW, .T_NULL, .T_PRIVATE, .T_PUBLIC, .T_PROTECTED,
                 .T_REQUIRE_ONCE, .T_RETURN, .T_STATIC, .T_SWITCH, .T_THROW, .T_TRY, .T_WHILE,
                 .T_PACKAGE,
