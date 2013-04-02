@@ -228,11 +228,11 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 Foo::preg_match("", "", $i);                // error
                 preg_match("", "", $j);                     // ok
                 $foo = new SomeClass();
-                $foo->preg_match("", "", $k);               // warning: this is unknown preg_match
+                $foo->preg_match("", "", $k);               // error: assume Foo::preg_match (?)
 
                 Foo::sort($l);                              // ok
                 sort($m);                                   // error, internal sort
-                $foo->sort($n);                             // warning, unknown sort
+                $foo->sort($n);                             // ok, $foo may be instance of Foo
             }
 
             Foo::preg_match("", "", $i);                // warning (global relaxed scope, otherwise - error)
@@ -242,7 +242,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
 
             Foo::sort($l);                              // ok
             sort($m);                                   // warning, internal sort
-            $foo->sort($n);                             // warning, unknown sort
+            $foo->sort($n);                             // ok, $foo may be instance of Foo
         '
         ;
 
@@ -253,14 +253,12 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$d', 16,  XRef::ERROR),
 
             array('$i', 21,  XRef::ERROR),
-            array('$k', 24,  XRef::WARNING),
+            array('$k', 24,  XRef::ERROR),
             array('$m', 27,  XRef::ERROR),
-            array('$n', 28,  XRef::WARNING),
 
             array('$i', 31,  XRef::WARNING),
             array('$k', 34,  XRef::WARNING),
             array('$m', 37,  XRef::WARNING),
-            array('$n', 38,  XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
@@ -279,11 +277,11 @@ class UndefinedVarsLintTest extends BaseLintTest {
 
         //
         XRef::setConfigValue(
-            'lint.init-by-reference',
+            'lint.add-function-signature',
             array(
-                "foo,0",
-                "Foo::bar,1",
-                "?::baz,0,1"
+                'foo(&$x)',
+                'Foo::bar($a, &$b)',
+                'Bar::baz(&$a, &$b)',
             )
         );
         $testPhpCode = '
@@ -305,7 +303,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
         $expectedDefects = array(
             array('$z', 5,   XRef::ERROR),
             array('$b', 8,   XRef::ERROR),
-            array('$m', 11,   XRef::ERROR),
+            array('$m', 11,  XRef::ERROR),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 

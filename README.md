@@ -205,15 +205,19 @@ List of config file parameters:
     because a global scope variable can be initialized in some included file.
     Choose an option that suits your project best; default is false (don't check global space).
 
-* lint.globals-vars     (array of strings, optional)
-    If you set the option lint.check-global-scope to true, you can list variables of global scope here.
-    Lint won't complain about these variables.
+* lint.add-global-var   (array of strings, optional)
+    If you check usage of variables in global scope (option lint.check-global-scope is set to true),
+    and your code depends on global variables defined in other files, you can notify lint about
+    these variables by listing them in this list.
 
-* lint.init-by-reference (array of strings, optional)
-    So far lint doesn't check function signatures and doesn't know about variables that are
-    assigned values being passed by reference to a function. You may list functions/methods
-    of your project that can initialize variables here.
-    Syntax: init-by-reference[]=<function_name>,<position of pass-by-reference argument>
+* lint.add-function-signature (array of strings, optional)
+    So far lint doesn't know about user functions defined in other files, and doesn't know
+    if there are functions that can assign a value to a variable passed by reference.
+    You can list such functions (and class methods) in this list.
+
+    Syntax:
+    add-function-signature[] = 'my_function($a, $&b)'
+    add-function-signature[] = 'MyClass::someMethod($a, $b, &c)'
 
 * lint.parsers[]        (array of class names; optional)
     Which parsers should lint use; by default it's XRef_Parser_PHP

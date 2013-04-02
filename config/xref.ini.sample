@@ -4,39 +4,39 @@
 ;
 
 [xref]
-data-dir            = /home/you/xref/data
-smarty-class        = /home/you/Smarty-3.1.13/libs/Smarty.class.php
-script-url          = http://xref.your.domain.com/bin
+data-dir                = /home/you/xref/data
+smarty-class            = /home/you/Smarty-3.1.13/libs/Smarty.class.php
+script-url              = http://xref.your.domain.com/bin
 
-; Documentation (cross-reference doc) section
+; Documentation (cross-reference doc) settings
 [doc]
-source-code-dir[]   = /home/you/your-project-dir
-remove-path         = /home/you/your-project-dir/
-output-dir          = /home/you/xref/report
+source-code-dir[]       = /home/you/your-project-dir
+remove-path             = /home/you/your-project-dir/
+output-dir              = /home/you/xref/report
 
 ; Lint settings
 [lint]
-color               = auto
-report-level        = warnings
-check-global-scope  = true
-;globals-vars[]     = $foo
-
+color                   = auto
+report-level            = warnings
+check-global-scope      = true
+;add-global-var[]       = $foo
+;add-function-signature = 'my_function($a, $b, &$c)'
 
 ; Continuous integration
 [ci]
-update-repository   = true
-incremental         = true
+update-repository       = true
+incremental             = true
 
 ; Repository settings
 [git]
-repository-dir      = /home/you/your-project-dir/
-update-method       = pull
+repository-dir          = /home/you/your-project-dir/
+update-method           = pull
 
 [mail]
-from            = XRef Continuous Intergration
-reply-to        = xref@your.domain.com
-to[]            = you@your.domain.com
-to[]            = "{%ae}"
-to[]            = "{%an}@your.domain"
+from                    = XRef Continuous Intergration
+reply-to                = xref@your.domain.com
+to[]                    = you@your.domain.com
+to[]                    = "{%ae}"
+to[]                    = "{%an}@your.domain"
 
 ; vim: expandtab tabstop=4

@@ -69,7 +69,12 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
     /**
      * array similar to $internalFunctions above but with user functions, file dependent
      */
-    private $userFunctions = array();
+    private $userFunctionsFromCurrentFile = array();
+
+    /**
+     * array similar to $internalFunctions above but with user functions, file dependent
+     */
+    private $userFunctionsFromConfig = array();
 
 
     /** loop management: allow a variable to be used in loop before it is assigned */
@@ -102,7 +107,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         // global variables
         $globals = array_merge(
             array('$argv', '$argc'),
-            XRef::getConfigValue("lint.globals-vars", array())
+            XRef::getConfigValue("lint.add-global-var", array())
         );
         self::$knownGlobals  = array_fill_keys($globals, true);
 
@@ -206,18 +211,30 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         $this->report = array();
         $dropScopeAt = -1;  // index of the token where current scope ends
         $this->addScope(-1, self::MODE_RELAXED);
-        $this->userFunctions = &self::get_user_functions($pf);
+        $this->userFunctionsFromCurrentFile = &self::getUserFunctionsFromCurrentFile($pf);
+
+        // switching from strict to relaxed mode
+        $switch_to_relaxed_scope_at = -1;   // token position, after which there is relaxed mode
+        $token_caused_mode_switch = null;   // token that caused the switch, e.g. "extract"
+
+        // loop management vars (out-of-order assign/use pattern in loops)
+        $this->loop_starts_at = -1;
+        $this->loop_ends_at = -1;
+        $this->loop_variables = array();
+
+        // TODO: move the line below into constructor. It's here for unit tests only.
+        // Config doesn't change during normal work, and neither the var below.
+        $this->userFunctionsFromConfig = &self::getUserFunctionsFromConfig();
 
         // to check or not to check variables in the global scope
         // variables in local scope (inside functions) will always be checked
         $checkGlobalScope = XRef::getConfigValue("lint.check-global-scope", true);
 
-        $switch_to_relaxed_scope_at = -1;   // token position, after which there is relaxed mode
-        $token_caused_mode_switch = null;   // token that caused the switch, e.g. "extract"
-
-        $this->loop_starts_at = -1;
-        $this->loop_ends_at = -1;
-        $this->loop_variables = array();
+        $function_knowledge_sources = array(
+            $this->userFunctionsFromConfig,
+            $this->userFunctionsFromCurrentFile,
+            self::$internalFunctions,
+        );
 
         $tokens = $pf->getTokens();
         // hate PHP 5.2: no loop labels allowed
@@ -484,9 +501,6 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 foreach ($args as $arg) {
                     $pass_by_reference = false;
                     list($type, $arg) = self::parseType($arg);
-                    if ($arg->isSpace()) {
-                        $arg = $arg->nextNS();
-                    }
                     if ($arg->text == '&') {
                         $pass_by_reference = true;
                         $arg = $arg->nextNS();
@@ -567,9 +581,6 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 list($type, $n) = self::parseType($n);
                 if (count($type)==0) {
                     throw new Exception("No exception type found ($n)");
-                }
-                if ($n->isSpace()) {
-                    $n = $n->nextNS();
                 }
                 if ($n->kind == T_VARIABLE) {
                     $var = $this->getOrCreateVar($n);
@@ -714,12 +725,12 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                     $function_name = self::getFullyQualifiedFunctionName($pf, $t);
                     $is_known_function = false;
 
-                    if (array_key_exists($function_name, $this->userFunctions)) {
-                        $args = $this->userFunctions[$function_name];
-                        $is_known_function = true;
-                    } elseif (array_key_exists($function_name, self::$internalFunctions)) {
-                        $args = self::$internalFunctions[$function_name];
-                        $is_known_function = true;
+                    foreach ($function_knowledge_sources as $s) {
+                        if (array_key_exists($function_name, $s)) {
+                            $args = $s[$function_name];
+                            $is_known_function = true;
+                            break;
+                        }
                     }
 
                     if ($is_known_function) {
@@ -757,7 +768,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                                             }
                                         }
 
-                                        // TODO: add other valid lvalues here, like $array["index"] or $object->field
+                                        // TODO: add other valid lvalues here, like $array["index"] or $object->field or Foo::$bar
                                         if (!$is_class_variable) {
                                             $this->addDefect($n, XRef::ERROR, "Possible attempt to pass non-variable by reference");
                                         }
@@ -934,7 +945,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         self::$internalFunctionsThatDoesntInitializePassedByReferenceParams = array_fill_keys($exceptionList, true);
     }
 
-    private static function &get_user_functions($pf) {
+    private static function &getUserFunctionsFromCurrentFile($pf) {
         $functions = array();
 
         // add functions/methods defined in this file
@@ -946,36 +957,88 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 // in decl/usage syntax
                 continue;
             }
-            $current_class_name = $pf->getClassAt( $m->nameStartIndex );
-            if ($current_class_name) {
-                $function_name = $current_class_name . '::' . $function_name;
-            }
             $t = $pf->getTokenAt( $m->nameStartIndex );
             $n = $t->nextNS();
             if ($n->text == '(') {
                 $ref_params_list = array();
                 $tokenList = $pf->extractList($n->nextNS());
                 for ($i=0; $i<count($tokenList); ++$i) {
-                    $t = $tokenList[$i];
+                    list($type, $t) = self::parseType($tokenList[$i]);
                     if ($t->text=='&') {
                         $ref_params_list[] = $i;
                     }
                 }
-                $functions[$function_name] = (count($ref_params_list)) ? $ref_params_list : null;
+            }
+
+            if (!count($ref_params_list)) {
+                $ref_params_list = null;
+            }
+
+            $current_class_name = $pf->getClassAt( $m->nameStartIndex );
+            if ($current_class_name) {
+                // add both names - Foo::bar and ?::bar (when it will be called as $var->bar(..)
+                // see rules of getFullyQualifiedFunctionName() below
+                $functions[ $current_class_name . '::' . $function_name ] = $ref_params_list;
+                $functions[ '?' . '::' . $function_name ] = $ref_params_list;
+            } else {
+                $functions[$function_name] = $ref_params_list;
             }
         }
 
-        // add functions/methods from config file
-        // format of each config entry (arguments positions starts with 1):
-        // init-by-reference[]  =   <function-name>,<position-of-param1>,<position-of-param2...>
-        foreach (XRef::getConfigValue("lint.init-by-reference", array()) as $str) {
-            $params = explode(",", $str);
-            $function_name = array_shift($params);
-            $functions[$function_name] = $params;
+        return $functions;
+    }
+
+    private static function &getUserFunctionsFromConfig() {
+        $functions = array();
+
+        // add user-defined functions/methods from config file
+        // add-function-signature = 'my_function($a, $b, &$c)'
+        // add-function-signature = 'MyClass::myMethod($a, $b, &$c)'
+        foreach (XRef::getConfigValue("lint.add-function-signature", array()) as $str) {
+            // TODO: tokenize all $str and get rig of regular expressions
+            if (!preg_match('#^\s*(\w+)(::(\w+))?\s*\((.+)\)\s*$#', $str, $matches)) {
+                throw new Exception("Can't parse function specification from config file: $str");
+            }
+
+            if ($matches[2]) {
+                $class_name = $matches[1];
+                $function_name = $matches[3];
+            } else {
+                $class_name = null;
+                $function_name = $matches[1];
+            }
+
+            $ref_params_list = array();
+            $arg_list = explode(',', $matches[4]);
+            for ($i = 0; $i < count($arg_list); ++$i) {
+                $t = $arg_list[$i];
+                if (preg_match('#^\s*&#', $t)) {
+                    $ref_params_list[] = $i;
+                }
+            }
+
+            if (!count($ref_params_list)) {
+                $ref_params_list = null;
+            }
+
+            if ($class_name) {
+                // add both names - Foo::bar and ?::bar (when it will be called as $var->bar(..)
+                // see rules of getFullyQualifiedFunctionName() below
+                $functions[ $class_name . '::' . $function_name ] = $ref_params_list;
+                $functions[ '?' . '::' . $function_name ] = $ref_params_list;
+            } else {
+                $functions[$function_name] = $ref_params_list;
+            }
         }
         return $functions;
     }
 
+    // input: token where starts the (optionally typed) declaration of variable
+    // output: tuple( array of type tokens, next token )
+    // e.g.
+    //      $foo         --> ( array(), $foo )
+    //      string &$foo --> ( array('string'), & )
+    //      \Foo\Bar $z  --> ( array('\', 'Foo', '\', 'Bar'), $z )
     private static function parseType($token) {
         // types:               array | ClassName | string | int | bool
         // namespaced types:    \string | foo\bar | \foo\bar
@@ -989,6 +1052,9 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 $type[] = $token;
                 $token = $token->next(); // not nextNS()!
             }
+        }
+        if ($token->isSpace()) {
+            $token = $token->nextNS();
         }
         return array($type, $token);
     }
