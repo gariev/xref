@@ -212,7 +212,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 public function sort(&$x)    {}
 
                 public function bar() {
-                    $this->preg_match("", "", $x);      // error: method preg_match dont initialize vars
+                    $this->preg_match("", "", $x);      // error: method preg_match doesnt initialize vars
                     Foo::preg_match("", "", $y);        // error
                     self::preg_match("", "", $z);       // error
                     preg_match("", "", $ok);            // ok, this is internal preg_match
@@ -228,11 +228,11 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 Foo::preg_match("", "", $i);                // error
                 preg_match("", "", $j);                     // ok
                 $foo = new SomeClass();
-                $foo->preg_match("", "", $k);               // error: assume Foo::preg_match (?)
+                $foo->preg_match("", "", $k);               // warning: unknown preg_match (?)
 
                 Foo::sort($l);                              // ok
                 sort($m);                                   // error, internal sort
-                $foo->sort($n);                             // ok, $foo may be instance of Foo
+                $foo->sort($n);                             // warning, unknown $foo sort
             }
 
             Foo::preg_match("", "", $i);                // warning (global relaxed scope, otherwise - error)
@@ -242,7 +242,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
 
             Foo::sort($l);                              // ok
             sort($m);                                   // warning, internal sort
-            $foo->sort($n);                             // ok, $foo may be instance of Foo
+            $foo->sort($n);                             // warning, unknown sort
         '
         ;
 
@@ -253,12 +253,14 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$d', 16,  XRef::ERROR),
 
             array('$i', 21,  XRef::ERROR),
-            array('$k', 24,  XRef::ERROR),
+            array('$k', 24,  XRef::WARNING),
             array('$m', 27,  XRef::ERROR),
+            array('$n', 28,  XRef::WARNING),
 
             array('$i', 31,  XRef::WARNING),
             array('$k', 34,  XRef::WARNING),
             array('$m', 37,  XRef::WARNING),
+            array('$n', 38,  XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
@@ -293,8 +295,10 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 Foo::bar(1, $a);            // ok
                 Foo::bar($b, $c);           // error on $b
 
-                $x->baz($i, $j);            // ok
-                $x->foo->baz($k, $l, $m);   // error on $m
+                $i = 0;
+                $x->baz($i, $j);            // warning on $j
+                $l = $m = 10;
+                $x->foo->baz($k, $l, $m);   // warning on $k
 
             }
         '
@@ -303,7 +307,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
         $expectedDefects = array(
             array('$z', 5,   XRef::ERROR),
             array('$b', 8,   XRef::ERROR),
-            array('$m', 11,  XRef::ERROR),
+            array('$j', 11,  XRef::WARNING),
+            array('$k', 13,  XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
@@ -494,6 +499,104 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$c',     24, XRef::WARNING),
             array('$y',     28, XRef::ERROR),
             array('$l',     45, XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+    }
+
+    public function testParseDocComments() {
+        //
+        $doc_comment = '/** @var SimpleClass $simple_test */';
+        $var_list = XRef_Lint_UninitializedVars::parseDocComment($doc_comment);
+        $this->assertEquals( count($var_list), 1 );
+        $this->assertEquals($var_list['$simple_test'], 'SimpleClass' );
+
+        // multi-lint doc comment
+        $doc_comment = '/**
+ * @var SimpleClass $simple_test
+ */';
+        $var_list = XRef_Lint_UninitializedVars::parseDocComment($doc_comment);
+        $this->assertEquals( count($var_list), 1 );
+        $this->assertEquals($var_list['$simple_test'], 'SimpleClass' );
+
+        // property-like annotation (not a variable annotation)
+        $doc_comment = '/** @var SimpleClass */';
+        $var_list = XRef_Lint_UninitializedVars::parseDocComment($doc_comment);
+        $this->assertEquals( count($var_list), 0 );
+
+        // long doc comment
+        $doc_comment = '/**
+Some introductory text
+ * @var $just_var_without_class
+ * @var SimpleClass $simple_test
+ * @var AnotherClass $foo , $bar
+ * @var YetAnotherClass $a,$b,$c
+
+ */';
+        $var_list = XRef_Lint_UninitializedVars::parseDocComment($doc_comment);
+        $this->assertEquals( count($var_list), 7 );
+        $this->assertEquals( $var_list['$simple_test'], 'SimpleClass' );
+        $this->assertEquals( $var_list['$foo'],'AnotherClass' );
+        $this->assertEquals( $var_list['$bar'], 'AnotherClass' );
+        $this->assertEquals( $var_list['$a'], 'YetAnotherClass' );
+        $this->assertEquals( $var_list['$b'], 'YetAnotherClass' );
+        $this->assertEquals( $var_list['$c'], 'YetAnotherClass' );
+        $this->assertTrue( array_key_exists('$just_var_without_class', $var_list) );
+        $this->assertTrue( is_null($var_list['$just_var_without_class']) );
+
+        // namespaced class names
+        $doc_comment = '/**
+ * @var  \Foo\Bar $foo_bar
+ * @var Baz\Quxx $baz, $quxx,
+ */';
+        $var_list = XRef_Lint_UninitializedVars::parseDocComment($doc_comment);
+        $this->assertEquals( count($var_list), 3 );
+        $this->assertEquals( $var_list['$foo_bar'], '\Foo\Bar' );
+        $this->assertEquals( $var_list['$baz'], 'Baz\Quxx' );
+        $this->assertEquals( $var_list['$quxx'], 'Baz\Quxx' );
+    }
+
+    public function testDocCommentRelaxedMode() {
+        $testPhpCode = '
+        <?php
+            echo $globalScopeVar;               // warning - in relaxed mode
+            /** @var $known_global_var */       // annotation
+            echo $known_global_var;             // ok
+
+            function foo($x) {
+                echo $y;                        // error
+                /** @var $no_effect_in_strict_mode */
+                echo $no_effect_in_strict_mode; // error
+                $$x = "foo";                    // relaxed mode starts here
+                /** @var $declared_var */
+                echo $declared_var;             //ok
+            }
+        ';
+        $expectedDefects = array(
+            array('$globalScopeVar',            3,  XRef::WARNING),
+            array('$y',                         8,  XRef::ERROR),
+            array('$no_effect_in_strict_mode', 10,  XRef::ERROR),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+    }
+
+
+    public function testDocCommentAnnotatedVarTypes() {
+        $testPhpCode = '
+        <?php
+            class Foo {
+                public function initVar(&$var) { $var = 1; }
+            }
+
+            $foo = unknown_var();
+            $foo->initVar($a);          // warning in relaxed mode - unknonwn $a, unknown ->initVar
+
+            /** @var Foo $bar */
+            $bar = unknown_var();
+            $bar->initVar($b);          // ok, initVar is Foo::initVar
+        ';
+
+        $expectedDefects = array(
+            array('$a', 8,  XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
     }

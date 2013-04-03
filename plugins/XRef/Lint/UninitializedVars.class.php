@@ -131,7 +131,10 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
 
     protected function addScope($prevScope, $mode) {
         $this->stackOfScopes[] = (object) array(
-            "vars"      => array(),
+            "vars"      => array(), // variable name --> stdObject
+            "varTypes"  => array(), // variable name --> string typeName
+                // variable type is not a part of var stdObject because
+                // type annotation can preceed the variable
             "prevScope" => $prevScope,
             "mode"      => $mode,
         );
@@ -147,21 +150,34 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         return array_pop($this->stackOfScopes);
     }
 
-    protected function getOrCreateVar($token, $scopeDepth=0) {
-        $varName = $token->text;
+    protected function getOrCreateVarByName($var_name, $scopeDepth=0) {
         $scope = $this->getScope($scopeDepth);
-        if (!isset($scope->vars[$varName])) {
-            $scope->vars[$varName] = (object) array(
+        if (!isset($scope->vars[$var_name])) {
+            $scope->vars[$var_name] = (object) array(
                 "status"     => self::VAR_UNKNOWN,
-                "token"      => $token,
-                "isRefParam" => false, // paramenter of fuction passed by reference: function foo(&$bar)
-                "isCatchVar" => false, // variable of try {} catch (E $foo) block
+                "token"      => null,
+                "isRefParam" => false,  // paramenter of fuction passed by reference: function foo(&$bar)
+                "isCatchVar" => false,  // variable of try {} catch (E $foo) block
                 "isGlobal"   => false,
             );
-        } else {
-            $scope->vars[$varName]->token = $token;
         }
-        return $scope->vars[$varName];
+        return $scope->vars[$var_name];
+    }
+
+    protected function getOrCreateVar($token, $scopeDepth=0) {
+        $var = $this->getOrCreateVarByName($token->text, $scopeDepth);
+        $var->token = $token;
+        return $var;
+    }
+
+    protected function setVarType($var_name, $var_type) {
+        $scope = $this->getScope();
+        $scope->varTypes[$var_name] = $var_type;
+    }
+
+    protected function getVarType($varName) {
+        $scope = $this->getScope();
+        return (isset($scope->varTypes[$varName])) ? $scope->varTypes[$varName] : null;
     }
 
     protected function checkVar($token, $scopeDepth=0) {
@@ -378,6 +394,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             // 10. functions that modify arguments:
             //      int preg_match ( string $pattern , string $subject [, array &$matches ...])
             // 11. test for existence of var in "relaxed" mode: isset($foo), empty($bar)
+            // 12. variables declared via annotations: @var ClassName $varName (relaxed mode only)
 
             // $foo =
             // $foo[...] =
@@ -478,6 +495,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
 
             // function &asdf($foo, $bar = array())
             // function asdf(&$foo);
+            // function asdf(Foo $foo);
             // function ($x) use ($y) ...
             // here a new scope frame is created
             if ($t->kind==T_FUNCTION) {
@@ -509,6 +527,8 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                         $var = $this->getOrCreateVar($arg);
                         $var->status = self::VAR_ASSIGNED;
                         $var->isRefParam = $pass_by_reference; // parameter passed by reference
+                        $this->setVarType($arg->text, $type);
+
                     } else {
                         throw new Exception("Invalid function decl found: $n instead of ')'");
                     }
@@ -579,7 +599,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 }
                 $n = $n->nextNS();
                 list($type, $n) = self::parseType($n);
-                if (count($type)==0) {
+                if (!$type) {
                     throw new Exception("No exception type found ($n)");
                 }
                 if ($n->kind == T_VARIABLE) {
@@ -693,7 +713,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             }
 
             //
-            // Functions that cat return values into passed-by-reference-arguments,
+            // Functions that can return values into passed-by-reference arguments,
             //  e.g. preg_match, preg_match_all etc.
             //
             //  foo($x);
@@ -707,7 +727,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             //  2. if function does accept &$vars, check that variable, not an expression is
             //       actually passed
             //  3. if function does accept params-by-reference, but does not intialize them
-            //      (e.g. sort()), check that variable existst
+            //      (e.g. sort()), check that variable exists
             //
             // Unknown (user-defined) functions can accept vars by reference too,
             // but we don't know about them, so just produce a warning
@@ -721,8 +741,8 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             if ($t->kind == T_STRING) {
                 $n = $t->nextNS();
                 if ($n->text == '(') {
+                    $function_name = $this->getFullyQualifiedFunctionName($pf, $t);
                     $arguments = $pf->extractList($n->nextNS());
-                    $function_name = self::getFullyQualifiedFunctionName($pf, $t);
                     $is_known_function = false;
 
                     foreach ($function_knowledge_sources as $s) {
@@ -822,6 +842,22 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                                 continue;
                             }
                         }
+                    }
+                }
+            }
+
+            // doc comment (/** */) annotations
+            // 1. Type info about variables (/** @var Foo $bar */)
+            // 2. Variable declaration in relaxed mode (/** @var $foo */)
+            if ($t->kind == T_DOC_COMMENT) {
+                $variables_list = self::parseDocComment($t->text);
+                $is_relaxed_mode = $this->getScope()->mode == self::MODE_RELAXED;
+                foreach ($variables_list as $var_name => $var_type) {
+                    if ($var_type) {
+                        $this->setVarType($var_name, $var_type);
+                    }
+                    if ($is_relaxed_mode) {
+                        $this->getOrCreateVarByName($var_name);
                     }
                 }
             }
@@ -976,10 +1012,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
 
             $current_class_name = $pf->getClassAt( $m->nameStartIndex );
             if ($current_class_name) {
-                // add both names - Foo::bar and ?::bar (when it will be called as $var->bar(..)
-                // see rules of getFullyQualifiedFunctionName() below
                 $functions[ $current_class_name . '::' . $function_name ] = $ref_params_list;
-                $functions[ '?' . '::' . $function_name ] = $ref_params_list;
             } else {
                 $functions[$function_name] = $ref_params_list;
             }
@@ -1022,10 +1055,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             }
 
             if ($class_name) {
-                // add both names - Foo::bar and ?::bar (when it will be called as $var->bar(..)
-                // see rules of getFullyQualifiedFunctionName() below
                 $functions[ $class_name . '::' . $function_name ] = $ref_params_list;
-                $functions[ '?' . '::' . $function_name ] = $ref_params_list;
             } else {
                 $functions[$function_name] = $ref_params_list;
             }
@@ -1034,37 +1064,39 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
     }
 
     // input: token where starts the (optionally typed) declaration of variable
-    // output: tuple( array of type tokens, next token )
+    // output: tuple(fully qualified type name, next token)
     // e.g.
-    //      $foo         --> ( array(), $foo )
-    //      string &$foo --> ( array('string'), & )
-    //      \Foo\Bar $z  --> ( array('\', 'Foo', '\', 'Bar'), $z )
+    //      $foo         --> (null, $foo)
+    //      string &$foo --> ('string', &)
+    //      \Foo\Bar $z  --> ('\Foo\Bar', $z)
     private static function parseType($token) {
         // types:               array | ClassName | string | int | bool
         // namespaced types:    \string | foo\bar | \foo\bar
         // note: when parsing namespaces in PHP 5.2, "\" will be lost
-        $type = array();
+        $typeParts = array();
         if ($token->kind == T_ARRAY) {
-            $type[] = $token;
+            $typeParts[] = 'array';
             $token = $token->next();
         } else {
             while ($token->kind == T_STRING || $token->kind == T_NS_SEPARATOR) {
-                $type[] = $token;
+                $typeParts[] = $token->text;
                 $token = $token->next(); // not nextNS()!
             }
         }
         if ($token->isSpace()) {
             $token = $token->nextNS();
         }
+        $type = ($typeParts) ? implode("", $typeParts) : null;
         return array($type, $token);
     }
 
-    // Foo::bar()       --> "Foo::bar"
-    // $this->bar()     --> "Foo::bar" or "?::bar" (outside of known class def)
-    // self::bar()      --> "Foo::bar" or "?::bar" (outside of known class def)
-    // $someVar->bar()  --> "?::bar"
-    // bar()            --> "bar"
-    private static function getFullyQualifiedFunctionName($pf, $token) {
+    // Foo::bar()               --> "Foo::bar"
+    // $this->bar()             --> "Foo::bar" or "?::bar" (outside of known class def)
+    // self::bar()              --> "Foo::bar" or "?::bar" (outside of known class def)
+    // $unknownTypeVar->bar()   --> "?::bar"
+    // $knownTypeVar->bar()     --> "VarType::bar"
+    // bar()                    --> "bar"
+    private function getFullyQualifiedFunctionName($pf, $token) {
         $function_name = $token->text;
         $p = $token->prevNS();
         $pp = $p->prevNS();
@@ -1075,6 +1107,13 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 if ($current_class_name) {
                     return $current_class_name . "::" . $function_name;
                 }
+            } elseif ($pp->kind == T_VARIABLE) {
+                $type = $this->getVarType($pp->text);
+                if ($type) {
+                    // TODO: check that the type is a class name and not e.g. an array or int.
+                    // Otherwise, add defect "Can't call method on value of <...> type"
+                    return $type . "::" . $function_name;
+                }
             }
             return "?::" . $function_name;
         } elseif ($p->kind == T_DOUBLE_COLON) {
@@ -1084,10 +1123,34 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 }
                 return "?::" . $function_name;
             } else {
+                // TODO: scan left for complex type names: \Foo\Bar::baz()
                 return $pp->text . "::" . $function_name;
             }
         }
         return $function_name;
+    }
+
+    // input: doc comment text
+    // output: array( '$variable_name' => 'variable type', '$name' => null, ...)
+    // TODO: this function is made public static for unit tests only
+    // TODO: move it to Parser class and change interface
+    public static function parseDocComment($doc_comment_text) {
+        // looking for annotations like
+        // @var [optionalTypeName] $variable_name1, $variable_name2 , e.g.
+        //      @var Foo $bar
+        //      @var \Foo\Bar $baz
+        //      @var $foo, $bar
+        $result = array();
+        if (preg_match_all('#@var\s+(?:([\w\\\\]+)\s+)?(\$\w+(?:\s*,\s*\$\w+)*)#', $doc_comment_text, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $m) {
+                $type = ($m[1]) ? $m[1] : null;
+                $var_list = explode(',', $m[2]);
+                foreach ($var_list as $v) {
+                    $result[ trim($v) ] = $type;
+                }
+            }
+        }
+        return $result;
     }
 }
 
