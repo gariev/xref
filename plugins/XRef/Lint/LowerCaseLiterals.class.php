@@ -7,6 +7,17 @@
 
 class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
+    const E_LOWER_CASE_STRING_LITERAL = "XL01";
+
+    public function getErrorMap() {
+        return array(
+            self::E_LOWER_CASE_STRING_LITERAL => array(
+                "severity" => XRef::WARNING,
+                "message" => "Mixed/Lower-case unquoted string literal",
+            )
+        );
+    }
+
     public function __construct() {
         parent::__construct("lint-const-literals", "Lint (use of lower- or mixed-case string literals)");
     }
@@ -180,7 +191,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                 }
                 $seen_strings[ $t->text ] = 1;
 
-                $this->addDefect($t, XRef::WARNING, "Mixed/Lower-case unquoted string literal");
+                $this->addDefect($t, self::E_LOWER_CASE_STRING_LITERAL);
             }
         }
 

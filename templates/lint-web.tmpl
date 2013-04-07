@@ -11,7 +11,7 @@
             <ul>
             {foreach from=$report item="e"}
             <li>
-                {xref_severity_str severity=$e->severity html=true}
+                {xref_severity_str severity=$e->severity html=true} ({$e->errorCode}):
                 {$e->message} ({$e->tokenText}) at
                 <a href="#{$e->lineNumber}">line {$e->lineNumber}</a>
             </li>

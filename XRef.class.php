@@ -461,48 +461,6 @@ class XRef {
         return $link;
     }
 
-    /**
-     * Affects what kind of defects the lint plugins will report.
-     *
-     * @param int $reportLevel - one of constants XRef::NOTICE, XRef::WARNING or XRef::ERROR
-     * @return void
-     */
-    public function setLintReportLevel($reportLevel) {
-        $plugins = $this->getPlugins("XRef_ILintPlugin");
-        foreach ($plugins as $pluginId => $plugin) {
-            $plugin->setReportLevel($reportLevel);
-        }
-    }
-
-    /**
-     * Runs all registered lint plugins for the given parsed file.
-     *
-     * @param XRef_IParsedFile $pf - parsed file object
-     * @return array of XRef_CodeDefect objects
-     */
-    public function getLintReport(XRef_IParsedFile $pf) {
-        $report = array();
-
-        $plugins = $this->getPlugins("XRef_ILintPlugin");
-        foreach ($plugins as $pluginId => $plugin) {
-            $report = array_merge($report, $plugin->getReport($pf));
-        }
-        usort($report, array("XRef", "_sortLintReportByLineNumber"));
-        return $report;
-    }
-
-    static function _sortLintReportByLineNumber ($a, $b) {
-        $la = $a->lineNumber;
-        $lb = $b->lineNumber;
-        if ($la==$lb) {
-            return 0;
-        } elseif ($la>$lb) {
-            return 1;
-        } else {
-            return -1;
-        }
-    }
-
     // list of links from source file to other reports
     //  $linkDatabase[ $filename ][ startTokenIndex ]   = array(report data)
     //  $linkDatabase[ $filename ][ endTokenIndex ]     = 0;
@@ -523,6 +481,128 @@ class XRef {
     public function &getSourceFileLinks($fileName) {
         return $this->linkDatabase[$fileName];
     }
+
+    /*----------------------------------------------------------------
+     *
+     * LINT SUPPORT CODE
+     *
+     * ---------------------------------------------------------------*/
+
+     /**
+     * Affects what kind of defects the lint plugins will report.
+     *
+     * @param int $reportLevel - one of constants XRef::NOTICE, XRef::WARNING or XRef::ERROR
+     * @return void
+     */
+
+    /** $lintReportLevel: XRef::ERROR, XRef::WARNING etc */
+    protected $lintReportLevel = null;
+
+    /** map error_code -> Array error_description */
+    protected $lintErrorMap = null;
+
+    /** map error_code -> true */
+    protected $lintIgnoredErrors = null;
+
+    public function setLintReportLevel($reportLevel) {
+        $this->lintReportLevel = $reportLevel;
+    }
+
+    /**
+     * Runs all registered lint plugins for the given parsed file.
+     *
+     * @param XRef_IParsedFile $pf - parsed file object
+     * @return array of XRef_CodeDefect objects
+     */
+    public function getLintReport(XRef_IParsedFile $pf) {
+
+        $plugins = $this->getPlugins("XRef_ILintPlugin");
+
+        // init once
+        if (is_null($this->lintErrorMap)) {
+            $this->lintErrorMap = array();
+            foreach ($plugins as $pluginId => $plugin) {
+                foreach ($plugin->getErrorMap() as $error_code => $error_description) {
+                    if (isset($this->lintErrorMap[ $error_code ])) {
+                        throw new Exception("Plugin " . $plugin->getId() . " tries to redefine error code '$error_code'");
+                    }
+                    $this->lintErrorMap[$error_code] = $error_description;
+                }
+            }
+        }
+
+        // also init once
+        if (is_null($this->lintIgnoredErrors)) {
+            $this->lintIgnoredErrors = array();
+            foreach (self::getConfigValue("lint.ignore-error", array()) as $error_code) {
+                if (! isset($this->lintErrorMap[$error_code])) {
+                    error_log("Unknown error code '$error_code'");
+                }
+                $this->lintIgnoredErrors[$error_code] = true;
+            }
+        }
+
+        // also once
+        if (is_null($this->lintReportLevel)) {
+            $r = XRef::getConfigValue("lint.report-level", "warning");
+            if ($r == "errors" || $r == "error") {
+                $reportLevel = XRef::ERROR;
+            } elseif ($r == "warnings" || $r == "warning") {
+                $reportLevel = XRef::WARNING;
+            } elseif ($r == "notice" || $r == "notices") {
+                $reportLevel = XRef::NOTICE;
+            } elseif (is_numeric($r)) {
+                $reportLevel = (int) $r;
+            } else {
+                throw new Exception("unknown value for config var 'lint.report-level': $r");
+            }
+            $this->lintReportLevel = $reportLevel;
+        }
+
+        $report = array();
+        foreach ($plugins as $pluginId => $plugin) {
+            $found_defects = $plugin->getReport($pf);
+            foreach ($found_defects as $d) {
+                list($token, $error_code) = $d;
+
+                if (isset($this->lintIgnoredErrors[ $error_code ])) {
+                    continue;
+                }
+
+                if (! isset($this->lintErrorMap[$error_code])) {
+                    error_log("No descriptions for error code '$error_code'");
+                    continue;
+                }
+
+                $description = $this->lintErrorMap[ $error_code ];
+                if (! isset($description["severity"]) || ! isset($description["message"])) {
+                    error_log("Invalid description for error code '$error_code'");
+                    continue;
+                }
+
+                if ($description["severity"] < $this->lintReportLevel) {
+                    continue;
+                }
+                $report[] = new XRef_CodeDefect($token, $error_code, $description["severity"], $description["message"]);
+            }
+        }
+
+        usort($report, array("XRef", "_sortLintReportByLineNumber"));
+        return $report;
+    }
+
+    static function _sortLintReportByLineNumber ($a, $b) {
+        $la = $a->lineNumber;
+        $lb = $b->lineNumber;
+        if ($la==$lb) {
+            return 0;
+        } elseif ($la>$lb) {
+            return 1;
+        } else {
+            return -1;
+        }
+    }
+
 
     /*----------------------------------------------------------------
      *
@@ -622,6 +702,7 @@ class XRef {
                 'XRef_Lint_AssignmentInCondition',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
             ),
+            'lint.ignore-error'       => array(),
             'lint.check-global-scope' => true,
             'ci.source-code-manager'  => 'XRef_SourceCodeManager_Git',
 

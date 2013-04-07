@@ -7,6 +7,32 @@
 
 class XRef_Lint_StaticThis extends XRef_ALintPlugin {
 
+    const E_THIS_OUTSIDE_OF_METHOD  = "XT01";
+    const E_THIS_IN_GLOBAL_SCOPE    = "XT02";
+    const E_SELF_OUTSIDE_OF_METHOD  = "XT03";
+    const E_SELF_IN_GLOBAL_SCOPE    = "XT04";
+
+    public function getErrorMap() {
+        return array(
+            self::E_THIS_OUTSIDE_OF_METHOD => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "'\$this' is used outside of instance method"
+            ),
+            self::E_THIS_IN_GLOBAL_SCOPE => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Possible use of '\$this' is global scope"
+            ),
+            self::E_SELF_OUTSIDE_OF_METHOD => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "'self/parent' is used outside of class scope"
+            ),
+            self::E_SELF_IN_GLOBAL_SCOPE => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Possible use of 'self/parent' is global scope"
+            ),
+        );
+    }
+
     public function __construct() {
         parent::__construct("lint-static-this", "Lint (use of \$this outside of instance methods)");
     }
@@ -70,9 +96,9 @@ class XRef_Lint_StaticThis extends XRef_ALintPlugin {
             // if we found $this anywhere else, this is an error
             if ($t->text == '$this') {
                 if ($allow_this_in_global_scope) {
-                    $this->addDefect($t, XRef::WARNING, "Possible use of '\$this' is global scope");
+                    $this->addDefect($t, self::E_THIS_IN_GLOBAL_SCOPE);
                 } else {
-                    $this->addDefect($t, XRef::ERROR, "'\$this' is used outside of instance method");
+                    $this->addDefect($t, self::E_THIS_OUTSIDE_OF_METHOD);
                 }
             }
 
@@ -84,9 +110,9 @@ class XRef_Lint_StaticThis extends XRef_ALintPlugin {
                 $p = $t->prevNS();
                 if ($n->text == '::' || $p->kind == T_NEW || $p->kind == T_INSTANCEOF) {
                     if ($allow_this_in_global_scope) {
-                        $this->addDefect($t, XRef::WARNING, "Possible use of 'self/parent' is global scope");
+                        $this->addDefect($t, self::E_SELF_IN_GLOBAL_SCOPE);
                     } else {
-                        $this->addDefect($t, XRef::ERROR, "'self/parent' is used outside of class scope");
+                        $this->addDefect($t, self::E_SELF_OUTSIDE_OF_METHOD);
                     }
                 }
             }

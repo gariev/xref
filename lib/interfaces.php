@@ -237,6 +237,7 @@ class XRef_Token {
  */
 class XRef_CodeDefect {
     public $tokenText;      // string
+    public $errorCode;      // string
     public $severity;       // XRef::ERROR, XRef::WARNING or XRef::NOTICE
     public $message;        // string, e.g. "variable is not declared"
     public $fileName;       // string
@@ -244,8 +245,9 @@ class XRef_CodeDefect {
     public $inClass;        // string, may be null
     public $inMethod;       // string, may be null
 
-    public function __construct($token, $severity, $message) {
+    public function __construct($token, $errorCode, $severity, $message) {
         $this->tokenText    = $token->text;
+        $this->errorCode    = $errorCode;
         $this->severity     = $severity;
         $this->message      = $message;
         $this->fileName     = $token->parsedFile->getFileName();
@@ -278,8 +280,8 @@ interface XRef_IDocumentationPlugin extends XRef_IPlugin {
  * Interface for plugins that check source code for errors
  */
 interface XRef_ILintPlugin extends XRef_IPlugin {
-    public function setReportLevel($level);             // takes one of XRef::ERROR, XRef::WARNING or XRef::NOTICE constant
-    public function getReport(XRef_IParsedFile $pf);    // returns array of XRef_CodeDefect objetcs
+    public function getErrorMap();                      // returns array (errorCode --> errorDescription)
+    public function getReport(XRef_IParsedFile $pf);    // returns array of tuples (token, errorCode)
 }
 
 /**
@@ -327,17 +329,11 @@ abstract class XRef_ALintPlugin extends XRef_APlugin implements XRef_ILintPlugin
         parent::__construct($reportId, $reportName);
     }
 
-    protected $reportLevel = XRef::WARNING;
-    public function setReportLevel($reportLevel) {
-        $this->reportLevel = $reportLevel;
-    }
-
-    // array of XRef_CodeDefect objects
+    // array of tuples (token, errorCode)
     protected $report = array();
-    protected function addDefect($token, $defectLevel, $message) {
-        if ($defectLevel >= $this->reportLevel) {
-            $this->report[] = new XRef_CodeDefect($token, $defectLevel, $message);
-        }
+
+    protected function addDefect($token, $errorCode) {
+        $this->report[] = array($token, $errorCode);
     }
 }
 

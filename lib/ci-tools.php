@@ -30,7 +30,7 @@ function XRef_getNewErrors($oldErrors, $curentErrors) {
 function XRef_createErrorsDigest($errorList) {
     $result = array();
     foreach ($errorList as $e) {
-        $result[] = "$e->tokenText##$e->message##$e->inMethod";
+        $result[] = "$e->tokenText##$e->errorCode##$e->inMethod";
     }
     return $result;
 }

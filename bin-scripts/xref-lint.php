@@ -28,23 +28,9 @@ if (XRef::needHelp()) {
 
 //
 // report-level:  errors, warnings or notices
-//
-$reportLevel = XRef::WARNING;
+// Option -r <value> is a shortcut for option -d lint.report-level=<value>
 if (isset($options['reportlevel'])) {
-    $r = $options['reportlevel'];
-} else {
-    $r = XRef::getConfigValue("lint.report-level", "warning");
-}
-if ($r == "errors" || $r == "error") {
-    $reportLevel = XRef::ERROR;
-} elseif ($r == "warnings" || $r == "warning") {
-    $reportLevel = XRef::WARNING;
-} elseif ($r == "notice" || $r == "notices") {
-    $reportLevel = XRef::NOTICE;
-} elseif (is_numeric($r)) {
-    $reportLevel = (int) $r;
-} else {
-    throw new Exception("unknown value for config var 'lint.report-level': $r");
+    XRef::getConfigValue("lint.report-level", $options['reportlevel']);
 }
 
 //
@@ -74,7 +60,6 @@ $colorMap = array(
 
 $xref = new XRef();
 $xref->loadPluginGroup("lint");
-$xref->setLintReportLevel($reportLevel);
 if (count($arguments)) {
     foreach ($arguments as $path) {
         $xref->addPath($path);
@@ -118,7 +103,7 @@ foreach ($xref->getFiles() as $filename => $ext) {
                     $lineNumber     = $r->lineNumber;
                     $tokenText      = $r->tokenText;
                     $severityStr    = XRef::$severityNames[ $r->severity ];
-                    $line = sprintf("    line %4d: %-8s: %s (%s)", $lineNumber, $severityStr, $r->message, $tokenText);
+                    $line = sprintf("    line %4d: %-8s (%s): %s (%s)", $lineNumber, $severityStr, $r->errorCode, $r->message, $tokenText);
                     if ($color) {
                         $line = $colorMap{$severityStr} . $line . $colorMap{"_off"};
                     }
@@ -134,6 +119,7 @@ foreach ($xref->getFiles() as $filename => $ext) {
                         'lineNumber'    => $r->lineNumber,
                         'tokenText'     => $r->tokenText,
                         'severityStr'   => $severityStr,
+                        'errorCode'     => $r->errorCode,
                         'message'       => $r->message,
                     );
                 }

@@ -51,6 +51,53 @@
 //
 
 class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
+
+    const E_UNKNOWN_VAR             = "XV01";
+    const E_UNKNOWN_VAR_RELAXED     = "XV02";
+    const E_UNKNOWN_VAR_ARGUMENT    = "XV03";
+    const E_ARRAY_AUTOVIVIFICATION  = "XV04";
+    const E_SCALAR_AUTOVIVIFICATION = "XV05";
+    const E_NON_VAR_PASSED_BY_REF   = "XV06";
+    const E_EMPTY_STATEMENT         = "XV07";
+    const E_LOSS_OF_STRICT_MODE     = "XV08";
+
+    public function getErrorMap() {
+        return array(
+            self::E_UNKNOWN_VAR  => array(
+                "message"   => "Use of unknown variable",
+                "severity"  => XRef::ERROR,
+            ),
+            self::E_UNKNOWN_VAR_RELAXED  => array(
+                "message"   => "Possible use of unknown variable",
+                "severity"  => XRef::WARNING,
+            ),
+            self::E_UNKNOWN_VAR_ARGUMENT  => array(
+                "message"   => "Possible use of unknown variable as argument of unknown function",
+                "severity"  => XRef::WARNING,
+            ),
+            self::E_ARRAY_AUTOVIVIFICATION  => array(
+                "message"   => "Array autovivification",
+                "severity"  => XRef::WARNING,
+            ),
+            self::E_SCALAR_AUTOVIVIFICATION  => array(
+                "message"   => "Scalar autovivification",
+                "severity"  => XRef::WARNING,
+            ),
+            self::E_NON_VAR_PASSED_BY_REF => array(
+                "message"   => "Possible attempt to pass non-variable by reference",
+                "severity"  => XRef::ERROR,
+            ),
+            self::E_EMPTY_STATEMENT  => array(
+                "message"   => "Empty declaration-like statement",
+                "severity"  => XRef::NOTICE,
+            ),
+            self::E_LOSS_OF_STRICT_MODE => array(
+                "message"   => "Can't reliable detect var usage from here",
+                "severity"  => XRef::NOTICE,
+            ),
+        );
+    }
+
     protected $supportedFileType    = XRef::FILETYPE_PHP;
 
     /** known superglobals: array('$_SEREVR' => true, ...); */
@@ -114,6 +161,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         if (!self::$internalFunctions) {
             self::initialize_internal_php_function_list();
         }
+
     }
 
     const VAR_ASSIGNED = 1;
@@ -150,8 +198,8 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         return array_pop($this->stackOfScopes);
     }
 
-    protected function getOrCreateVarByName($var_name, $scopeDepth=0) {
-        $scope = $this->getScope($scopeDepth);
+    protected function getOrCreateVarByName($var_name, $scope_depth=0) {
+        $scope = $this->getScope($scope_depth);
         if (!isset($scope->vars[$var_name])) {
             $scope->vars[$var_name] = (object) array(
                 "status"     => self::VAR_UNKNOWN,
@@ -164,8 +212,8 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         return $scope->vars[$var_name];
     }
 
-    protected function getOrCreateVar($token, $scopeDepth=0) {
-        $var = $this->getOrCreateVarByName($token->text, $scopeDepth);
+    protected function getOrCreateVar($token, $scope_depth=0) {
+        $var = $this->getOrCreateVarByName($token->text, $scope_depth);
         $var->token = $token;
         return $var;
     }
@@ -180,38 +228,42 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         return (isset($scope->varTypes[$varName])) ? $scope->varTypes[$varName] : null;
     }
 
-    protected function checkVar($token, $scopeDepth=0) {
+    protected function checkVar($token, $scope_depth=0) {
         $varName = $token->text;
         if (isset(self::$knownSuperglobals[$varName])) {
             return true;
         } else if (count($this->stackOfScopes)==1 && isset(self::$knownGlobals[$varName])) {
             return true;
         } else {
-            $currentScope = $this->getScope($scopeDepth);
+            $currentScope = $this->getScope($scope_depth);
             return isset($currentScope->vars[$varName]);
         }
     }
 
-    protected function checkVarAndAddDefectIfMissing($token, $forceWarning=false, $scopeDepth=0, $message=null) {
-        if (!$this->checkVar($token, $scopeDepth)) {
-            $scope = $this->getScope($scopeDepth);
-            $severity = ($scope->mode == self::MODE_RELAXED || $forceWarning) ? XRef::WARNING : XRef::ERROR;
-            if (!$message) {
-                $message = ($severity == XRef::WARNING) ?
-                    "Possible use of non-defined variable" : "Use of non-defined variable";
+    public function getErrorsDescription() {
+    }
+
+    protected function checkVarAndAddDefectIfMissing($token, $scope_depth=0, $error_code=null) {
+        if (!$this->checkVar($token, $scope_depth)) {
+            $scope = $this->getScope($scope_depth);
+
+            if (!$error_code) {
+                $error_code = ($scope->mode == self::MODE_RELAXED) ?
+                    self::E_UNKNOWN_VAR_RELAXED : self::E_UNKNOWN_VAR;
             }
+
             if ($this->loop_ends_at > 0) {
                 // special "inside-loop" mode: don't report the missing variable
                 // till the end of the loop, since
                 // assign/use pattern can be out of lexical order inside of loops
                 $variable_name = $token->text;
                 if (!isset( $this->loop_variables[$variable_name] )) {
-                    $this->loop_variables[$variable_name] = array($token, $severity, $message);
+                    $this->loop_variables[$variable_name] = array($token, $error_code);
                 }
             } else {
-                $this->addDefect($token, $severity, $message);
+                $this->addDefect($token, $error_code);
                 // create this var to report the error only once
-                $var = $this->getOrCreateVar($token, $scopeDepth);
+                $var = $this->getOrCreateVar($token, $scope_depth);
                 $var->status = self::VAR_ASSIGNED;
             }
         }
@@ -317,7 +369,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 $scope = $this->getScope();
                 if ($scope->mode != self::MODE_RELAXED) {
                     $scope->mode = self::MODE_RELAXED;
-                    $this->addDefect($token_caused_mode_switch, XRef::NOTICE, "Can't reliable detect var usage from here");
+                    $this->addDefect($token_caused_mode_switch, self::E_LOSS_OF_STRICT_MODE);
                 }
                 $switch_to_relaxed_scope_at = -1;
                 unset($token_caused_mode_switch);
@@ -343,9 +395,9 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                     // mark all variables that were used but not initialized
                     // inside the loop as defects
                     foreach ($this->loop_variables as $variable_name => $v) {
-                        list($token, $severity, $message) = $v;
+                        list($token, $error_code) = $v;
                         if (!$this->checkVar($token)) {
-                            $this->addDefect($token, $severity, $message);
+                            $this->addDefect($token, $error_code);
                             $var = $this->getOrCreateVar($token);
                             $var->status = self::VAR_ASSIGNED;
                         }
@@ -433,7 +485,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 if ($n->text == '=') {
                     if ($is_array && !$this->checkVar($t)) {
                         // array autovivification?
-                        $this->checkVarAndAddDefectIfMissing($t, true, 0, "Array autovivification");
+                        $this->checkVarAndAddDefectIfMissing($t, 0, self::E_ARRAY_AUTOVIVIFICATION);
                     } else {
                         $var = $this->getOrCreateVar($t);
                         $var->status = self::VAR_ASSIGNED;
@@ -442,14 +494,14 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 }
 
                 if ($n->kind==T_INC || $n->kind==T_DEC || $p->kind==T_INC || $p->kind==T_DEC || $n->kind==T_CONCAT_EQUAL || $n->kind==T_PLUS_EQUAL) {
-                    $message = ($is_array) ? "Array autovivification" : "Scalar autovivification";
-                    $this->checkVarAndAddDefectIfMissing($t, true, 0, $message);
+                    $error_code = ($is_array) ? self::E_ARRAY_AUTOVIVIFICATION : self::E_SCALAR_AUTOVIVIFICATION;
+                    $this->checkVarAndAddDefectIfMissing($t, 0, $error_code);
                     continue;
                 }
 
                 if ($n->text == ';' && !$is_array) {
                     if ($p && ($p->text==';' || $p->text=='{')) {
-                        $this->addDefect($t, XRef::NOTICE, "Empty declaration-like statement");
+                        $this->addDefect($t, self::E_EMPTY_STATEMENT);
                         $var = $this->getOrCreateVar($t);
                         $var->status = self::VAR_ASSIGNED;
                         continue;
@@ -556,7 +608,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                             //      $foo = function () using (&$x) { $x = 1; };
                             //      $foo(); // now we have $x here
                             if (!$pass_by_reference) {
-                                $this->checkVarAndAddDefectIfMissing($arg, false, 1);
+                                $this->checkVarAndAddDefectIfMissing($arg, 1);
                             } else {
                                 $var = $this->getOrCreateVar($arg, 1);
                                 $var->status = self::VAR_ASSIGNED;  // not quite true -
@@ -790,7 +842,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
 
                                         // TODO: add other valid lvalues here, like $array["index"] or $object->field or Foo::$bar
                                         if (!$is_class_variable) {
-                                            $this->addDefect($n, XRef::ERROR, "Possible attempt to pass non-variable by reference");
+                                            $this->addDefect($n, self::E_NON_VAR_PASSED_BY_REF);
                                         }
                                     }
                                 }
@@ -810,7 +862,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                                 if ($nn->text==',' || $nn->text==')') {
                                     // single variable - check that it exists but if not issue a warning only,
                                     // cause it can be initialized by this unknown funciton
-                                    $this->checkVarAndAddDefectIfMissing($n, true);
+                                    $this->checkVarAndAddDefectIfMissing($n, 0, self::E_UNKNOWN_VAR_ARGUMENT);
                                 }
                             }
                         }
@@ -1004,17 +1056,16 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                         $ref_params_list[] = $i;
                     }
                 }
-            }
+                if (!count($ref_params_list)) {
+                    $ref_params_list = null;
+                }
 
-            if (!count($ref_params_list)) {
-                $ref_params_list = null;
-            }
-
-            $current_class_name = $pf->getClassAt( $m->nameStartIndex );
-            if ($current_class_name) {
-                $functions[ $current_class_name . '::' . $function_name ] = $ref_params_list;
-            } else {
-                $functions[$function_name] = $ref_params_list;
+                $current_class_name = $pf->getClassAt( $m->nameStartIndex );
+                if ($current_class_name) {
+                    $functions[ $current_class_name . '::' . $function_name ] = $ref_params_list;
+                } else {
+                    $functions[$function_name] = $ref_params_list;
+                }
             }
         }
 
