@@ -29,12 +29,9 @@ XRef is a set of tools to work with PHP source files. Currently it includes:
 INSTALLATION
 ============
 
-Basic installation
-------------------
-
 ```shell
 ## get it
-curl -o XRef-stable.tgz https://xref-lint.net/releases/XRef-stable.tgz
+curl -o XRef-stable.tgz http://xref-lint.net/releases/XRef-stable.tgz
 ## install
 pear install ./XRef-stable.tgz
 ## run
@@ -54,16 +51,18 @@ Full installation
 
 To get most of the xref package, configure it after the basic installation.
 
-1.  Download and install Smarty template engine. <http://www.smarty.net/>;
-    any of versions 2.x or 3.x should work
-
-2.  Create a data directory where XRef will keep its data about your project
-
-3.  Configure web server to run scripts from web-scripts dir XRef/web-scripts/,
-    see also sample Apache config file in XRef/examples/httpd.conf
-
-4. Create a config file and place it where XRef can found it
+1.  Create a config file and place it where XRef can found it
     (see section CONFIG FILE below; also see sample config in config/xref.ini.sample)
+
+2.  Download and install Smarty template engine. <http://www.smarty.net/>;
+    any of versions 2.x or 3.x should work, version 2 takes less memory.
+    Set the pass to Smarty.class.php file in *xref.smarty-class* config param.
+
+3.  Create a data directory where XRef will keep its data about your project.
+    Specify this dir in *xref.data-dir*.
+
+4.  Configure web server to run scripts from web-scripts dir XRef/web-scripts/,
+    see also sample Apache config file in XRef/examples/httpd.conf
 
 5. Set up crontab to run xref-ci to monitor your project,
     see sample cronab script in
@@ -117,7 +116,7 @@ ERROR MESSAGES REPORTED BY LINT
         return $this->foo;  // error: there is no object context!
     }
 
-    class Example{
+    class Example {
         public static function example4() {
             $this->invoceMethod();  // no $this in static methods!
         }
@@ -311,7 +310,7 @@ List of config file parameters:
     %an - author of the commit name, %ae - e-mail address of commit author, etc.
     Consult your repository manager doc about supported fields.
 
-    Examples:
+    Example:
 
         to[] = you@your.domain
         to[] = "{%ae}"
