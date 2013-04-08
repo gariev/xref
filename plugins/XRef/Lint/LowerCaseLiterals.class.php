@@ -8,18 +8,30 @@
 class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
     const E_LOWER_CASE_STRING_LITERAL = "XL01";
+    const E_UNPREFIXED_CLASS_CONSTANT = "XL02";
 
     public function getErrorMap() {
         return array(
             self::E_LOWER_CASE_STRING_LITERAL => array(
                 "severity" => XRef::WARNING,
                 "message" => "Mixed/Lower-case unquoted string literal",
-            )
+            ),
+            self::E_UNPREFIXED_CLASS_CONSTANT => array(
+                "severity" => XRef::WARNING,
+                "message" => "Possible use of class constant without class prefix",
+            ),
         );
     }
 
+    // set of all PHP system constants (SORT_DESC etc)
+    // array (constant_name => true)
+    protected $system_constants = array();
+
     public function __construct() {
         parent::__construct("lint-const-literals", "Lint (use of lower- or mixed-case string literals)");
+        foreach (get_defined_constants() as $const_name => $value) {
+            $this->system_constants[ $const_name ] = true;
+        }
     }
 
     protected $supportedFileType    = XRef::FILETYPE_PHP;
@@ -35,6 +47,9 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
         // for (foo=0; $foo<10; )
         // $bar[x]  - is it $bar['x'] or $bar[$x] ?
         $seen_strings = array(); // report every literal once per file, don't be noisy
+
+        $global_constants = array();    // list of all global space constants defined in this file
+        $class_constants = array();     // list of all class constants names defined in this file
 
         // list of token indexes that contains allowed string literals
         $ignore_tokens = array();
@@ -89,11 +104,11 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                     // ignore foo and bar in this declaration
                     $ignore_tokens[ $token->index ] = 1;
 
-                    // and add their names to list of known constants,
-                    // unless they are class constants and
-                    // will be prefixed by class name when used
-                    if (! $pf->getClassAt($token->index)) {
-                        $seen_strings[ $token->text ] = 1;
+                    // add their names to list of known constants or class constants
+                    if ($pf->getClassAt($token->index)) {
+                        $class_constants[ $token->text ] = 1;
+                    } else {
+                        $global_constants[ $token->text ] = 1;
                     }
                 }
                 continue;
@@ -101,13 +116,19 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
 
             if ($t->kind == T_STRING) {
-                $str_upper = strtoupper($t->text);
-                if ($t->text == $str_upper) {
-                    // ok, all-uppercase, SOME_CONSTANT, I hope
+
+                if (isset($seen_strings[ $t->text ])) {
+                    // report each string only once
                     continue;
                 }
 
-                // PHP predefined constants?
+                if (isset($global_constants[ $t->text ]) || isset($this->system_constants[ $t->text ])) {
+                    // skip know constants defined in this file (const foo=1) and system constants(SORT_DESC)
+                    continue;
+                }
+
+                // PHP predefined case-insensitive constants?
+                $str_upper = strtoupper($t->text);
                 if ($str_upper == "TRUE" || $str_upper == "FALSE" || $str_upper == "NULL") {
                     continue;
                 }
@@ -130,7 +151,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                             if ($nn->text == ',' && strlen($string) > 2) {
                                 // remove the first and the last quotes
                                 $string = substr($string, 1, strlen($string)-2);
-                                $seen_strings[ $string ] = 1;
+                                $global_constants[ $string ] = 1;
                                 continue;
                             }
                         }
@@ -186,12 +207,23 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
                 }
 
-                if (array_key_exists($t->text, $seen_strings)) {
+                // is it some known class constant used without prefix?
+                //  class Foo { const BAR = 1; }
+                //  echo BAR; // should be Foo::BAR or self::BAR inside the class
+                if (isset($class_constants[ $t->text ])) {
+                    $this->addDefect($t, self::E_UNPREFIXED_CLASS_CONSTANT);
+                    $seen_strings[ $t->text ] = 1;
                     continue;
                 }
-                $seen_strings[ $t->text ] = 1;
+
+                if ($t->text == $str_upper) {
+                    // ok, all-uppercase, SOME_CONSTANT, I hope
+                    continue;
+                }
+
 
                 $this->addDefect($t, self::E_LOWER_CASE_STRING_LITERAL);
+                $seen_strings[ $t->text ] = 1;
             }
         }
 
