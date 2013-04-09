@@ -149,7 +149,7 @@ REPORTED ERRORS
 
 * <a name="XV03"> **Possible use of unknown variable as argument of unknown function** (severity: warning, code: XV03)
 
-    Similar to the above, caused by using a varibale as a parameter to function with unknown signature.
+    Similar to the above, caused by using a variable as a parameter to function with unknown signature.
 
 ```php
     // COUNTEREXAMPLE
@@ -246,7 +246,7 @@ REPORTED ERRORS
 * <a name="XT02"> **Possible use of \$this, self:: or parent:: is global scope** (severity: warning, code: XT02)
 
     Similar to the above, caused by using $this/self/parent in global scope in file that doesn't contain
-    other clases and/or methods and, therefore, can be included into body of class method.
+    other classes and/or methods and, therefore, can be included into body of class method.
     For this codestyle, see Joomla project:
 
 ```php
@@ -298,7 +298,7 @@ class Foo {
     }
 ```
 
-* <a name="XA01"> **Assignement in condition** (severity: warning, code: XA01)
+* <a name="XA01"> **Assignment in conditional expression** (severity: warning, code: XA01)
 
     Sample code:
 
@@ -324,7 +324,7 @@ XRef tools will look for the config file in the following places in order:
 If no file found, default values will be used - they are good enough to run lint (both command-line and web version),
 but not to run xref-doc or xref-ci.
 
-Each of the value below can be overriden by command-line option -d (--define), e.g.
+Each of the value below can be overridden by command-line option -d (--define), e.g.
 
 ```
 xref-lint -d lint.check-global-scope=false -d lint.ignore-error=XA01 ...
@@ -354,7 +354,7 @@ List of config file parameters:
 * **xref.script-url** (url, optional)
 
     URL where PHP scripts from XRef/web-scripts dir are accessible;
-    if present, the xref-ci notificatons will contain links to them
+    if present, the xref-ci notifications will contain links to them
 
 * **xref.storage-manager**  (class name; optional)
 
