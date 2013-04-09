@@ -5,31 +5,39 @@ WHAT IS THIS?
 XRef is a set of tools to work with PHP source files. Currently it includes:
 
 * xref-lint
+
     A lint, i.e. static code analysis tool that finds errors.
     PHP is not a perfect language to catch programmer's errors,
     so it's a good idea to have a tool that will do.
     See section "ERROR MESSAGES REPORTED BY LINT" below.
 
 * xref-doc
+
     A tool to create cross-reference documentation about your project
     (which classes/methods/properties are defined and where they are used)
 
 * xref-ci
+
     Continuous Integration tool to monitor your project repository and send e-mail
     notifications about errors.
 
 * GIT lint plugin
+
     Just type 'git xref-lint' in your git repository root before doing a commit
     and you'll get lint report of modified files
 
 * parser libraries to build your own tools
+
     XRef is easily extensible - read the section "HOW TO EXTEND THE XREF" below
 
+* Try it online!
+
+    <http://xref-lint.net/>
 
 INSTALLATION
 ============
 
-```shell
+```sh
 ## get it
 curl -o XRef-stable.tgz http://xref-lint.net/releases/XRef-stable.tgz
 ## install
@@ -39,7 +47,7 @@ xref-lint <your-project-dir>
 ```
 
 Alternatively, you can get the source code and add its 'bin' directory to your executable path:
-```shell
+```sh
 git clone git@github.com:gariev/xref.git
 export PATH=$PATH:xref/bin
 ```
@@ -71,7 +79,7 @@ To get most of the xref package, configure it after the basic installation.
 REPORTED ERRORS
 ===============
 
-* **Use of unknown variable** (severity: error, code: XV01) <a name="XV01">
+* <a name="XV01"> **Use of unknown variable** (severity: error, code: XV01)
 
     This error is caused by using a variable that was never
     introduced in this scope. Most often it's because of misspelled
@@ -87,7 +95,7 @@ REPORTED ERRORS
     }
 ```
 
-* **Possible use of unknown variable** (severity: warning, code: XV02) <a name="XV02">
+* <a name="XV02"> **Possible use of unknown variable** (severity: warning, code: XV02)
 
     Similar to the above, but issued when xref can't reliable detect
     which variables can be legitimately present in this scope
@@ -109,12 +117,13 @@ REPORTED ERRORS
         echo $foo;                      // <-- can $foo be here? maybe.
     }
 ```
+
     How to get rid of this warning:
 
-    * Test for existence of the variable before using it
-    * Use doc comment annotations
-    * rewrite the code - use array indexing instead of *extract()*,
-    * if your project heavily depends on these features, disable
+    - Test for existence of the variable before using it
+    - Use doc comment annotations
+    - rewrite the code - use array indexing instead of *extract()*,
+    - if your project heavily depends on these features, disable
       the error code
       (see xref.ignore-error config parameter/command-line option below)
 
@@ -138,9 +147,9 @@ REPORTED ERRORS
     $res = eval("return $expression_str");
 ```
 
-* **Possible use of unknown variable as argument of unknown function** (severity: warning, code: XV03) <a name="XV03">
+* <a name="XV03"> **Possible use of unknown variable as argument of unknown function** (severity: warning, code: XV03)
 
-Similar to the above, caused by using a varibale as a parameter to function with unknown signature.
+    Similar to the above, caused by using a varibale as a parameter to function with unknown signature.
 
 ```php
     // COUNTEREXAMPLE
@@ -158,14 +167,14 @@ Similar to the above, caused by using a varibale as a parameter to function with
     }
 ```
 
-How to get rid out of this warning:
+    How to get rid out of this warning:
 
-    * Initialize the variable with some appropriate value (e.g. null)
-      before using it as parameter
-    * add function signature with *lint.add-function-signature*
-      config file/command-line parameter (see below)
+        - Initialize the variable with some appropriate value (e.g. null)
+          before using it as parameter
+        - add function signature with *lint.add-function-signature*
+          config file/command-line parameter (see below)
 
-* **Array autovivification** (severity: warning, code: XV04) <a name="XV04">
+* <a name="XV04"> **Array autovivification** (severity: warning, code: XV04)
 
     Similar to the above - when a value assigned to a variable that was never
     defined in array context, a new array is instantiated. This may be intended
@@ -183,7 +192,7 @@ How to get rid out of this warning:
                     // $test = array();
 ```
 
-* **Scalar autovivification** (severity: warning, code: XV05) <a name="XV05">
+* <a name="XV05"> **Scalar autovivification** (severity: warning, code: XV05)
 
     Similar to the above, caused by operations like ++, .= or +=
     on variables that were never initialized.
@@ -199,7 +208,7 @@ How to get rid out of this warning:
     return $sum;
 ```
 
-* **Possible attempt to pass non-variable by reference** (severity: error, code: XV06) <a name="XV06">
+* <a name="XV06"> **Possible attempt to pass non-variable by reference** (severity: error, code: XV06)
 
     This message is issued if a function takes a parameter by reference,
     but something else but variable is given.
@@ -215,7 +224,7 @@ How to get rid out of this warning:
     $last_word = array_pop($tmp);   // ok
 ```
 
-* **$this, self:: or parent:: is used outside of instance/class scope** (severity: error, code: XT01) <a name="XT01">
+* <a name="XT01"> **$this, self:: or parent:: is used outside of instance/class scope** (severity: error, code: XT01)
 
     Sample code:
 
@@ -234,11 +243,11 @@ How to get rid out of this warning:
 
 ```
 
-* **Possible use of \$this, self:: or parent:: is global scope** (severity: warning, code: XT02) <a name="XT02">
+* <a name="XT02"> **Possible use of \$this, self:: or parent:: is global scope** (severity: warning, code: XT02)
 
-Similar to the above, caused by using $this/self/parent in global scope in file that doesn't contain
-other clases and/or methods and, therefore, can be included into body of class method.
-For this codestyle, see Joomla project:
+    Similar to the above, caused by using $this/self/parent in global scope in file that doesn't contain
+    other clases and/or methods and, therefore, can be included into body of class method.
+    For this codestyle, see Joomla project:
 
 ```php
 // COUNTEREXAMPLE
@@ -255,9 +264,9 @@ class Foo {
     return $this->bar;      // <-- warning here
 ```
 
-If your project depends on code like this, disable this error.
+    If your project depends on code like this, disable this error.
 
-* **Mixed/Lower-case unquoted string literal** (severity: warning, code: XL01) <a name="XL01">
+* <a name="XL01"> **Mixed/Lower-case unquoted string literal** (severity: warning, code: XL01)
 
     Unquoted ("bare") strings are either constant names or, if no constant with
     this name is defined, are interpreted as strings.
@@ -275,9 +284,9 @@ If your project depends on code like this, disable this error.
     echo foo + bar;         // ok, no warning here
 ```
 
-* **Possible use of class constant without class prefix** (severity: warning, code: XL02) <a name="XL02">
+* <a name="XL02"> **Possible use of class constant without class prefix** (severity: warning, code: XL02)
 
-Sample code:
+    Sample code:
 
 ```php
     // COUNTEREXAMPLE
@@ -289,9 +298,9 @@ Sample code:
     }
 ```
 
-* **Assignement in condition** (severity: warning, code: XA01) <a name="XA01">
+* <a name="XA01"> **Assignement in condition** (severity: warning, code: XA01)
 
-Sample code:
+    Sample code:
 
 ```php
     // COUNTEREXMAPLE
