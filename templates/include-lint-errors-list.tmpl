@@ -11,7 +11,8 @@
         {if is_array($errorsList)}
             {foreach from=$errorsList item="e"}
             <li>
-                {xref_severity_str severity=$e->severity html=true} ({$e->errorCode}):
+                {xref_severity_str severity=$e->severity html=true}
+                (<a href="https://github.com/gariev/xref/blob/master/README.md#{$e->errorCode}">{$e->errorCode}</a>):
                 {$e->message} ({$e->tokenText}) at
                 {if isset($lintDocReport)}
                     {* Link from xref report leads to cross-ref documentation page *}
