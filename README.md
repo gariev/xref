@@ -68,25 +68,104 @@ To get most of the xref package, configure it after the basic installation.
     see sample cronab script in
 
 
-ERROR MESSAGES REPORTED BY LINT
-===============================
+REPORTED ERRORS
+===============
 
-* Use of non-defined variable [error]
+* **Use of unknown variable** (severity: error, code: XV01) <a name="XV01">
 
-    This error message is caused by accessing a variable that was never
-    assigned a value. Most often it's because of misspelled variable name
-    or refactoring went wrong.
+    This error is caused by using a variable that was never
+    introduced in this scope. Most often it's because of misspelled
+    variable name or refactoring that went wrong.
 
     Sample code:
 
 ```php
+    // COUNTEREXAMPLE
     function example1() {
         $message = "hello, world";
         echo $Message;  // <-- error: there is no variable $Message
     }
 ```
 
-* Array autovivification [warning]
+* **Possible use of unknown variable** (severity: warning, code: XV02) <a name="XV02">
+
+    Similar to the above, but issued when xref can't reliable detect
+    which variables can be legitimately present in this scope
+    (the relaxed mode).
+
+```php
+    // COUNTEREXAMPLE
+    //
+    // global scope is always in relaxed mode -
+    // variables defined in other files can be used here
+    //
+    function foo($params, $var_name) {
+        // functions starts in strict mode, but
+        include "other_file.php";       // all of these
+        extract($a);                    // makes xref
+        $$var_name = 1;                 // switch to
+        eval("\$res = $expression_str");// relaxed mode
+
+        echo $foo;                      // <-- can $foo be here? maybe.
+    }
+```
+    How to get rid of this warning:
+
+    * Test for existence of the variable before using it
+    * Use doc comment annotations
+    * rewrite the code - use array indexing instead of *extract()*,
+    * if your project heavily depends on these features, disable
+      the error code
+      (see xref.ignore-error config parameter/command-line option below)
+
+```php
+    //
+    // making variables known in relaxed mode
+    //
+
+    // checking for a var
+    if (isset($foo)) {
+        // ok, we know $foo now
+    }
+
+    // doc comment annotations
+    /** @var MyClass $bar */
+    $bar->doSomething();
+
+    // rewrite the code:
+    // use array indexing instead of extract, returning for of eval etc
+    $baz = $params["baz"];
+    $res = eval("return $expression_str");
+```
+
+* **Possible use of unknown variable as argument of unknown function** (severity: warning, code: XV03) <a name="XV03">
+
+Similar to the above, caused by using a varibale as a parameter to function with unknown signature.
+
+```php
+    // COUNTEREXAMPLE
+
+    unknown_function($foo);     // <-- is $foo legitimate here?
+                                // maybe, if unknown_function takes param
+                                // by reference and assigns value to it
+
+    known_function($bar);       // no warning here - since
+                                // known_function() is defined in the same
+                                // file, xref will extract its signature
+
+    function known_function(&$param) {
+        $param = 1;
+    }
+```
+
+How to get rid out of this warning:
+
+    * Initialize the variable with some appropriate value (e.g. null)
+      before using it as parameter
+    * add function signature with *lint.add-function-signature*
+      config file/command-line parameter (see below)
+
+* **Array autovivification** (severity: warning, code: XV04) <a name="XV04">
 
     Similar to the above - when a value assigned to a variable that was never
     defined in array context, a new array is instantiated. This may be intended
@@ -96,68 +175,133 @@ ERROR MESSAGES REPORTED BY LINT
     Sample code:
 
 ```php
-    function example2($str) {
-        $text = explode('', $str);
-        $test[] = '!';  // a new array $text is instantiated here
-            // is it corrent or array $text should be here?
-            // to remove the warning, initialize var before usage:
-            // $test = array();
-    }
+    // COUNTEREXAMAPLE
+    $text = explode('', $str);
+    $test[] = '!';  // <-- a new array $test is instantiated here.
+                    // is it intended or array $text should be here?
+                    // to remove the warning, initialize var before usage:
+                    // $test = array();
 ```
 
-* $this is used outside of instance method [error]
+* **Scalar autovivification** (severity: warning, code: XV05) <a name="XV05">
 
-    Variable $this is used in function or in static class method.
+    Similar to the above, caused by operations like ++, .= or +=
+    on variables that were never initialized.
+    This may be inteded behaviour or it can mask a real error.
+    Initialize the variable before usage
+
+```php
+    // COUNTEREXAMPLE
+    $sum = 0;
+    foreach ($prices as $price) {
+        $total += $price;       // <-- warning, variable $total is instantiated here
+    }
+    return $sum;
+```
+
+* **Possible attempt to pass non-variable by reference** (severity: error, code: XV06) <a name="XV06">
+
+    This message is issued if a function takes a parameter by reference,
+    but something else but variable is given.
+
+```php
+    // COUNTEREXAMPLE
+    $last_word = array_pop(explode(" ", $text));        // <--
+        // error - array_pop() takes an array by reference and modifies it
+        // this code may work but will break in E_ALL | E_STRICT mode
+        // use temp variable to fix it:
+
+    $tmp = explode(" ", $text);
+    $last_word = array_pop($tmp);   // ok
+```
+
+* **$this, self:: or parent:: is used outside of instance/class scope** (severity: error, code: XT01) <a name="XT01">
 
     Sample code:
 
 ```php
-    function example3() {
-        return $this->foo;  // error: there is no object context!
+    // COUNTEREXAMPLE
+    class Foo {
+        public static function bar() {
+            return $this->bar;      // <-- error: no $this in static method
+        }
     }
 
-    class Example {
-        public static function example4() {
-            $this->invoceMethod();  // no $this in static methods!
+    function foo {
+        return parent::foo();   // <-- error: there is no parent:: or self::
+                                // pseudo-classes outside of class context
+    }
+
+```
+
+* **Possible use of \$this, self:: or parent:: is global scope** (severity: warning, code: XT02) <a name="XT02">
+
+Similar to the above, caused by using $this/self/parent in global scope in file that doesn't contain
+other clases and/or methods and, therefore, can be included into body of class method.
+For this codestyle, see Joomla project:
+
+```php
+// COUNTEREXAMPLE
+
+// file: main.php
+class Foo {
+    public function bar() {
+        include "method_body.php";
+    }
+}
+
+// file: method_body.php
+
+    return $this->bar;      // <-- warning here
+```
+
+If your project depends on code like this, disable this error.
+
+* **Mixed/Lower-case unquoted string literal** (severity: warning, code: XL01) <a name="XL01">
+
+    Unquoted ("bare") strings are either constant names or, if no constant with
+    this name is defined, are interpreted as strings.
+    Best practice for constants is to use upper-case names for them.
+
+    Sample code:
+
+```php
+    // COUNTEREXAMPLE
+    echo time;              // <-- should it be really "time" or time(), $time, or even some constant TIME?
+
+    // xref knows about constants defined in current file:
+    define("foo", 1);
+    const bar = 2;
+    echo foo + bar;         // ok, no warning here
+```
+
+* **Possible use of class constant without class prefix** (severity: warning, code: XL02) <a name="XL02">
+
+Sample code:
+
+```php
+    // COUNTEREXAMPLE
+    class Foo {
+        const BAR = 1;
+        public method bar() {
+            echo BAR;           // <-- did you mean self::BAR / Foo::BAR?
         }
     }
 ```
 
-* Mixed/Lower-case unquoted string literal [warning]
+* **Assignement in condition** (severity: warning, code: XA01) <a name="XA01">
 
-    Unquoted ("bare") strings are either constant names or interpreted as strings.
-    Best practice for constants is to use upper-case names for them; so lower-case
-    unquoted string either a poorly named constant (rename it) or error.
-
-    Sample code:
+Sample code:
 
 ```php
-    echo time; // should it be time(), $time, 'time' or TIME?
+    // COUNTEREXMAPLE
+    if ($foo = 0) { ... }       // <-- did you mean ($foo == 0)?
+    if ($bar = $baz) { ... }    // <-- ($bar == $baz) ?
+
+    // examples below are ok and doesn't trigger warning:
+    if ($handle = fopen("file", "w") { ... }    // ok
+    if ($ch = curl_init(...)) { ... }           // ok
 ```
-
-HOW TO EXTEND THE XREF
-======================
-
-In XRef tools most of the work are done by loadable plugins, and config file
-determines which plugin to load for any of action. So, here is the checklist:
-
-1. Find the interface that your plugin should implement
-    All interfaces are defined in lib/interfaces.php file; currently there are
-    four interfaces for plugins: XRef_IDocumentationPlugin, XRef_ILintPlugin,
-    XRef_IPersistentStorage, XRef_ISourceCodeManager and one interface for
-    parsers: XRef_IFileParser.
-
-2. Create your implementation; you may inherit from XRef classes and override
-    just needed methods. If class is named My_Plugin place it into file named
-    My/Plugin.class.php
-
-3. Specifiy the root directory where to look for your plugins in
-    xref.plugins-dir[] variable of config file.
-
-4. Tell XRef that your plugin should be loaded in config file.
-    Parameters of interest: lint.parsers[], lint.plugins[],
-    doc.parsers[], doc.plugins[], xref.storage-manager and
-    ci.source-code-manager.
 
 
 CONFIG FILE
@@ -314,6 +458,31 @@ List of config file parameters:
 
         to[] = you@your.domain
         to[] = "{%ae}"
+
+
+HOW TO EXTEND THE XREF
+======================
+
+In XRef tools most of the work are done by loadable plugins, and config file
+determines which plugin to load for any of action. So, here is the checklist:
+
+1. Find the interface that your plugin should implement
+    All interfaces are defined in lib/interfaces.php file; currently there are
+    four interfaces for plugins: XRef_IDocumentationPlugin, XRef_ILintPlugin,
+    XRef_IPersistentStorage, XRef_ISourceCodeManager and one interface for
+    parsers: XRef_IFileParser.
+
+2. Create your implementation; you may inherit from XRef classes and override
+    just needed methods. If class is named My_Plugin place it into file named
+    My/Plugin.class.php
+
+3. Specifiy the root directory where to look for your plugins in
+    xref.plugins-dir[] variable of config file.
+
+4. Tell XRef that your plugin should be loaded in config file.
+    Parameters of interest: lint.parsers[], lint.plugins[],
+    doc.parsers[], doc.plugins[], xref.storage-manager and
+    ci.source-code-manager.
 
 
 AUTHOR
