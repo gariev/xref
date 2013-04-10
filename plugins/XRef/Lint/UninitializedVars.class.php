@@ -72,7 +72,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 "severity"  => XRef::WARNING,
             ),
             self::E_UNKNOWN_VAR_ARGUMENT  => array(
-                "message"   => "Possible use of unknown variable as argument of unknown function",
+                "message"   => "Possible use of unknown variable as function argument",
                 "severity"  => XRef::WARNING,
             ),
             self::E_ARRAY_AUTOVIVIFICATION  => array(

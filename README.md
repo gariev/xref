@@ -147,7 +147,7 @@ REPORTED ERRORS
     $res = eval("return $expression_str");
 ```
 
-* <a name="XV03"></a> **Possible use of unknown variable as argument of unknown function** (severity: warning, code: XV03)
+* <a name="XV03"></a> **Possible use of unknown variable as function argument** (severity: warning, code: XV03)
 
     Similar to the above, caused by using a variable as a parameter to function with unknown signature.
 
@@ -412,8 +412,8 @@ List of config file parameters:
 
     Syntax:
 
-        add-function-signature[] = 'my_function($a, $&b)'
-        add-function-signature[] = 'MyClass::someMethod($a, $b, &c)'
+        add-function-signature[] = "my_function($a, $&b)"
+        add-function-signature[] = "MyClass::someMethod($a, $b, &c)"
 
 * **lint.check-global-scope** (boolean; optional)
 
