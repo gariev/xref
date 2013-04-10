@@ -31,3 +31,13 @@ Version 0.1.7
     - allowing lower/mixed-case constants defined in the same file
     - eval triggers relaxed mode now
 
+Version 0.1.8
+==============
+- lint:
+    - list of all errors with help URLs
+    - new warning: assignment in conditions
+    - new warning: class constants used without class prefix
+    - command lint option -d (--define)
+    - ability to disable errors by their codes
+    - experimental support for DocComments
+
