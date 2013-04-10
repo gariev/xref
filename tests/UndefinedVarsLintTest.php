@@ -284,6 +284,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 'foo(&$x)',
                 'Foo::bar($a, &$b)',
                 'Bar::baz(&$a, &$b)',
+                '?::qux(&$a, &$b)',
             )
         );
         $testPhpCode = '
@@ -300,6 +301,10 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 $l = $m = 10;
                 $x->foo->baz($k, $l, $m);   // warning on $k
 
+                $x->qux($p, $q);            // ok, unknown class of $x, matches "?::qux"
+                $p->foo->bar->qux($r);      // ok
+                $x->qux($s, $t, $u);        // error on $u
+
             }
         '
         ;
@@ -309,6 +314,7 @@ class UndefinedVarsLintTest extends BaseLintTest {
             array('$b', 8,   XRef::ERROR),
             array('$j', 11,  XRef::WARNING),
             array('$k', 13,  XRef::WARNING),
+            array('$u', 17,  XRef::ERROR),
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 

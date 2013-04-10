@@ -1073,24 +1073,25 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         $functions = array();
 
         // add user-defined functions/methods from config file
-        // add-function-signature = 'my_function($a, $b, &$c)'
-        // add-function-signature = 'MyClass::myMethod($a, $b, &$c)'
+        // add-function-signature = "my_function($a, $b, &$c)"
+        // add-function-signature = "MyClass::myMethod($a, $b, &$c)"
+        // add-function-signature = "?::myMethod($a, $b, &$c)"
         foreach (XRef::getConfigValue("lint.add-function-signature", array()) as $str) {
             // TODO: tokenize all $str and get rig of regular expressions
-            if (!preg_match('#^\s*(\w+)(::(\w+))?\s*\((.+)\)\s*$#', $str, $matches)) {
+            if (!preg_match('#^\s*(?:(\w+|\?)::)?(\w+)\s*\((.+)\)\s*$#', $str, $matches)) {
                 throw new Exception("Can't parse function specification from config file: $str");
             }
 
-            if ($matches[2]) {
+            if ($matches[1]) {
                 $class_name = $matches[1];
-                $function_name = $matches[3];
+                $function_name = $matches[2];
             } else {
                 $class_name = null;
-                $function_name = $matches[1];
+                $function_name = $matches[2];
             }
 
             $ref_params_list = array();
-            $arg_list = explode(',', $matches[4]);
+            $arg_list = explode(',', $matches[3]);
             for ($i = 0; $i < count($arg_list); ++$i) {
                 $t = $arg_list[$i];
                 if (preg_match('#^\s*&#', $t)) {

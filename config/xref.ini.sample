@@ -22,6 +22,7 @@ check-global-scope      = true
 ;add-global-var[]       = $foo
 ;add-function-signature = "my_function($a, $b, &$c)"
 ;add-function-signature = "KnownClass::someMethod(&$a)"
+;add-function-signature = "?::methodOfUnknownClass(&$a)"
 
 ; Continuous integration
 [ci]
