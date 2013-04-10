@@ -79,7 +79,7 @@ To get most of the xref package, configure it after the basic installation.
 REPORTED ERRORS
 ===============
 
-* <a name="XV01"> **Use of unknown variable** (severity: error, code: XV01)
+* <a name="XV01"></a> **Use of unknown variable** (severity: error, code: XV01)
 
     This error is caused by using a variable that was never
     introduced in this scope. Most often it's because of misspelled
@@ -95,7 +95,7 @@ REPORTED ERRORS
     }
 ```
 
-* <a name="XV02"> **Possible use of unknown variable** (severity: warning, code: XV02)
+* <a name="XV02"></a> **Possible use of unknown variable** (severity: warning, code: XV02)
 
     Similar to the above, but issued when xref can't reliable detect
     which variables can be legitimately present in this scope
@@ -147,7 +147,7 @@ REPORTED ERRORS
     $res = eval("return $expression_str");
 ```
 
-* <a name="XV03"> **Possible use of unknown variable as argument of unknown function** (severity: warning, code: XV03)
+* <a name="XV03"></a> **Possible use of unknown variable as argument of unknown function** (severity: warning, code: XV03)
 
     Similar to the above, caused by using a variable as a parameter to function with unknown signature.
 
@@ -174,7 +174,7 @@ REPORTED ERRORS
         - add function signature with *lint.add-function-signature*
           config file/command-line parameter (see below)
 
-* <a name="XV04"> **Array autovivification** (severity: warning, code: XV04)
+* <a name="XV04"></a> **Array autovivification** (severity: warning, code: XV04)
 
     Similar to the above - when a value assigned to a variable that was never
     defined in array context, a new array is instantiated. This may be intended
@@ -192,7 +192,7 @@ REPORTED ERRORS
                     // $test = array();
 ```
 
-* <a name="XV05"> **Scalar autovivification** (severity: warning, code: XV05)
+* <a name="XV05"></a> **Scalar autovivification** (severity: warning, code: XV05)
 
     Similar to the above, caused by operations like ++, .= or +=
     on variables that were never initialized.
@@ -208,7 +208,7 @@ REPORTED ERRORS
     return $sum;
 ```
 
-* <a name="XV06"> **Possible attempt to pass non-variable by reference** (severity: error, code: XV06)
+* <a name="XV06"></a> **Possible attempt to pass non-variable by reference** (severity: error, code: XV06)
 
     This message is issued if a function takes a parameter by reference,
     but something else but variable is given.
@@ -224,7 +224,7 @@ REPORTED ERRORS
     $last_word = array_pop($tmp);   // ok
 ```
 
-* <a name="XT01"> **$this, self:: or parent:: is used outside of instance/class scope** (severity: error, code: XT01)
+* <a name="XT01"></a> **$this, self:: or parent:: is used outside of instance/class scope** (severity: error, code: XT01)
 
     Sample code:
 
@@ -243,7 +243,7 @@ REPORTED ERRORS
 
 ```
 
-* <a name="XT02"> **Possible use of \$this, self:: or parent:: is global scope** (severity: warning, code: XT02)
+* <a name="XT02"></a> **Possible use of \$this, self:: or parent:: is global scope** (severity: warning, code: XT02)
 
     Similar to the above, caused by using $this/self/parent in global scope in file that doesn't contain
     other classes and/or methods and, therefore, can be included into body of class method.
@@ -266,7 +266,7 @@ class Foo {
 
     If your project depends on code like this, disable this error.
 
-* <a name="XL01"> **Mixed/Lower-case unquoted string literal** (severity: warning, code: XL01)
+* <a name="XL01"></a> **Mixed/Lower-case unquoted string literal** (severity: warning, code: XL01)
 
     Unquoted ("bare") strings are either constant names or, if no constant with
     this name is defined, are interpreted as strings.
@@ -282,7 +282,15 @@ class Foo {
     define("foo", 1);
     const bar = 2;
     echo foo + bar;         // ok, no warning here
+
+    // all upper-case literals are assumed to be constants
+    echo UPPER_CASE;        // ok, no warning here
+
 ```
+
+    If you get warnings about a lower-case constant defined somewhere else, you can disable the warning
+    listing the constant in lint.add-constant setting (see below).
+
 
 * <a name="XL02"> **Possible use of class constant without class prefix** (severity: warning, code: XL02)
 
@@ -384,6 +392,11 @@ List of config file parameters:
 * **lint.report-level** (errors/warnings/notices; optional)
 
     Messages with which severity level should be reported by lint; it's warnings by default
+
+* **lint.add-constant[]** (array of strings, optional)
+
+    If you get warnings about lower-case string literals that are actually global constants
+    defined in somewere else, you can list these constants here.
 
 * **lint.add-global-var[]** (array of strings, optional)
 

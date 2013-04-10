@@ -26,6 +26,8 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
     // set of all PHP system constants (SORT_DESC etc)
     // array (constant_name => true)
     protected $system_constants = array();
+    // similar array with config-defined (lint.add-constant) constants
+    protected $config_constants = array();
 
     public function __construct() {
         parent::__construct("lint-const-literals", "Lint (use of lower- or mixed-case string literals)");
@@ -43,12 +45,19 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
         $this->report = array();
 
+        // config_constants are initialized here and not in constructor only for
+        // unittest. TODO: make unittest reload plugings after config changes
+        $this->config_constants = array();
+        foreach (XRef::getConfigValue("lint.add-constant", array()) as $const_name) {
+            $this->config_constants[ $const_name ] = true;
+        }
+
         // lower/mixed-case string literals:
         // for (foo=0; $foo<10; )
         // $bar[x]  - is it $bar['x'] or $bar[$x] ?
         $seen_strings = array(); // report every literal once per file, don't be noisy
 
-        $global_constants = array();    // list of all global space constants defined in this file
+        $global_constants = array();    // list of all constants defined in global space in this file
         $class_constants = array();     // list of all class constants names defined in this file
 
         // list of token indexes that contains allowed string literals
@@ -122,8 +131,13 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                     continue;
                 }
 
-                if (isset($global_constants[ $t->text ]) || isset($this->system_constants[ $t->text ])) {
-                    // skip know constants defined in this file (const foo=1) and system constants(SORT_DESC)
+                // skip know constants defined in this file (const foo=1),
+                // system constants (SORT_DESC) and config-defined constants
+                if (isset($global_constants[ $t->text ])
+                    || isset($this->system_constants[ $t->text ])
+                    || isset($this->config_constants[ $t->text ])
+                )
+                {
                     continue;
                 }
 

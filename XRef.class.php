@@ -703,9 +703,12 @@ class XRef {
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
             ),
             'lint.ignore-error'       => array(),
+            'lint.add-constant'             => array(),
+            'lint.add-function-signature'   => array(),
+            'lint.add-global-var'           => array(),
+            'lint.ignore-error'       => array(),
             'lint.check-global-scope' => true,
             'ci.source-code-manager'  => 'XRef_SourceCodeManager_Git',
-
         );
         foreach ($defaultConfig as $key => $value) {
             if (!isset($config[$key])) {
