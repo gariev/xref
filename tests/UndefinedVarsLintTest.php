@@ -312,6 +312,34 @@ class UndefinedVarsLintTest extends BaseLintTest {
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
+        $testPhpCode = '
+        <?php
+            class Foo {
+                public $bar = array();
+                public static $baz = array();
+            }
+
+            function passed_by_ref_arg(Array &$a) {
+                echo array_pop($a);
+            }
+
+            $a = array();
+            $foo = new Foo;
+
+            passed_by_ref_arg($a);                  // ok
+            passed_by_ref_arg($foo->bar);           // ok
+            passed_by_ref_arg(Foo::$baz);           // ok
+            passed_by_ref_arg(\External\Code::$x);  // ok
+            passed_by_ref_arg(Some\Other::$z);      // ok
+            passed_by_ref_arg( array(1, 2, 3) );    // error
+        '
+        ;
+
+        $expectedDefects = array(
+            array('array', 20,  XRef::ERROR),
+        );
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+
     }
 
     // test to check constructs like

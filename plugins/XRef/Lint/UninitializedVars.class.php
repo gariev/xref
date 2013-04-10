@@ -829,18 +829,15 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                                         }
                                     } else {
                                         // warn about non-variable being passed by reference
-                                        // allow static class variable: Foo::$bar
+                                        // allow static class variable: Foo::$bar, \Foo\Bar::$baz
                                         $is_class_variable = false;
-                                        if ($n->kind == T_STRING) {
-                                            $nn = $n->nextNS();
-                                            if ($nn->kind == T_DOUBLE_COLON) {
-                                                if ($nn->nextNS()->kind == T_VARIABLE) {
-                                                    $is_class_variable = true;
-                                                }
+                                        if ($n->kind == T_STRING || $n->kind == T_NS_SEPARATOR) {
+                                            list($type, $t) = self::parseType($n);
+                                            if ($t->kind == T_DOUBLE_COLON && $t->nextNS()->kind == T_VARIABLE) {
+                                                $is_class_variable = true;
                                             }
                                         }
 
-                                        // TODO: add other valid lvalues here, like $array["index"] or $object->field or Foo::$bar
                                         if (!$is_class_variable) {
                                             $this->addDefect($n, self::E_NON_VAR_PASSED_BY_REF);
                                         }
