@@ -54,6 +54,16 @@ class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
 
     /**
      *
+     * @param string $revision
+     * @return string[]            List of files that were modified from $oldRev to $currentRev
+     */
+    public function getListOfFiles($revision) {
+        return self::git(array("ls-tree", "--name-only", "-r", "'$revision'"), true);
+    }
+
+
+    /**
+     *
      * @param string $oldRev
      * @param string $currentRev
      * @return string[]            List of files that were modified from $oldRev to $currentRev

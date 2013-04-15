@@ -94,7 +94,7 @@ class XRef {
     }
 
     public static function version() {
-        return "0.1.8";
+        return "0.1.8p";
     }
 
     /*----------------------------------------------------------------
@@ -583,7 +583,7 @@ class XRef {
                 if ($description["severity"] < $this->lintReportLevel) {
                     continue;
                 }
-                $report[] = new XRef_CodeDefect($token, $error_code, $description["severity"], $description["message"]);
+                $report[] = XRef_CodeDefect::fromToken($token, $error_code, $description["severity"], $description["message"]);
             }
         }
 

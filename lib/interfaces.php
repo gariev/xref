@@ -245,16 +245,19 @@ class XRef_CodeDefect {
     public $inClass;        // string, may be null
     public $inMethod;       // string, may be null
 
-    public function __construct($token, $errorCode, $severity, $message) {
-        $this->tokenText    = $token->text;
-        $this->errorCode    = $errorCode;
-        $this->severity     = $severity;
-        $this->message      = $message;
-        $this->fileName     = $token->parsedFile->getFileName();
+    // helper constructor
+    public static function fromToken($token, $errorCode, $severity, $message) {
         $filePos = new XRef_FilePosition($token->parsedFile, $token);
-        $this->lineNumber   = $filePos->lineNumber;
-        $this->inClass      = $filePos->inClass;
-        $this->inMethod     = $filePos->inMethod;
+        $codeDefect = new XRef_CodeDefect();
+        $codeDefect->tokenText    = $token->text;
+        $codeDefect->errorCode    = $errorCode;
+        $codeDefect->severity     = $severity;
+        $codeDefect->message      = $message;
+        $codeDefect->fileName     = $token->parsedFile->getFileName();
+        $codeDefect->lineNumber   = $filePos->lineNumber;
+        $codeDefect->inClass      = $filePos->inClass;
+        $codeDefect->inMethod     = $filePos->inMethod;
+        return $codeDefect;
     }
 }
 
@@ -428,6 +431,7 @@ class XRef_FilePosition {
 interface XRef_ISourceCodeManager {
     public function updateRepository();
     public function getListOfBranches();                            // returns array( "branch name" => "current branch revision", ...);
+    public function getListOfFiles($revision);                      // returns array("filename1", "filename2", ...)
     public function getListOfModifiedFiles($revision1, $revision2); // returns array("filename1", "filename2", ...)
     public function getFileContent($revision, $filename);           // returns the content of given file in the given revision
     public function getRevisionInfo($revision);                     // SCM-specific, returns key-value array with info for the given commit

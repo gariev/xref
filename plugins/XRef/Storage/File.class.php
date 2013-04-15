@@ -11,18 +11,7 @@ class XRef_Storage_File implements XRef_IPersistentStorage {
     public function setXRef(XRef $xref) { }
 
     public function saveData($domain, $key, $data) {
-        XRef::createDirIfNotExist("$this->dbDir/$domain");
-        // this is a trick - if key is long like md5/sha sum,
-        // assume that there will be many objects in this domain and
-        // use nested directory structure
-        if (strlen($key) >= 16) {
-            $firstLetter = substr($key, 0, 1);
-            XRef::createDirIfNotExist("$this->dbDir/$domain/$firstLetter");
-            $filename = "$this->dbDir/$domain/$firstLetter/$key";
-        } else {
-            $filename = "$this->dbDir/$domain/$key";
-        }
-
+        $filename = $this->getFilenameForKey($domain, $key, true);
         $fh = fopen($filename, "w");
         if (!$fh) {
             throw new Exception("Can't write to file $filename");
@@ -33,6 +22,7 @@ class XRef_Storage_File implements XRef_IPersistentStorage {
     }
 
     public function restoreData($domain, $key) {
+        $filename = $this->getFilenameForKey($domain, $key);
         if (strlen($key) >= 16) {
             $firstLetter = substr($key, 0, 1);
             $filename = "$this->dbDir/$domain/$firstLetter/$key";
@@ -53,8 +43,7 @@ class XRef_Storage_File implements XRef_IPersistentStorage {
     }
 
     public function getLock($key) {
-        XRef::createDirIfNotExist("$this->dbDir/locks");
-        $lockFile = "$this->dbDir/locks/$key";
+        $lockFile = $this->getFilenameForKey('lock', $key, true);
         $fhLock = fopen($lockFile, "w");
         if (!$fhLock) {
             throw new Exception("Can't open file $lockFile");
@@ -76,6 +65,27 @@ class XRef_Storage_File implements XRef_IPersistentStorage {
         }
     }
 
+    private function getFilenameForKey($domain, $key, $create_sub_dirs = false) {
+        if ($create_sub_dirs) {
+            XRef::createDirIfNotExist("$this->dbDir/$domain");
+        }
+        $key = urlencode($key);
+
+        // this is a trick - if key is long like md5/sha sum,
+        // assume that there will be many objects in this domain and
+        // use nested directory structure
+        if (strlen($key) >= 16) {
+            $firstLetter = substr($key, 0, 1);
+            if ($create_sub_dirs) {
+                XRef::createDirIfNotExist("$this->dbDir/$domain/$firstLetter");
+            }
+            $filename = "$this->dbDir/$domain/$firstLetter/$key";
+        } else {
+            $filename = "$this->dbDir/$domain/$key";
+        }
+
+        return $filename;
+    }
 }
 
 // vim: tabstop=4 expandtab

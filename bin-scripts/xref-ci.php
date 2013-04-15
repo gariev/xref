@@ -16,6 +16,7 @@
 $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/XRef";
 require_once "$includeDir/XRef.class.php";
 require_once "$includeDir/lib/ci-tools.php";
+require_once "$includeDir/lib/experimental.php";
 
 list ($options, $arguments) = XRef::getCmdOptions();
 if (XRef::needHelp() || count($arguments)) {
@@ -135,11 +136,41 @@ foreach ($branches as $branchName => $currentRev) {
         }
     }
 
-    if (count($fileErrors)) {
+    /* ------------------------------------------------------------
+     * EXPERIMENTAL PART
+     * ------------------------------------------------------------*/
+    $projectErrors = array();
+    $project_lint = new ProjectLintPrototype();
+    $project_lint->setXRef($xref);
+    $project_lint->loadOrCreateProject($branchName, $oldRev);
+    $old_errors = $project_lint->getErrors();
+    foreach ($listOfFiles as $file) {
+        if (!preg_match("#\\.php\$#", $file)) {
+            continue;
+        }
+        $project_lint->updateFile($currentRev, $file);
+    }
+    $current_errors = $project_lint->getErrors();
+    $project_lint->saveProject($branchName);
+    foreach ($current_errors as $file => $errors_list) {
+        if (!isset($oldErrors[$file])) {
+            $projectErrors[$file] = $errors_list;
+        } else {
+            $errors = XRef_getNewErrors($old_errors[$file], $errors_list);
+            if (count($errors)) {
+                $projectErrors[$file] = $errors;
+            }
+        }
+    }
+    /* ------------------------------------------------------------
+     * END OF EXPERIMENTAL PART
+     * ------------------------------------------------------------*/
+
+    if (count($fileErrors) || count($projectErrors)) {
         if (XRef::verbose()) {
             error_log(count($fileErrors) . " files with errors found");
         }
-        XRef_notifyAuthor($xref, $fileErrors, $branchName, $oldRev, $currentRev);
+        XRef_notifyAuthor($xref, $fileErrors, $projectErrors, $branchName, $oldRev, $currentRev);
         $db["numberOfSentLetters"]++;
     }
 
@@ -150,7 +181,7 @@ foreach ($branches as $branchName => $currentRev) {
 }
 $storage->releaseLock("ci");
 
-function XRef_notifyAuthor(XRef $xref, $fileErrors, $branchName, $oldRev, $currentRev) {
+function XRef_notifyAuthor(XRef $xref, $fileErrors, $projectErrors, $branchName, $oldRev, $currentRev) {
     $replyTo    = XRef::getConfigValue('mail.reply-to');
     $from       = XRef::getConfigValue('mail.from');
     $recepients = XRef::getConfigValue('mail.to');
@@ -176,6 +207,7 @@ function XRef_notifyAuthor(XRef $xref, $fileErrors, $branchName, $oldRev, $curre
         'currentRev'        => $currentRev,
         'currentRevShort'   => $currentRevShort,
         'fileErrors'        => $fileErrors,
+        'projectErrors'     => $projectErrors,
         'commitInfo'        => $commitInfo,
     ));
 
