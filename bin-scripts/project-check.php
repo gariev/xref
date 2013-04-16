@@ -2,6 +2,7 @@
 $includeDir = dirname(__FILE__) . "/..";
 require_once("$includeDir/XRef.class.php");
 require_once("$includeDir/lib/experimental.php");
+require_once("$includeDir/lib/ci-tools.php");
 
 /**
  * This is very experimental script to check cross-reference integrity of a project:
@@ -9,20 +10,52 @@ require_once("$includeDir/lib/experimental.php");
  * defined somewhere (it can be a parent class).
  */
 
+XRef::registerCmdOption("x:", "revision=", "", "");
+XRef::registerCmdOption("y:", "other=", "", "");
+
 $xref = new XRef();
-$path = ($argc>1) ? $argv[1] : ".";
-$xref->addPath($path);
 $xref->addParser( new XRef_Parser_PHP() );
 $project_lint = new ProjectLintPrototype();
+$project_lint->setXRef($xref);
 
-foreach ($xref->getFiles() as $filename => $ext) {
-    try {
-        $pf = $xref->getParsedFile($filename, $ext);
-        $project_lint->addFile($pf);
-        $pf->release(); // help PHP garbage collector to free memory
-    } catch(Exception $e) {
-        error_log("Can't process file '$filename': " . $e->getMessage() . "\n" . $e->getLine() . "\n");
+XRef::setConfigValue("xref.storage-manager", "XRef_Storage_File");
+XRef::setConfigValue("xref.data-dir", ".");
+XRef::setConfigValue("git.repository-dir", ".");
+XRef::setConfigValue("ci.source-code-manager", "XRef_SourceCodeManager_Git");
+list($options, $arguments) = XRef::getCmdOptions();
+
+$report = null;
+if (isset($options["revision"])) {
+    // if we got git revision, try to load the project state
+    // of this revision and save it for future use
+    $revision = $options["revision"];
+    $project_lint->loadOrCreateProject($revision);
+    $project_lint->saveProject($revision);
+    $errors = $project_lint->getErrors();
+    if (isset($options["other"])) {
+        // compare 2 repository versions
+        $other_revision = $options["other"];
+        $project_lint->loadOrCreateProject($other_revision);
+        $project_lint->saveProject($other_revision);
+        $other_errors = $project_lint->getErrors();
+        $report = XRef_getNewProjectErrors($errors, $other_errors);
+    } else {
+        $report = $errors;
     }
+} else {
+    // otherwise, just iterate over all files in dir
+    $path = ($arguments) ? $arguments[0] : ".";
+    $xref->addPath($path);
+    foreach ($xref->getFiles() as $filename => $ext) {
+        try {
+            $pf = $xref->getParsedFile($filename, $ext);
+            $project_lint->addFile($pf);
+            $pf->release(); // help PHP garbage collector to free memory
+        } catch(Exception $e) {
+            error_log("Can't process file '$filename': " . $e->getMessage() . "\n" . $e->getLine() . "\n");
+        }
+    }
+    $report = $project_lint->getErrors();
 }
 
 $colorMap = array(
@@ -32,7 +65,6 @@ $colorMap = array(
     "_off"      => "\033[0;0m",
 );
 
-$report = $project_lint->getErrors();
 foreach ($report as $filename => $errors_list) {
     echo("File: $filename\n");
     foreach ($errors_list as $r) {

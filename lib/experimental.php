@@ -25,14 +25,16 @@ class ProjectLintPrototype extends XRef_APlugin {
         parent::__construct("project-check", "Cross-reference integrity check");
     }
 
-    public function loadOrCreateProject($project_name, $revision) {
+    public function loadOrCreateProject($revision) {
         $storage_manager = $this->xref->getStorageManager();
         $source_code_manager = $this->xref->getSourceCodeManager();
+        $this->provides = array();
+        $this->uses = array();
 
         // get the list of files for this project
-        $this->projectFiles = $storage_manager->restoreData("project-check", $project_name);
+        $this->projectFiles = $storage_manager->restoreData("project-check", $revision);
         if (is_null($this->projectFiles)) {
-            error_log("igariev: Project $project_name is not found");
+            error_log("igariev: Project $revision is not found");
             $this->projectFiles = array();
             $filenames = $source_code_manager->getListOfFiles($revision);
             foreach ($filenames as $filename) {
@@ -41,15 +43,16 @@ class ProjectLintPrototype extends XRef_APlugin {
                 }
                 $this->projectFiles[ $filename ] = null;    // temporary, see 'updateFile' below
             }
+        } else {
+            error_log("Project $revision found");
         }
 
         // load the parsed data for each file,
         // or parse file if the data is missing
         $files_to_load = array();
         foreach ($this->projectFiles as $filename => $shasum) {
-            if ($this->loadFile($filename, $shasum)) {
+            if (!$shasum || !$this->loadFile($filename, $shasum)) {
                 $files_to_load[] = $filename;
-                error_log("igariev: Data for file $filename/$shasum ($project_name) is not found");
             }
         }
         foreach ($files_to_load as $filename) {
@@ -81,6 +84,8 @@ class ProjectLintPrototype extends XRef_APlugin {
         $content = $source_code_manager->getFileContent($new_revision, $filename);
         if (!$content) {
             unset($this->projectFiles[$filename]);
+            unset($this->provides[$filename]);
+            unset($this->uses[$filename]);
         } else {
             $shasum = sha1($content);
             $this->projectFiles[$filename] = $shasum;
@@ -106,9 +111,9 @@ class ProjectLintPrototype extends XRef_APlugin {
         }
     }
 
-    public function saveProject($project_name) {
+    public function saveProject($revision) {
         $storage_manager = $this->xref->getStorageManager();
-        $storage_manager->saveData("project-check", $project_name, $this->projectFiles);
+        $storage_manager->saveData("project-check", $revision, $this->projectFiles);
     }
 
     public function addFile(XRef_IParsedFile $pf) {
@@ -164,7 +169,7 @@ class ProjectLintPrototype extends XRef_APlugin {
             }
         }
         ksort($errors); // sort by the file names
-        foreach ($errors as $filename => $errors_list) {
+        foreach ($errors as $filename => &$errors_list) {
             usort($errors_list, array("self", "sort_by_line_number_and_token"));
         }
         return $errors;

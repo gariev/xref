@@ -9,6 +9,8 @@
  * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  */
 
+// input:arrays of XRef_CodeDefect objects
+// output: array of XRef_CodeDefect that are new
 function XRef_getNewErrors($oldErrors, $curentErrors) {
     // 1. create array of text messages without line number
     $a1 = XRef_createErrorsDigest($oldErrors);
@@ -23,6 +25,23 @@ function XRef_getNewErrors($oldErrors, $curentErrors) {
         }
     }
     return $newErrors;
+}
+
+// input: arrays (file name => array of XRef_CodeDefect objects)
+// output: array (file name => array of XRef_CodeDefect objects)
+function XRef_getNewProjectErrors($oldErrors, $curentErrors) {
+    $result = array();
+    foreach ($curentErrors as $filename => $errors_list) {
+        if (!isset($oldErrors[$filename])) {
+            $result[$filename] = $errors_list;
+        } else {
+            $diff = XRef_getNewErrors($oldErrors[$filename], $errors_list);
+            if ($diff) {
+                $result[$filename] = $diff;
+            }
+        }
+    }
+    return $result;
 }
 
 // input: array or arrays($lineNumber, $severity, $message, $tokenText, $method)
