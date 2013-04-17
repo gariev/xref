@@ -285,6 +285,7 @@ class XRef {
      * TODO: move this to plugin; add more config variables
      ---------------------------------------------------------------*/
     protected $paths        = array();
+    protected $excludePath  = array();
     protected $seenFiles    = array();
     protected $inputFiles   = array(); // ($filename => $file_extension)
     protected $removePathPrefix;
@@ -294,6 +295,11 @@ class XRef {
     /** path where to look for source files */
     public function addPath($path) {
         $this->paths[] = $path;
+        $this->inputFiles = null; // invalidate cache
+    }
+
+    public function excludePath($path) {
+        $this->excludePath[] = $path;
         $this->inputFiles = null; // invalidate cache
     }
 
@@ -316,7 +322,7 @@ class XRef {
     public function getFiles() {
         if (!$this->inputFiles) {
             $this->inputFiles = array();
-            $this->seenFiles = array();
+            $this->seenFiles = array_fill_keys($this->excludePath, true);
             foreach ($this->paths as $p) {
                 $this->findInputFiles($p);
             }
@@ -333,7 +339,7 @@ class XRef {
      */
     protected function findInputFiles($file) {
         // prevent visiting the same dir several times
-        if (array_key_exists($file, $this->seenFiles)) {
+        if (isset($this->seenFiles[$file])) {
             return;
         } else {
             $this->seenFiles[$file] = 1;
@@ -350,7 +356,7 @@ class XRef {
                     // skip "." and ".." dirs
                     continue;
                 }
-                $this->findInputFiles("$file/$filename");
+                $this->findInputFiles( ($file == '.') ? $filename : "$file/$filename");
             }
         } else if (is_file($file)) {
             $ext = strtolower( pathinfo($file, PATHINFO_EXTENSION) );

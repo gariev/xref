@@ -25,9 +25,11 @@ $xref = new XRef();
 foreach (XRef::getConfigValue("doc.source-code-dir") as $path) {
     $xref->addPath($path);
 }
+foreach (XRef::getConfigValue("doc.exclude-path", array()) as $exclude_path) {
+    $xref->excludePath($exclude_path);
+}
 $xref->removeStartingPath( XRef::getConfigValue("doc.remove-path", '') );
 $xref->setOutputDir( XRef::getConfigValue("doc.output-dir") );
-
 $xref->loadPluginGroup("doc");
 $plugins = $xref->getPlugins("XRef_IDocumentationPlugin");
 $numberOfFiles = 0;

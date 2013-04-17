@@ -34,7 +34,6 @@ class ProjectLintPrototype extends XRef_APlugin {
         // get the list of files for this project
         $this->projectFiles = $storage_manager->restoreData("project-check", $revision);
         if (is_null($this->projectFiles)) {
-            error_log("igariev: Project $revision is not found");
             $this->projectFiles = array();
             $filenames = $source_code_manager->getListOfFiles($revision);
             foreach ($filenames as $filename) {
@@ -43,8 +42,6 @@ class ProjectLintPrototype extends XRef_APlugin {
                 }
                 $this->projectFiles[ $filename ] = null;    // temporary, see 'updateFile' below
             }
-        } else {
-            error_log("Project $revision found");
         }
 
         // load the parsed data for each file,
@@ -91,7 +88,6 @@ class ProjectLintPrototype extends XRef_APlugin {
             $this->projectFiles[$filename] = $shasum;
             if (!$this->loadFile($filename, $shasum)) {
                 try {
-                    error_log("igariev: parsing file $filename ($new_revision)");
                     $pf = $this->xref->getParsedFile($filename, "php", $content);
                     $this->addFile($pf);
                     $pf->release();
@@ -189,7 +185,9 @@ class ProjectLintPrototype extends XRef_APlugin {
         if (!isset($this->classes[$class_name])) {
             return true; // actually, should return "unknown"
         }
-
+        if ($key == 'method') {
+            $name = strtolower($name);
+        }
         foreach ($this->classes[$class_name] as $c) {
             if (isset($c[$key]) && isset($c[$key][$name])) {
                 return true;
@@ -272,6 +270,9 @@ class ProjectLintPrototype extends XRef_APlugin {
         $tokens = $pf->getTokens();
         for ($i=0; $i<count($tokens); ++$i) {
             $t = $tokens[$i];
+
+            // $this->foo();
+            // $this->bar;
             if ($t->text == '$this') {
                 $n = $t->nextNS();
                 if ($n->text == '->') {
@@ -281,7 +282,6 @@ class ProjectLintPrototype extends XRef_APlugin {
                         $n = $n->nextNS();
                         if ($n->text == '(') {
                             $key = 'method';
-                            $name = strtolower($name);
                         } else {
                             $key = 'property';
                         }
@@ -293,6 +293,26 @@ class ProjectLintPrototype extends XRef_APlugin {
                         if (!isset($already_seen[$uniq_key])) {
                             $already_seen[$uniq_key] = true;
                             $used[] = array($class_name, $key, $name, $t->lineNumber);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // Foo::bar();
+            if ($t->kind == T_STRING) {
+                $n = $t->nextNS();
+                if ($n->kind == T_DOUBLE_COLON) {
+                    $n = $n->nextNS();
+                    if ($n->kind == T_STRING) {
+                        $nn = $n->nextNS();
+                        if ($nn->text == '(') {
+                            $class_name = $t->text;
+                            $method_name = $n->text;
+                            if ($class_name != 'self' && $class_name != 'parent') {
+                                $used[] = array($class_name, 'method', $method_name, $t->lineNumber);
+                            }
+                            continue;
                         }
                     }
                 }
@@ -365,7 +385,7 @@ class ProjectLintPrototype extends XRef_APlugin {
                     if ($t->kind != T_VARIABLE) {
                         throw new Exception($t);
                     }
-                    list ($t, $var) = $this->parseProperties($t);
+                    list ($t, $var) = $this->parseProperties($pf, $t);
                     $property_name = substr($var['name'], 1);   // skip '$' sign
                     $content['property'][$property_name] = $var;
                     if ($t->text == ';') {
@@ -408,7 +428,7 @@ class ProjectLintPrototype extends XRef_APlugin {
         return array($t, $constant);
     }
 
-    private function parseProperties($t) {
+    private function parseProperties($pf, $t) {
         if ($t->kind != T_VARIABLE) {
             throw new Exception($t);
         }
@@ -416,8 +436,11 @@ class ProjectLintPrototype extends XRef_APlugin {
         $t = $t->nextNS();
         if ($t->text == '=') {
             // TODO: parse const expression
-            while ($t->text != ';') {
+            while ($t->text != ';' && $t->text != ',') {
                 $t = $t->nextNS();
+                if ($t->text == '(') {
+                    $t = $pf->getTokenAt( $pf->getIndexOfPairedBracket($t->index) );
+                }
             }
         }
         $var = array('name' => $name, 'defaultValue' => '');

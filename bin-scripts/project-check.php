@@ -12,6 +12,7 @@ require_once("$includeDir/lib/ci-tools.php");
 
 XRef::registerCmdOption("x:", "revision=", "", "");
 XRef::registerCmdOption("y:", "other=", "", "");
+XRef::registerCmdOption("e:", "exclude=", "", "", true);
 
 $xref = new XRef();
 $xref->addParser( new XRef_Parser_PHP() );
@@ -46,6 +47,11 @@ if (isset($options["revision"])) {
     // otherwise, just iterate over all files in dir
     $path = ($arguments) ? $arguments[0] : ".";
     $xref->addPath($path);
+    if (isset($options["exclude"])) {
+        foreach ($options["exclude"] as $exclude_path) {
+            $xref->excludePath($exclude_path);
+        }
+    }
     foreach ($xref->getFiles() as $filename => $ext) {
         try {
             $pf = $xref->getParsedFile($filename, $ext);
