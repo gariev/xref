@@ -156,8 +156,8 @@ class ProjectLintPrototype extends XRef_APlugin {
                     $cd = new XRef_CodeDefect();
                     $cd->tokenText = $name;
                     $cd->errorCode = "exp02";
-                    $cd->severity = ($key=='method') ? XRef::ERROR : XRef::WARNING;
-                    $cd->message = "Access to undefined $key";
+                    $cd->severity = ($key=='method' || $key=='constant') ? XRef::ERROR : XRef::WARNING;
+                    $cd->message = "Access to undefined $key of class $class_name";
                     $cd->fileName = $file_name;
                     $cd->lineNumber = $line_number;
                     $errors[ $cd->fileName ][] = $cd;
@@ -264,9 +264,23 @@ class ProjectLintPrototype extends XRef_APlugin {
         return $classes;
     }
 
+    // report each used construct only once
+    private $already_seen = array();
+    // className, kind (method|property|const), name
+    private $used = array();
+
+    private function addUsedConstruct($class_name, $key, $name, $line_number) {
+        $uniq_key = "$class_name##$key##$name";
+        if (!isset($this->already_seen[$uniq_key])) {
+            $this->already_seen[$uniq_key] = true;
+            $this->used[] = array($class_name, $key, $name, $line_number);
+        }
+    }
+
     private function collectUsedConstructs(XRef_IParsedFile $pf) {
-        $used = array();            // className, kind (method|property|const), name
-        $already_seen = array();    // report each used construct only once
+        $this->used = array();
+        $this->already_seen = array();
+
         $tokens = $pf->getTokens();
         for ($i=0; $i<count($tokens); ++$i) {
             $t = $tokens[$i];
@@ -280,20 +294,12 @@ class ProjectLintPrototype extends XRef_APlugin {
                     if ($n->kind == T_STRING) {
                         $name = $n->text;
                         $n = $n->nextNS();
-                        if ($n->text == '(') {
-                            $key = 'method';
-                        } else {
-                            $key = 'property';
-                        }
                         $class_name = $pf->getClassAt( $t->index );
                         if (!$class_name) {
-                            throw new Exception($t);
+                            continue;
                         }
-                        $uniq_key = "$class_name##$key##$name";
-                        if (!isset($already_seen[$uniq_key])) {
-                            $already_seen[$uniq_key] = true;
-                            $used[] = array($class_name, $key, $name, $t->lineNumber);
-                        }
+                        $key = ($n->text == '(') ? 'method' : 'property';
+                        $this->addUsedConstruct($class_name, $key, $name, $t->lineNumber);
                     }
                 }
                 continue;
@@ -303,22 +309,36 @@ class ProjectLintPrototype extends XRef_APlugin {
             if ($t->kind == T_STRING) {
                 $n = $t->nextNS();
                 if ($n->kind == T_DOUBLE_COLON) {
+
+                    // TODO: parent:: class, static::, etc
+                    $class_name = $t->text;
+                    if ($class_name == 'self') {
+                        $class_name = $pf->getClassAt( $t->index );
+                    }
+
                     $n = $n->nextNS();
                     if ($n->kind == T_STRING) {
                         $nn = $n->nextNS();
                         if ($nn->text == '(') {
-                            $class_name = $t->text;
-                            $method_name = $n->text;
-                            if ($class_name != 'self' && $class_name != 'parent') {
-                                $used[] = array($class_name, 'method', $method_name, $t->lineNumber);
-                            }
-                            continue;
+                            // Foo::bar()
+                            $this->addUsedConstruct($class_name, 'method', $n->text, $t->lineNumber);
+                        } else {
+                            // Foo:BAR - constant?
+                            $const_name = $n->text;
+                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber);
                         }
+                    } elseif ($n->kind == T_VARIABLE) {
+                        // Foo::$bar
+                        $property_name = substr($n->text, 1);   // skip '$' sign
+                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber);
+                    } else {
+                        error_log($n);
                     }
+                    continue;
                 }
             }
         }
-        return $used;
+        return $this->used;
     }
 
     private function extractCommaSeparatedStringsList($t) {
@@ -344,9 +364,9 @@ class ProjectLintPrototype extends XRef_APlugin {
 
     private function parseClassContent($pf, $t) {
         $content = array(
-            'constants'     => array(),
-            'property'    => array(),
-            'method'       => array(),
+            'constant'  => array(),
+            'property'  => array(),
+            'method'    => array(),
         );
 
         while (true) {
@@ -362,11 +382,11 @@ class ProjectLintPrototype extends XRef_APlugin {
             if ($t->kind == T_CONST) {
                 $t = $t->nextNS();
                 list($t, $c) = $this->parseConstant($t);
-                $content['constants'][ $c['name'] ] = $c;
+                $content['constant'][ $c['name'] ] = $c;
                 while ($t->text == ',') {
                     $t = $t->nextNS();
                     list($t, $c) = $this->parseConstant($t);
-                    $content['constants'][ $c['name'] ] = $c;
+                    $content['constant'][ $c['name'] ] = $c;
                 }
                 if ($t->text == ';') {
                     $t = $t->nextNS();
