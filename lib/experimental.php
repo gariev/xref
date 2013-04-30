@@ -4,6 +4,15 @@
 
 class ProjectLintPrototype extends XRef_APlugin {
 
+    private static $masks = array(
+        T_PUBLIC    => 1,
+        T_PROTECTED => 2,
+        T_PRIVATE   => 4,
+        T_STATIC    => 8,
+        T_ABSTRACT  => 16,
+        T_FINAL     => 32,
+    );
+
     /** map: file name --> array with classes, consts, method etc that this file provides */
     private $provides = array( );
 
@@ -25,11 +34,15 @@ class ProjectLintPrototype extends XRef_APlugin {
         parent::__construct("project-check", "Cross-reference integrity check");
     }
 
-    public function loadOrCreateProject($revision) {
-        $storage_manager = $this->xref->getStorageManager();
-        $source_code_manager = $this->xref->getSourceCodeManager();
+    public function clearProject() {
         $this->provides = array();
         $this->uses = array();
+    }
+
+    public function loadOrCreateProject($revision) {
+        $this->clearProject();
+        $storage_manager = $this->xref->getStorageManager();
+        $source_code_manager = $this->xref->getSourceCodeManager();
 
         // get the list of files for this project
         $this->projectFiles = $storage_manager->restoreData("project-check", $revision);
@@ -151,13 +164,15 @@ class ProjectLintPrototype extends XRef_APlugin {
         // are there references to missed methods/properties?
         foreach ($this->uses as $file_name => $usage_list) {
             foreach ($usage_list as $u) {
-                list($class_name, $key, $name, $line_number) = $u;
-                if (!$this->isDefined($class_name, $key, $name)) {
+                list($class_name, $key, $name, $line_number, $from_class, $is_static) = $u;
+                $e = $this->checkAccessError($class_name, $key, $name, $from_class, $is_static);
+                if ($e) {
+                    list($error_code, $severity, $message) = $e;
                     $cd = new XRef_CodeDefect();
                     $cd->tokenText = $name;
-                    $cd->errorCode = "exp02";
-                    $cd->severity = ($key=='method' || $key=='constant') ? XRef::ERROR : XRef::WARNING;
-                    $cd->message = "Access to undefined $key of class $class_name";
+                    $cd->errorCode = $error_code;
+                    $cd->severity = $severity; //($key=='method' || $key=='constant') ? XRef::ERROR : XRef::WARNING;
+                    $cd->message = $message; //"Access to undefined $key of class $class_name";
                     $cd->fileName = $file_name;
                     $cd->lineNumber = $line_number;
                     $errors[ $cd->fileName ][] = $cd;
@@ -181,28 +196,127 @@ class ProjectLintPrototype extends XRef_APlugin {
     }
 
     // is $key( = 'property|method') named $name defined in class $class_name?
-    private function isDefined($class_name, $key, $name) {
+    // returns array(error_code, error_message)
+    private function checkAccessError($class_name, $key, $name, $from_class, $is_static) {
+        $d = $this->getDefinition($class_name, $key, $name);
+        if ($d === TRUE) {
+            // definition not found because definition of base class is missing
+        } elseif (!$d) {
+            // definition not found
+            $found = false;
+            if ($key=='property') {
+                $d = $this->getDefinition($class_name, 'method', '__get');
+                if ($d) {
+                    $found = true;
+                }
+            }
+            if (!$found) {
+                $error_code = "exp02";
+                $severity = ($key=='method' || $key=='constant') ? XRef::ERROR : XRef::WARNING;
+                $message = "Access to undefined $key of class $class_name";
+                return array($error_code, $severity, $message);
+            }
+        } else {
+            // got definition, check access
+            list($found_in_class, $def) = $d;
+
+            // 1. static vs. instance
+            if ($key != 'constant') {
+                if ($is_static) {
+                    if ( ($def["mask"] & self::$masks[T_STATIC]) == 0 ) {
+                        $error_code = "exp03";
+                        $severity = XRef::ERROR;
+                        $message = "Trying to access instance $key as static one";
+                        return array($error_code, $severity, $message);
+                    }
+                } else {
+                    if ( ($def["mask"] & self::$masks[T_STATIC]) != 0 && $key == 'property') {
+                        $error_code = "exp03";
+                        $severity = XRef::ERROR;
+                        $message = "Trying to access static $key as instance one";
+                        return array($error_code, $severity, $message);
+                    }
+                }
+            }
+
+            // 2. public, private, protected
+            if ($def["mask"] & self::$masks[T_PUBLIC]) {
+                // ok
+            } elseif ($def["mask"] & self::$masks[T_PRIVATE]) {
+                if ($found_in_class != $from_class) {
+                    $error_code = "exp04";
+                    $severity = XRef::ERROR;
+                    $message = "Attempt to access private $key of class $found_in_class";
+                    return array($error_code, $severity, $message);
+                }
+            } elseif ($def["mask"] & self::$masks[T_PROTECTED]) {
+                if ($found_in_class != $from_class && (!$from_class || !$this->isSubclassOf($from_class, $found_in_class))) {
+                    $error_code = "exp04";
+                    $severity = XRef::ERROR;
+                    $message = "Attempt to access protected $key of class $found_in_class";
+                    return array($error_code, $severity, $message);
+                }
+            } else {
+                // default access == public
+            }
+        }
+        return;
+    }
+
+    private function isSubclassOf($child_class, $parent_class) {
+        if ($child_class == $parent_class) {
+            return true;
+        }
+
+        // if a class is unknown, or any of the parent classes is missing,
+        // assume that child_class may be the child of the parent_class
+        if (!isset($this->classes[$child_class])) {
+            return true;
+        }
+
+        foreach ($this->classes[$child_class] as $c) {
+            if (isset($c['extends'])) {
+                foreach ($c['extends'] as $parent_class_name) {
+                    if ($this->isSubclassOf($parent_class_name, $parent_class)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // finds a definition of method/property of the given class in class hierarchy
+    // input:
+    //  e.g ('Foo', 'method', 'bar') for Foo::bar()
+    // output:
+    //  array(class_name, $definition) if found
+    //  true if missing some of base classes
+    //  null if definitely can't found
+    private function getDefinition($class_name, $key, $name) {
         if (!isset($this->classes[$class_name])) {
-            return true; // actually, should return "unknown"
+            return true;
         }
         if ($key == 'method') {
             $name = strtolower($name);
         }
         foreach ($this->classes[$class_name] as $c) {
             if (isset($c[$key]) && isset($c[$key][$name])) {
-                return true;
+                return array($class_name, $c[$key][$name]);
             }
         }
         foreach ($this->classes[$class_name] as $c) {
             if (isset($c['extends'])) {
                 foreach ($c['extends'] as $parent_class_name) {
-                    if ($this->isDefined($parent_class_name, $key, $name)) {
-                        return true;
+                    $d = $this->getDefinition($parent_class_name, $key, $name);
+                    if ($d) {
+                        return $d;
                     }
                 }
             }
         }
-        return false;
+        return null;
     }
 
     // input: XRef_IParsedFile object
@@ -258,7 +372,7 @@ class ProjectLintPrototype extends XRef_APlugin {
                 if (!$t) {
                     break;
                 }
-                $i = $t->index;
+                $i = $t->index - 1;
             }
         }
         return $classes;
@@ -269,11 +383,11 @@ class ProjectLintPrototype extends XRef_APlugin {
     // className, kind (method|property|const), name
     private $used = array();
 
-    private function addUsedConstruct($class_name, $key, $name, $line_number) {
-        $uniq_key = "$class_name##$key##$name";
+    private function addUsedConstruct($class_name, $key, $name, $line_number, $from_class, $is_static) {
+        $uniq_key = "$class_name##$key##$name##$from_class##$is_static";
         if (!isset($this->already_seen[$uniq_key])) {
             $this->already_seen[$uniq_key] = true;
-            $this->used[] = array($class_name, $key, $name, $line_number);
+            $this->used[] = array($class_name, $key, $name, $line_number, $from_class, $is_static);
         }
     }
 
@@ -299,7 +413,7 @@ class ProjectLintPrototype extends XRef_APlugin {
                             continue;
                         }
                         $key = ($n->text == '(') ? 'method' : 'property';
-                        $this->addUsedConstruct($class_name, $key, $name, $t->lineNumber);
+                        $this->addUsedConstruct($class_name, $key, $name, $t->lineNumber, $class_name, false);
                     }
                 }
                 continue;
@@ -312,8 +426,9 @@ class ProjectLintPrototype extends XRef_APlugin {
 
                     // TODO: parent:: class, static::, etc
                     $class_name = $t->text;
+                    $from_class = $pf->getClassAt( $t->index );
                     if ($class_name == 'self') {
-                        $class_name = $pf->getClassAt( $t->index );
+                        $class_name = $from_class;
                     }
 
                     $n = $n->nextNS();
@@ -321,16 +436,16 @@ class ProjectLintPrototype extends XRef_APlugin {
                         $nn = $n->nextNS();
                         if ($nn->text == '(') {
                             // Foo::bar()
-                            $this->addUsedConstruct($class_name, 'method', $n->text, $t->lineNumber);
+                            $this->addUsedConstruct($class_name, 'method', $n->text, $t->lineNumber, $from_class, true);
                         } else {
                             // Foo:BAR - constant?
                             $const_name = $n->text;
-                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber);
+                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber, $from_class, true);
                         }
                     } elseif ($n->kind == T_VARIABLE) {
                         // Foo::$bar
                         $property_name = substr($n->text, 1);   // skip '$' sign
-                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber);
+                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber, $from_class, true);
                     } else {
                         error_log($n);
                     }
@@ -369,6 +484,7 @@ class ProjectLintPrototype extends XRef_APlugin {
             'method'    => array(),
         );
 
+        $mask = 0;
         while (true) {
             if ($t->text == '}') {
                 $t = $t->nextNS();
@@ -376,16 +492,19 @@ class ProjectLintPrototype extends XRef_APlugin {
             }
 
             while ($t->kind == T_PUBLIC || $t->kind == T_PRIVATE || $t->kind == T_STATIC || $t->kind == T_PROTECTED || $t->kind == T_ABSTRACT || $t->kind==T_FINAL) {
+                $mask |= self::$masks[ $t->kind ];
                 $t = $t->nextNS();
             }
 
             if ($t->kind == T_CONST) {
                 $t = $t->nextNS();
                 list($t, $c) = $this->parseConstant($t);
+                $c["mask"] = $mask;
                 $content['constant'][ $c['name'] ] = $c;
                 while ($t->text == ',') {
                     $t = $t->nextNS();
                     list($t, $c) = $this->parseConstant($t);
+                    $c["mask"] = $mask;
                     $content['constant'][ $c['name'] ] = $c;
                 }
                 if ($t->text == ';') {
@@ -393,6 +512,7 @@ class ProjectLintPrototype extends XRef_APlugin {
                 } else {
                     throw new Exception("$t");
                 }
+                $mask = 0;
             } else if ($t->kind == T_VAR) {
                 $t = $t->nextNS();
                 if ($t->kind != T_VARIABLE) {
@@ -407,6 +527,7 @@ class ProjectLintPrototype extends XRef_APlugin {
                     }
                     list ($t, $var) = $this->parseProperties($pf, $t);
                     $property_name = substr($var['name'], 1);   // skip '$' sign
+                    $var["mask"] = $mask;
                     $content['property'][$property_name] = $var;
                     if ($t->text == ';') {
                         $t = $t->nextNS();
@@ -417,9 +538,12 @@ class ProjectLintPrototype extends XRef_APlugin {
                         throw new Exception($t);
                     }
                 }
+                $mask = 0;
             } else if ($t->kind == T_FUNCTION) {
                 list ($t, $f) = $this->parseMethods($pf, $t);
+                $f["mask"] = $mask;
                 $content['method'][ strtolower($f['name']) ] = $f;
+                $mask = 0;
             } else {
                 throw new Exception($t);
             }
