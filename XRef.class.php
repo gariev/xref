@@ -830,8 +830,8 @@ class XRef {
         foreach (self::$optionsList as $o) {
             $shortOptionsList[] = $o[0];
             $longOptionsList[] = $o[1];
-            $short = preg_replace('/\W/', '', $o[0]); // remove ':' and '=' from specificators
-            $long = preg_replace('/\W/', '', $o[1]);
+            $short = preg_replace('/\W$/', '', $o[0]); // remove ':' and '=' at the end of specificators
+            $long = preg_replace('/\W$/', '', $o[1]);
             $renameMap[ $short ] = $long;
             $isArrayMap[ $long ] = $o[4];
         }
@@ -853,7 +853,8 @@ class XRef {
             if (is_null($v)) {
                 $v = true;
             }
-            $k = preg_replace('#^\-+#', '', $k);
+            // '-a' --> 'a', '--foo' -> 'foo'
+            $k = preg_replace('#^-+#', '', $k);
 
             // force long option names
             if (isset($renameMap[$k])) {

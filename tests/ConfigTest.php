@@ -48,6 +48,29 @@ class ConfigTest extends PHPUnit_Framework_TestCase {
         $this->assertTrue($options["help"] === true);
         $this->assertTrue($arguments[0] == "foo");
 
+        // check custom options with arguments
+        XRef::registerCmdOption('a:', "foo-bar=",  '...',  "some help");
+        $args = array("script.php", "-a", "baz");
+        list($options, $arguments) = XRef::getCmdOptions($args);
+        $this->assertTrue(count($options) == 1);
+        $this->assertTrue(count($arguments) == 0);
+        $this->assertTrue(isset($options["foo-bar"]));
+        $this->assertTrue($options["foo-bar"] === "baz");
+
+        $args = array("script.php", "--foo-bar", "baz");
+        list($options, $arguments) = XRef::getCmdOptions($args);
+        $this->assertTrue(count($options) == 1);
+        $this->assertTrue(count($arguments) == 0);
+        $this->assertTrue(isset($options["foo-bar"]));
+        $this->assertTrue($options["foo-bar"] === "baz");
+
+        $args = array("script.php", "--foo-bar=baz");
+        list($options, $arguments) = XRef::getCmdOptions($args);
+        $this->assertTrue(count($options) == 1);
+        $this->assertTrue(count($arguments) == 0);
+        $this->assertTrue(isset($options["foo-bar"]));
+        $this->assertTrue($options["foo-bar"] === "baz");
+
         // check -d (--define) option
         $args = array("script.php", "-d", "foo=bar", "--define", "bz");
         list($options, $arguments) = XRef::getCmdOptions($args);

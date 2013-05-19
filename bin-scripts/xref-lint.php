@@ -29,8 +29,8 @@ if (XRef::needHelp()) {
 //
 // report-level:  errors, warnings or notices
 // Option -r <value> is a shortcut for option -d lint.report-level=<value>
-if (isset($options['reportlevel'])) {
-    XRef::setConfigValue("lint.report-level", $options['reportlevel']);
+if (isset($options['report-level'])) {
+    XRef::setConfigValue("lint.report-level", $options['report-level']);
 }
 
 //
