@@ -837,6 +837,10 @@ class XRef {
         }
 
         // TODO: write a better command-line parser
+        // too bad: the code below (from official Console/Getopt documentation) doesn't work in E_STRICT mode
+        // and Console_GetoptPlus is not installed by default on most systems :(
+        $error_reporting = error_reporting();
+        error_reporting($error_reporting ^ E_STRICT);
         require_once 'Console/Getopt.php';
         $getopt = new Console_Getopt();
         $args = ($testArgs) ? $testArgs : $getopt->readPHPArgv();
@@ -844,6 +848,8 @@ class XRef {
         if (PEAR::isError($getoptResult)) {
             throw new Exception('Error: ' . $getoptResult->getMessage());
         }
+        error_reporting($error_reporting);
+        // end of Console_Getopt dependent code
 
         $options = array();
         list($optList, $arguments) = $getoptResult;
