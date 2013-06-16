@@ -73,6 +73,24 @@ class XRef {
         XRef::ERROR     => "error",
     );
 
+    // bitmasks for attributes fields
+    // e.g. public static function ...
+    const MASK_PUBLIC     = 1;
+    const MASK_PROTECTED  = 2;
+    const MASK_PRIVATE    = 4;
+    const MASK_STATIC     = 8;
+    const MASK_ABSTRACT   = 16;
+    const MASK_FINAL      = 32;
+    // map: token kind --> bitmask
+    static $attributesMasks = array(
+        T_PUBLIC    => XRef::MASK_PUBLIC,
+        T_PROTECTED => XRef::MASK_PROTECTED,
+        T_PRIVATE   => XRef::MASK_PRIVATE,
+        T_STATIC    => XRef::MASK_STATIC,
+        T_ABSTRACT  => XRef::MASK_ABSTRACT,
+        T_FINAL     => XRef::MASK_FINAL,
+    );
+
     /** constructor */
     public function __construct() {
         spl_autoload_register(array($this, "autoload"), true);
@@ -474,8 +492,8 @@ class XRef {
         // current syntax:
         //  if element is array(report, id),    then this is an open link   <a href="report/id">
         //  if element is 0,                    then this a closing tag     </a>
-        $this->linkDatabase[$fp->fileName][$fp->startIndex] = array($reportName, $reportObjectId);
-        $this->linkDatabase[$fp->fileName][$fp->endIndex+1] = 0;
+        $this->linkDatabase[$fp->fileName][$fp->index] = array($reportName, $reportObjectId);
+        $this->linkDatabase[$fp->fileName][$fp->index+1] = 0;
     }
 
     public function &getSourceFileLinks($fileName) {

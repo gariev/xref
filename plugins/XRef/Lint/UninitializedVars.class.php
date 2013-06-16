@@ -1057,9 +1057,9 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                     $ref_params_list = null;
                 }
 
-                $current_class_name = $pf->getClassAt( $m->nameStartIndex );
-                if ($current_class_name) {
-                    $functions[ $current_class_name . '::' . $function_name ] = $ref_params_list;
+                $current_class = $pf->getClassAt( $m->nameStartIndex );
+                if ($current_class) {
+                    $functions[ $current_class->name . '::' . $function_name ] = $ref_params_list;
                 } else {
                     $functions[$function_name] = $ref_params_list;
                 }
@@ -1149,12 +1149,12 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         $function_name = $token->text;
         $p = $token->prevNS();
         $pp = $p->prevNS();
-        $current_class_name = $pf->getClassAt( $token->index );
+        $current_class = $pf->getClassAt( $token->index );
 
         if ($p->kind == T_OBJECT_OPERATOR) {
             if ($pp->text == '$this') {
-                if ($current_class_name) {
-                    return $current_class_name . "::" . $function_name;
+                if ($current_class) {
+                    return $current_class->name . "::" . $function_name;
                 }
             } elseif ($pp->kind == T_VARIABLE) {
                 $type = $this->getVarType($pp->text);
@@ -1167,8 +1167,8 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             return "?::" . $function_name;
         } elseif ($p->kind == T_DOUBLE_COLON) {
             if ($pp->text == 'self') {
-                if ($current_class_name) {
-                    return $current_class_name . "::" . $function_name;
+                if ($current_class) {
+                    return $current_class->name . "::" . $function_name;
                 }
                 return "?::" . $function_name;
             } else {

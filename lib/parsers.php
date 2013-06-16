@@ -9,6 +9,15 @@
  * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  */
 
+class XRef_ParseException extends Exception {
+    function __construct($token, $expected_text = null) {
+        $filename = $token->parsedFile->getFileName();
+        $message = ($expected_text)
+                ? "Found '$token->text' instead of $expected_text at $filename:$token->lineNumber"
+                : "Found '$token->text' at $filename:$token->lineNumber";
+        parent::__construct($message);
+    }
+}
 
 class XRef_Parser_PHP implements XRef_IFileParser {
     public function parse($file_content, $filename) {
@@ -55,7 +64,7 @@ class XRef_Parser_PHP implements XRef_IFileParser {
         } // foreach token
 
         // without this unset(), in PHP 5.2 $t will still reference the last element of $tokens array,
-        // which may be overwriteen by the next loop
+        // which may be overwritten by the next loop
         unset($t);
 
         if ($namespace_compat_mode) {
@@ -98,7 +107,7 @@ class XRef_Parser_PHP implements XRef_IFileParser {
             $tokens = $tmp_array;
         }
 
-        return new XRef_ParsedFile($tokens, $filename, XRef::FILETYPE_PHP);
+        return new XRef_ParsedFile_PHP($tokens, $filename);
     }
 
     public function getSupportedFileExtensions() {
@@ -126,172 +135,36 @@ class XRef_Parser_PHP implements XRef_IFileParser {
     }
 }
 
-class XRef_Parser_AS3 extends XRef_Parser_PHP {
 
-    public function parse($file_content, $filename) {
-        // a hack:
-        // tokens (keywords, strings, comments etc) are similar in php and as3,
-        // so we can use php's builtin tokenizer to parse as3
-        $file_content = preg_replace("#\\r\\n#", "\n", $file_content);
-        $file_content = preg_replace("#\\r#", "\n", $file_content);
-
-        // at this point, no \r are left in source code
-        // insert a space symbol (\r) into opening/closing php tags, if any
-        $file_content = preg_replace("#<\\?#", "<\r?", $file_content);
-        $file_content = preg_replace("#\\?>#", "?\r>", $file_content);
-
-        $tokens = @token_get_all("<" . "?php $file_content ?" . ">");
-        array_shift($tokens);
-        array_pop($tokens);
-        array_pop($tokens);
-
-        // remove space \r chars from tokens
-        $tokens = array_filter($tokens, "XRef_Parser_AS3::nonSlashR");
-
-        // php tokenizer fails on AS regular expression syntax (/regex here/)
-        // Extra pass here catches and re-assembles regexps from PHP tokens
-        // TODO: this is ugly, is there better solution?
-        // TODO: PHP v 5.2 and 5.3 fails differently; parsing of AS with regexp tokens is not guaranteed :(
-        $tmp_tokens = array();
-        $current_re_token = '';
-
-        for($i=0; $i<count($tokens); ++$i) {
-            $t = &$tokens[$i];
-            if ($current_re_token) {
-
-                // $t is part of the re token
-                if (is_string($t)) {
-                    $current_re_token .= $t;
-                } else {
-                    list ($kind, $text) = $t;
-                    $current_re_token .= $text;
-                }
-
-                // is it the end of the current re token?
-                if (is_string($t) && $t=='/') {
-                    $tmp_tokens[] = array(XRef::T_REGEXP, $current_re_token);
-                    $current_re_token = null;
-                }
-
-            } else {
-                // $t is outside of re token
-                if (is_string($t) && $t=='/') {
-                    // is this a start of new RE token?
-                    //      = /regex...
-                    //      str.replace( /regex...
-                    //      (list, /regex...
-
-                    // find the previous token
-                    for ($j=$i-1; $j>=0; --$j) {
-                        $p = &$tokens[$j];
-                        // skip whitespaces
-                        if (!is_string($p) && ($p[0]==T_WHITESPACE || $p[0]==T_COMMENT || $p[0]==T_DOC_COMMENT)) {
-                            continue;
-                        }
-
-                        if (is_string($p) && ($p=="=" || $p=="(" || $p=="," || $p=="[")) {
-                            $current_re_token = $t;
-                        }
-
-                        break;
-                    }
-                }
-
-                // still outside of re token
-                if (!$current_re_token) {
-                    $tmp_tokens[] = $t;
-                }
-            }
-        }
-        $tokens = $tmp_tokens;
-
-        foreach ($tokens as &$t) {
-            if (!is_string($t)) {
-                list ($kind, $text) = $t;
-                if ($kind==T_FUNCTION && $text!="function") {
-                    // e.g. listener:Function
-                    $t[0] = T_STRING;
-                } elseif ($kind==T_ARRAY && $text!="array") {
-                    // e.g. new Array()
-                    $t[0] = T_STRING;
-                } elseif ($kind==T_LIST && $text!="list") {
-                    $t[0] = T_STRING;
-                } elseif ($kind==T_INTERFACE && $text!="interface") {
-                    $t[0] = T_STRING;
-                } elseif ($kind==T_CLASS && $text!="class") {
-                    $t[0] = T_STRING;
-                } elseif ($kind==T_GLOBAL && $text!="global") {
-                    $t[0] = T_STRING;
-                } elseif ($kind==T_STRING) {
-                    switch ($text) {
-                        case "package":
-                            $t[0] = XRef::T_PACKAGE;
-                            break;
-                        case "import":
-                            $t[0] = XRef::T_IMPORT;
-                            break;
-                        case "override":
-                            $t[0] = XRef::T_OVERRIDE;
-                            break;
-                        case "in":
-                            $t[0] = XRef::T_IN;
-                            break;
-                        case "each":
-                            $t[0] = XRef::T_EACH;
-                            break;
-                        case "null":
-                            $t[0] = XRef::T_NULL;
-                            break;
-                        case "get":
-                            $t[0] = XRef::T_GET;
-                            break;
-                        case "set":
-                            $t[0] = XRef::T_SET;
-                            break;
-                        case "true":
-                            $t[0] = XRef::T_TRUE;
-                            break;
-                        case "false":
-                            $t[0] = XRef::T_FALSE;
-                            break;
-                        default:
-                    }
-                } // if kind==string
-            } // if token is (kind, text)
-        } // foreach token
-
-        return new XRef_ParsedFile($tokens, $filename, XRef::FILETYPE_AS3);
-    }
-
-    public function getSupportedFileExtensions() {
-        return array("as");
-    }
-
-    // hate PHP 5.2 - no anonymous functions
-    static function nonSlashR($t) { return is_array($t) || $t!="\r"; }
-}
-
-class XRef_ParsedFile implements XRef_IParsedFile {
+class XRef_ParsedFile_PHP implements XRef_IParsedFile {
+    /** @var string */
     protected $filename;
+
+    /** @var XRef_Token[] */
     protected $tokens;
     protected $numberOfLines;
     protected $fileType;
+    protected $tokensCount;
 
-    // list of declared classes
-    // map: class name --> XRef_NamedStatement object
-    protected $classes; // classes, abstract classes and interfaces
-    protected $methods;
-    protected $packages;
-    protected $namespaces;
+    // list of declared classes, interfaces and traits
+    // array of XRef_Class objects
+    protected $classes = array();
+
+    // list of all functions (including closures) and methods
+    // array of XRef_Function objects
+    protected $functions = array();
+
+    // list of all namespaces, array of XRef_Namespace objects
+    protected $namespaces = array();
 
     // map:     (index of opening "{") --> (index of closing "{")
     //          (index of closing "]") --> (index of opening "[")
     //          ...
     protected $pairedBrackets = array();
 
-    public function __construct(array &$tokens, $filename, $fileType) {
+    public function __construct(array &$tokens, $filename) {
         $this->filename = $filename;
-        $this->fileType = $fileType;
+        $this->fileType = XRef::FILETYPE_PHP;
         $this->tokens = array();
 
         $lineNumber = 1;
@@ -308,27 +181,9 @@ class XRef_ParsedFile implements XRef_IParsedFile {
             $lineNumber += substr_count($text, "\n");
         }
         $this->numberOfLines = $lineNumber;
-
+        $this->tokensCount = count($this->tokens);
         $this->matchBrackets();
-
-        // find out classes and function boundaries
-        $this->classes = array_merge(
-            $this->extractNamedStatements(T_CLASS),
-            $this->extractNamedStatements(T_INTERFACE),
-            $this->extractNamedStatements(T_TRAIT)
-        );
-
-        $this->methods =
-            $this->extractNamedStatements(T_FUNCTION);
-
-        // No namespaces before 5.3
-        if (defined("T_NAMESPACE")) {
-            $this->namespaces =
-                $this->extractNamedStatements(T_NAMESPACE);
-        }
-
-        $this->packages =
-            $this->extractNamedStatements(XRef::T_PACKAGE);
+        $this->parseFileContent();
     }
 
     public function getFileType() {
@@ -343,7 +198,7 @@ class XRef_ParsedFile implements XRef_IParsedFile {
     }
 
     public function getTokenAt($index) {
-        if ($index<0 || $index>=count($this->tokens)) {
+        if ($index < 0 || $index >= $this->tokensCount) {
             return null;
         } else {
             return $this->tokens[$index];
@@ -359,28 +214,53 @@ class XRef_ParsedFile implements XRef_IParsedFile {
         }
     }
 
+    // search for object(s) with $o->bodyStarts <= $index <= $o->bodyEnds
+    // and return the most deeply enclosed object
+    // e.g., for closure inside a function return the closure object
+    // TODO: replace linear search by faster algorithm
     protected function getObjectAt(&$objectList, $index) {
+        $found_object = null;
         foreach ($objectList as $o) {
-            if ($o->startIndex<=$index && $index<=$o->endIndex) {
-                return $o->name;
+            if (!$o->bodyStarts) {
+                continue; // function declaration without body, etc
+            }
+            if ($o->bodyStarts > $index) {
+                break;
+            }
+            if ($o->bodyEnds >= $index) {
+               $found_object = $o;
             }
         }
-        return;
-
+        return $found_object;
     }
 
+    /**
+     * @return XRef_Namespace
+     */
+    public function getNamespaceAt($index) {
+        return $this->getObjectAt($this->namespaces, $index);
+    }
+
+    /**
+     * @param  $index int
+     * @return XRef_Class
+     */
     public function getClassAt($index) {
         return $this->getObjectAt($this->classes, $index);
     }
 
+    /**
+     * @param  $index int
+     * @return XRef_Function
+     */
     public function getMethodAt($index) {
-        return $this->getObjectAt($this->methods, $index);
+        return $this->getObjectAt($this->functions, $index);
     }
 
     protected function matchBrackets() {
         $bracket_count = 0;
         $stack = array();
-        for ($i = 0; $i < count($this->tokens); ++$i) {
+        for ($i = 0; $i < $this->tokensCount; ++$i) {
             $t = $this->tokens[$i];
 
             // opening brackets
@@ -397,10 +277,6 @@ class XRef_ParsedFile implements XRef_IParsedFile {
                 } else {
                     $expect_bracket = '}';
                 }
-                // hate PHP - the commented code doesn't work as code above
-                //$expect_bracket =
-                //  ($t->text=="(") ? ')' :
-                //  ($t->text=="[") ? ']' : '}';
 
                 $stack[] = (object) array(
                     "index"         => $i,
@@ -434,73 +310,608 @@ class XRef_ParsedFile implements XRef_IParsedFile {
         }
     }
 
-    // extracts classes, interfaces, namespaces and functions, e.g.:
-    //      class       "name" ... "{" ... "}"
-    //      function    "name" ... ";"
-    protected function extractNamedStatements($tokenKind) {
+    private $index;
+    private function reset() {
+        $this->index = 0;
+    }
 
-        $result = array();
-        $isWaitingForName = false;
-        $isWaitingForCurly = false;
-        $statement = new XRef_NamedStatement();
+    /** get token at current position */
+    private function current() {
+        // NOTE: hot method, duplicate code from getTokenAt
+        // return $this->getTokenAt($this->index);
+        $index = $this->index;
+        if ($index < 0 || $index >= $this->tokensCount) {
+            return null;
+        } else {
+            return $this->tokens[$index];
+        }
+    }
 
-        for ($i = 0; $i < count($this->tokens); ++$i) {
-            $t = $this->tokens[$i];
+    /** advance $index pointer to next non-space token and return it */
+    private function next() {
+        // NOTE: hot method, duplicate code
+        // $this->index++; return $this->current();
+        $this->index++;
+        $index = $this->index;
+        if ($index < 0 || $index >= $this->tokensCount) {
+            return null;
+        } else {
+            return $this->tokens[$index];
+        }
+    }
 
-            if ($t->kind == $tokenKind) {
-                $statement->startIndex = $i;
-                $statement->kind = $t->kind;
-                $isWaitingForName = true;
+    /** advance $index pointer to next non-space token and return it */
+    private function nextNS() {
+        // $t = $this->next();
+        // while ($t && $t->isSpace()) {
+        //     $t = $this->next();
+        // }
+        // return $t;
+
+        $this->index++;
+        $t = null;
+        while ($this->index < $this->tokensCount) {
+            $t = $this->tokens[$this->index];
+            if (!$t->isSpace()) {
+                break;
+            }
+            $this->index++;
+        }
+        return $t;
+
+    }
+
+    /**
+     * very basic LL(1) parser that is interested in subset of PHP constructs
+     */
+    protected function parseFileContent() {
+        for ($this->index = 0; $this->index < $this->tokensCount; /**nop*/ ) {
+            $t = $this->current();
+
+            if ($t->kind == T_NAMESPACE) {
+                $this->parseNamespace();
                 continue;
             }
 
-            if ($isWaitingForName && !$t->isSpace()) {
-                if ($tokenKind==T_FUNCTION && $this->fileType==XRef::FILETYPE_PHP) {
-                    // php specific - function &asdf(), skip &
-                    if ($t->text=='&') {
-                        continue;
-                    }
-                }
-
-                if ($tokenKind==T_FUNCTION && $this->fileType==XRef::FILETYPE_AS3) {
-                    // as3 specific - anonymous functions,
-                    // skip completely
-                    if ($t->text=='(') {
-                        $isWaitingForName = false;
-                        $isWaitingForCurly = false;
-                        continue;
-                    }
-                    // as3 - function getters: function get foo(
-                    if (($t->kind==XRef::T_GET || $t->kind==XRef::T_SET)
-                            && $t->nextNS()!= null
-                            && $t->nextNS()->kind==T_STRING)
-                    {
-                        continue;
-                    }
-                }
-
-                $statement->name = $t->text;
-                $statement->nameStartIndex = $i;
-                $statement->nameEndIndex = $i;
-                $isWaitingForName = false;
-                $isWaitingForCurly = true;
+            if ($t->kind == T_USE) {
+                $this->parseImportedNamespaces();
                 continue;
             }
 
-            if ($isWaitingForCurly && $t->kind==XRef::T_ONE_CHAR && ($t->text=="{" ||  $t->text==";")) {
-                $statement->isDeclaration = ($t->text==";"); // declared methods vs. defined;
-                $statement->endIndex = ($t->text=="{") ? $this->pairedBrackets[$i] : $i;
-                if (!$statement->endIndex) {
-                    throw new Exception("No matched curly for $i");
+            // functions
+            if ($t->kind == T_FUNCTION) {
+                $this->parseFunction();
+                continue;
+            }
+
+            // classes
+            if ($t->kind == T_CLASS || $t->kind == T_INTERFACE || $t->kind == T_TRAIT) {
+                $this->parseClass();
+                continue;
+            }
+
+            // constants
+            if ($t->kind == T_CONST) {
+                $this->parseConstant();
+                continue;
+            }
+
+            // everything else - just skip till the next non-space token
+            $this->nextNS();
+        }
+    }
+
+    // declared namespaces
+    //  namespace foo\bar { ... }
+    //  namespace { ... }
+    //  namespace foo\bar;
+    protected function parseNamespace() {
+        $t = $this->current();
+        if ($t->kind != T_NAMESPACE) {
+            throw new XRef_ParseException($t, "namespace");
+        }
+
+        $namespace = new XRef_Namespace();
+        $namespace->index = $t->index;
+
+        $this->nextNS();
+        $name = $this->parseTypeName();
+        $n = $this->current();
+        if ($n->text == ';') {
+            // namespace till the next namespace declaration
+            // if there is an unfinished namespace, close it
+            $openNamespace = $this->getNamespaceAt($t->index);
+            if ($openNamespace) {
+                $openNamespace->bodyEnds = $namespace->index - 1;
+            }
+            $namespace->bodyStarts  = $t->index;
+            $namespace->bodyEnds    = $this->tokensCount;
+            $namespace->name = $name;
+        } elseif ($n->text == '{') {
+            // namespace till the closing '}'
+            $namespace->bodyStarts  = $t->index;
+            $namespace->bodyEnds    = $this->getIndexOfPairedBracket( $n->index );
+            $namespace->name = $name;
+        } else {
+            throw new XRef_ParseException($t, "';' or '{'");
+        }
+        $this->namespaces[] = $namespace;
+        $this->nextNS();    // skip the ';' or '}'
+    }
+
+    // imported namespaces
+    //  use foo\bar as foobar, baz as another_baz;
+    //  use foo\bar;
+    protected function parseImportedNamespaces() {
+        $t = $this->current();
+        if ($t->kind != T_USE) {
+            throw new XRef_ParseException($t, "use");
+        }
+
+        while (true) {
+            $this->nextNS();
+            $name = $this->parseTypeName();
+            $t = $this->current();
+
+            if ($t->kind == T_AS) {
+                $t = $this->nextNS();
+                $alias_name = $t->text;
+                $t = $this->nextNS();
+            } else {
+                $parts = explode('\\', $name);
+                $alias_name = $parts[ count($parts)-1 ];
+            }
+
+            $currentNamespace = $this->getNamespaceAt($t->index);
+            if (!$currentNamespace) {
+                if (!$this->namespaces) {
+                    // importing into the global namespace,
+                    // ok, create one
+                    $namespace = new XRef_Namespace();
+                    $namespace->bodyStarts = 1;
+                    $namespace->bodyEnds = $this->tokensCount;
+                    $namespace->name = null;
+                    $this->namespaces[] = $namespace;
+                    $currentNamespace = $namespace;
+                } else {
+                    // importing outside a namespace?
+                    throw new XRef_ParseException($t);
                 }
-                $result[] = $statement;
-                $statement = new XRef_NamedStatement();
-                $isWaitingForCurly = false;
+            }
+
+            $currentNamespace->importMap[$alias_name] = $name;
+
+            if ($t->text == ';') {
+                break;
+            } elseif ($t->text == ',') {
+                continue;
+            } else {
+                throw new XRef_ParseException($t, "';' or ','");
+            }
+        }
+        $this->nextNS(); // skip the ';'
+    }
+
+    // class Foo extends \Bar\Baz implements A, B;
+    // class Foo {}
+    private function parseClass() {
+        $t = $this->current();
+        if ($t->kind != T_CLASS && $t->kind != T_INTERFACE && $t->kind != T_TRAIT) {
+            throw new XRef_ParseException($t);
+        }
+
+        $class = new XRef_Class();
+        $class->index = $t->index;
+        $class->kind = $t->kind;
+
+        $t = $this->nextNS();
+        if ($t->kind == T_STRING) {
+            $class->name = $this->qualifySimpleName($t->text, $t->index);
+        } else {
+            throw new XRef_ParseException($t);
+        }
+
+        $t = $this->nextNS();
+        if ($t->kind == T_EXTENDS) {
+            // classes have no multiple inheritance in php,
+            // but this code parses interfaces too, and they have
+            while (true) {
+                $this->nextNS();    // skip "extends" or ","
+                $extends = $this->parseTypeName();
+                $class->extends[] = $this->qualifyName($extends, $t->index);
+                $t = $this->current();
+                if ($t->text != ',') {
+                    break;
+                }
             }
         }
 
-        return $result;
+        $t = $this->current();
+        if ($t->kind == T_IMPLEMENTS) {
+            while (true) {
+                $this->nextNS();    // skip "implements" or ","
+                $implements = $this->parseTypeName();
+                $class->implements[] = $this->qualifyName($implements, $t->index);
+                $t = $this->current();
+                if ($t->text != ',') {
+                    break;
+                }
+            }
+        }
+
+        $this->classes[] = $class;
+
+        $t = $this->current();
+        $this->nextNS();
+        if ($t->text == '{') {
+            $class->bodyStarts  = $t->index;
+            $class->bodyEnds    = $this->getIndexOfPairedBracket($t->index);
+            $this->parseClassBody($class, $class->bodyEnds);
+        } else {
+            throw new XRef_ParseException($t);
+        }
     }
+
+    private function parseClassBody(XRef_Class $class, $lastIndex) {
+        $attributes = 0;
+
+        while ($this->index < $lastIndex) {
+            $t = $this->current();
+
+            if ($t->kind == T_PUBLIC    ||
+                $t->kind == T_PRIVATE   ||
+                $t->kind == T_STATIC    ||
+                $t->kind == T_PROTECTED ||
+                $t->kind == T_ABSTRACT  ||
+                $t->kind == T_FINAL
+            ) {
+                $attributes |= XRef::$attributesMasks[ $t->kind ];
+                $t = $this->nextNS();
+                continue;
+            }
+
+            // functions
+            if ($t->kind == T_FUNCTION) {
+                $this->parseFunction($class, $attributes);
+                $attributes = 0;
+                continue;
+            }
+
+            // constants
+            if ($t->kind == T_CONST) {
+                $this->parseConstant($class, $attributes);
+                $attributes = 0;
+                continue;
+            }
+
+            if ($t->kind == T_VAR) {
+                $t = $this->nextNS();
+                if ($t->kind != T_VARIABLE) {
+                    throw new XRef_ParseException($t);
+                }
+                // do nothing here, the next iteration will take care of $t
+                // continue;
+            }
+
+            if ($t->kind == T_VARIABLE) {
+                while (true) {
+                    $this->parseClassProperty($class, $attributes);
+                    $t = $this->current();
+                    if ($t->text == ',') {
+                        $this->nextNS();
+                    } elseif ($t->text == ';') {
+                        $this->nextNS();
+                        break;
+                    } else {
+                        throw new XRef_ParseException($t);
+                    }
+                }
+                $attributes = 0;
+                continue;
+            }
+
+            // shouldn't be here
+            throw new XRef_ParseException($t);
+
+        }
+
+        $t = $this->current();
+        if ($t->index != $lastIndex) {
+            throw new XRef_ParseException($t, "$t->index != $lastIndex");
+        }
+        if ($t->text != '}') {
+            throw new XRef_ParseException($t, "'}'");
+        }
+        $this->nextNS();    // skip the '}'
+    }
+
+    private function parseClassProperty(XRef_Class $class, $attributes) {
+        $t = $this->current();
+        if ($t->kind != T_VARIABLE) {
+            throw new XRef_ParseException($t);
+        }
+
+        $prop = new XRef_Property();
+        $prop->name = $t->text;
+        $prop->index = $t->index;
+        $prop->attribures = $attributes;
+        $class->properties[] = $prop;
+
+        $t = $this->nextNS();
+        if ($t->text == '=') {
+            // TODO: parse const expression
+            $t = $this->nextNS();
+            while ($t->text != ';' && $t->text != ',') {
+                $t = $this->nextNS();
+                if ($t->text == '(') {
+                    $this->index = $this->getIndexOfPairedBracket($t->index);
+                    $t = $this->nextNS();
+                }
+            }
+        }
+    }
+
+
+    private function parseConstant(XRef_Class $class = null, $attributes = null) {
+        $t = $this->current();
+        if ($t->kind != T_CONST) {
+            throw new Exception($t);
+        }
+        $t = $this->nextNS();
+
+        $current_namespace = $this->getNamespaceAt($t->index);
+
+        while (true) {
+            if ($t->kind != T_STRING) {
+                throw new XRef_ParseException($t);
+            }
+
+            $const = new XRef_Constant;
+            $const->index = $t->index;
+            $const->attributes = $attributes;
+            if ($class) {
+                $const->name = $t->text;
+                $const->className = $class->name;
+            } else {
+                $const->name = $this->qualifySimpleName($t->text, $t->index);
+            }
+
+            $t = $this->nextNS();
+            if ($t->text != '=') {
+                throw new XRef_ParseException($t);
+            }
+
+            // skip the constant value
+            while ($t->text != ',' && $t->text != ';') {
+                $t = $this->nextNS();
+            }
+
+            if ($t->text == ';') {
+                $this->nextNS();    // skip the ';'
+                break;
+            }
+            $t = $this->nextNS();
+        }
+    }
+
+    private function parseFunction(XRef_Class $class = null, $attributes = null) {
+        $t = $this->current();
+        if ($t->kind != T_FUNCTION) {
+            throw new Exception($t);
+        }
+
+        $function = new XRef_Function();
+        $function->index = $t->index;
+        $function->attributes = $attributes;
+        $t = $this->nextNS();
+        if ($t->text == '&') {
+            $t = $this->nextNS();
+            $function->returnsReference = true;
+        } else {
+            $function->returnsReference = false;
+        }
+
+        $function->nameStartIndex = $t->index; // TODO: remove this
+        if ($t->kind == T_STRING) {
+            if ($class) {
+                $function->name = $t->text;
+                $function->className = $class->name;
+                $class->methods[] = $function;
+            } else {
+                $function->name = $this->qualifySimpleName( $t->text, $t->index );
+            }
+            $t = $this->nextNS();
+        } else if ($t->text == '(') {
+            // anonymous function
+            $function->name = '';
+        } else {
+            throw new XRef_ParseException($t);
+        }
+
+        // list of parameters/arguments
+        $parameters = $this->parseFunctionParametersList($t);
+        $function->parameters = $parameters;
+        $t = $this->current();
+
+        // closures: T_USE
+        if (!$function->name && $t->kind == T_USE) {
+            $this->nextNS();
+            $parameters = $this->parseFunctionParametersList($t);
+            $function->usedVariables = $parameters;
+        }
+
+        $t = $this->current();
+        if ($t->text == ';') {
+            $function->isDeclaration = true;
+        } else if ($t->text == '{') {
+            $function->bodyStarts   = $t->index;
+            $function->bodyEnds     = $this->getIndexOfPairedBracket($t->index);
+            $function->isDeclaration= false;
+        } else {
+            throw new XRef_ParseException($t);
+        }
+
+        $this->functions[] = $function;
+        $this->nextNS();    // skip the ';' or '{'
+
+        // parse function body, if any
+        if (!$function->isDeclaration) {
+            $this->parseFunctionBody($function->bodyEnds);
+        }
+    }
+
+    private function parseFunctionBody($closingTokenIndex) {
+        while ($this->index < $closingTokenIndex) {
+            $t = $this->current();
+
+            // functions
+            if ($t->kind == T_FUNCTION) {
+                $this->parseFunction();
+                continue;
+            }
+
+            // classes
+            if ($t->kind == T_CLASS || $t->kind == T_INTERFACE || $t->kind == T_TRAIT) {
+                $this->parseClass();
+                continue;
+            }
+
+            // constants
+            if ($t->kind == T_CONST) {
+                $this->parseConstant();
+                continue;
+            }
+
+            // everything else - just skip till the next non-space token
+            $this->nextNS();
+        }
+
+        $t = $this->current();
+        if ($t->index != $closingTokenIndex) {
+            throw new XRef_ParseException($t);
+        }
+        if ($t->text != '}') {
+            throw new XRef_ParseException($t);
+        }
+        $this->nextNS();    // skip the '}'
+    }
+
+    // ( $a, FooBar &$b, $c = null, $d = array(1, array(2), 3) )
+    private function parseFunctionParametersList() {
+        $t = $this->current();
+        if ($t->text != '(') {
+            throw new XRef_ParseException($t, "'('");
+        }
+        $parameters = array();
+
+        $t = $this->nextNS();
+        while ($t->text != ')') {
+
+            $parameter = new XRef_FunctionParameter();
+            $type_name = $this->parseTypeName();
+            $parameter->typeName = $this->qualifyName($type_name, $t->index);
+            $t = $this->current();
+            if ($t->text == '&') {
+                $parameter->isPassedByReference = true;
+                $t = $this->nextNS();
+            }
+            if ($t->kind != T_VARIABLE) {
+                throw new XRef_ParseException($t, 'variable');
+            }
+            $parameter->name = $t->text;
+            $parameter->index = $t->index;
+            $t = $this->nextNS();
+            if ($t->text == '=') {
+                $parameter->hasDefaultValue = true;
+                $t = $this->nextNS();
+                // TODO: need a better parser for default values
+                while ($t->text != ',' && $t->text != ')') {
+                    $t = $this->nextNS();
+                    if ($t->text == '(') {
+                        $this->index = $this->getIndexOfPairedBracket($t->index);
+                        $t = $this->nextNS();
+                    }
+                }
+            }
+            $parameters[] = $parameter;
+
+            if ($t->text == ',') {
+                $this->nextNS();
+                continue;
+            } elseif ($t->text == ')') {
+                break;
+            } else {
+                throw new XRef_ParseException($t, "')' or ','");
+            }
+        }
+        $this->nextNS();    // skip the ')'
+
+        return $parameters;
+    }
+
+    // input: $token
+    // output: string $typeName
+    // side effects: sets the cursor to the non-space token after the type name
+    // e.g.:
+    //      string $x ...   --> 'string',   cursor == $x
+    //      \Foo\bar $y ... --> '\Foo\bar', cursor == $y
+    //      $z              --> '',         cursor isn't changed ($z)
+    private function parseTypeName() {
+        $name_parts = array();
+        $t = $this->current();
+        if ($t->isSpace()) {
+            $t = $this->nextNS();
+        }
+        while ($t->kind == T_STRING || $t->kind == T_NS_SEPARATOR || $t->kind == T_ARRAY) {
+            $name_parts[] = $t->text;
+            $t = $this->next();    // not nextNS()!
+        }
+        if ($t->isSpace()) {
+            $t = $this->nextNS();
+        }
+        return implode('', $name_parts);
+    }
+
+    // input: simple or complex name, e.g. "Foo", "Foo\Bar" or "namespace\Foo"
+    // output: fully-qualified name, e.g. "My\NameSpace\Foo" or "Imported\Bar"
+    private function qualifyName($name, $index) {
+        if (!$name) {
+            return $name;
+        }
+
+        if (substr($name, 0, 1)== '\\') {
+            // this is an absolute name, '\foo\bar' --> 'foo\bar'
+            return substr($name, 1);
+        } else {
+            // relative name
+            $namespace = $this->getNamespaceAt($index);
+            if (!$namespace) {
+                return $name;
+            } else {
+                $parts = explode('\\', $name);
+                if ($parts[0] == 'namespace') {
+                    $parts[0] = $namespace->name;
+                } elseif (isset($namespace->importMap[ $parts[0] ])) {
+                    $parts[0] = $namespace->importMap[ $parts[0] ];
+                } else {
+                    array_unshift($parts, $namespace->name);
+                }
+                return implode('\\', $parts);
+            }
+        }
+    }
+
+    // input: simple type name, e.g. 'Foo'
+    // output: fully-qualified name, e.g. 'My\NameSpace\Foo'
+    private function qualifySimpleName($name, $index) {
+        $namespace = $this->getNamespaceAt($index);
+        if (!$namespace) {
+            return $name;
+        } else {
+            return $namespace->name . '\\' . $name;
+        }
+    }
+
 
     public function extractList($startToken, $separatorString=",", $terminatorString=")") {
         $result = array();
@@ -530,10 +941,6 @@ class XRef_ParsedFile implements XRef_IParsedFile {
         return $result;
     }
 
-    public function &getMethods() {
-        return $this->methods;
-    }
-
     public function &getClasses() {
         return $this->classes;
     }
@@ -552,6 +959,15 @@ class XRef_ParsedFile implements XRef_IParsedFile {
         } else {
             throw new Exception("No matching bracket for index $index");
         }
+    }
+
+    /**
+     * returns array of all declared/defined methods
+     * @return XRef_Function[]
+     */
+    public function &getMethods()
+    {
+        return $this->functions;
     }
 }
 

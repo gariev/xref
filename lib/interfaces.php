@@ -11,65 +11,10 @@
  * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  */
 
-
-/**
- * SYNOPSYS
- *
- * <code>
- *      require_once "XRef/XRef.class.php";
- *
- *      $fileName = "test.php";
- *      $fileContent = file_get_contents($fileName);
- *
- *      try {
- *          $parser = new XRef_IFileParser_Implementation(...);
- *          $parsedFileObject = $parser->parse($fileContent, $fileName);
- *      } catch (Exception $e) {
- *          echo "Can't parse $filename: " . $e->getMessage() . "\n";
- *      }
- *
- *      // tokens
- *      $tokens = $parsedFileObject->getTokens(); // array of tokens
- *      foreach ($tokens as $token) {
- *          echo $token->text;
- *      }
- *
- *      // tokens API: print names of all functions
- *      // function foo(...)
- *      foreach ($tokens as $t) {
- *          if ($t->kind==T_FUNCTION) {
- *              $functionNameToken = $t->nextNS(); // next non-space token
- *              echo $functionNameToken->text, "\n";
- *          }
- *      }
- *
- *      // high-level details: classes and methods
- *      foreach ($parsedFileObject->getClasses() as $className => $classDetails) {
- *          $startingLineNumber = $parsedFileObject->getLineNumberAt( $classDetails->startIndex );
- *          $endingLineNumber = $parsedFileObject->getLineNumberAt( $classDetails->endIndex );
- *
- *          echo "Class $className is between lines $startingLineNumber and $endingLineNumber\n";
- *      }
- *
- *      // braces and parenthesis
- *      for ($i=0; $i<count($tokens); ++$i) {
- *              $t = $tokens[$i];
- *              if ($t->text == '(') {
- *                  $closingParenthesis = $parsedFileObject()
- *              }
- *      }
- *
- *      // at the end: clean-up the memory
- *      $parsedFileObject->release();
- * </code>
- *
- */
-
 /**
  * Interface for parser/tokenizer
  */
 interface XRef_IFileParser {
-
     /**
      * Main method to parse code; returns XRef_IParsedFile object.
      * Parameter $filename must not be the real filename, it's used in messages mostly ("line 123 at file <filename>")
@@ -90,7 +35,6 @@ interface XRef_IFileParser {
  * Interface for object with content of one file
  */
 interface XRef_IParsedFile {
-
     /**
      * Returns one of the XRef::FILETYPE_PHP, XRef::FILETYPE_AS3, etc constants
      * @return int
@@ -122,30 +66,37 @@ interface XRef_IParsedFile {
     public function getLineNumberAt($index);
 
     /**
-     * returns class name for the token index $index
+     * returns class for the token index $index
      * @param int $index
-     * @return string|null
+     * @return XRef_Class
      */
     public function getClassAt($index);
 
     /**
-     * returns method name at the token index $index
+     * returns method or function at the token index $index
      * @param int $index
-     * @return string|null
+     * @return XRef_Function
      */
     public function getMethodAt($index);
 
     /**
-     * returns array of all declared/defined methods
-     * @return XRef_NamedStatement[]
+     * returns array of all declared/defined methods and functions
+     * @return XRef_Function[]
      */
     public function &getMethods();
 
     /**
      * returns array of all classes
-     * @return XRef_NamedStatement[]
+     * @return XRef_Class[]
      */
     public function &getClasses();
+
+    /**
+     * returns namespace at the given index
+     * @param int $index
+     * @return XRef_Namespace
+     */
+    public function getNamespaceAt($index);
 
     /**
      * input: index of any paired token (e.g. "["), output: index of the corresponding paired token (here, index of closing "]" token)
@@ -379,49 +330,28 @@ interface XRef_IPersistentStorage {
 }
 
 /**
- * data structure for definitions/declarations of classes, methods etc.
- * "funciton" name ... "{" ... "}"
- * "class" name ... "{" ... "}"
- */
-class XRef_NamedStatement {
-    public $name;
-    public $kind;           // matched token kind, e.g. T_CLASS
-    public $startIndex;
-    public $endIndex;
-    public $nameStartIndex; // for PHP, nameStartIndex==nameEndIndex
-    public $nameEndIndex;   // in AS3, name may be of several tokens: package foo.bar.baz;
-    public $isDeclaration;
-}
-
-/**
  * File position object - "something is called from ClassName::MethodName at file:line"
  */
 class XRef_FilePosition {
     public $fileName;
     public $lineNumber;
-
     public $inClass;
     public $inMethod;
+    public $index;
 
-    public $startIndex;
-    public $endIndex;
-
-    public function __construct(XRef_IParsedFile $pf, $s) {
+    public function __construct(XRef_IParsedFile $pf, $index) {
         $this->fileName     = $pf->getFileName();
 
-        if (is_a($s, "XRef_NamedStatement")) {
-            $this->lineNumber   = $pf->getLineNumberAt( $s->startIndex );
-            $this->startIndex   = $s->nameStartIndex;
-            $this->endIndex     = $s->nameEndIndex;
-        } elseif (is_a($s, "XRef_Token")) {
-            $this->lineNumber   = $pf->getLineNumberAt( $s->index );
-            $this->startIndex   = $s->index;
-            $this->endIndex     = $s->index;
-        } else {
-            throw new Exception("Can't instantiate XRef_FilePosition from object of class " . get_class($s));
+        if (is_a($index, 'XRef_Token')) {
+            $index = $index->index;
         }
-        $this->inClass  = $pf->getClassAt($this->startIndex);
-        $this->inMethod = $pf->getMethodAt($this->startIndex);
+        $this->lineNumber   = $pf->getLineNumberAt($index);
+        $this->index        = $index;
+
+        $class  = $pf->getClassAt($index);
+        $method = $pf->getMethodAt($index);
+        $this->inClass  = ($class) ? $class->name : null;
+        $this->inMethod = ($method) ? $method->name : null;
     }
 }
 
@@ -431,6 +361,104 @@ interface XRef_ISourceCodeManager {
     public function getListOfModifiedFiles($revision1, $revision2); // returns array("filename1", "filename2", ...)
     public function getFileContent($revision, $filename);           // returns the content of given file in the given revision
     public function getRevisionInfo($revision);                     // SCM-specific, returns key-value array with info for the given commit
+}
+
+class XRef_Namespace {
+    /** @var int - index of T_NAMESPACE token*/
+    public $index;
+    /** @var string - e.g. 'foo\bar' or '' for global namespace */
+    public $name;
+    /** @var int - index of '{' or ';' token */
+    public $bodyStarts;
+    /** @var int - index of '}' token or the last token in file */
+    public $bodyEnds;
+    /** @var array - map (string -> string), e.g. ('Another' => 'My\Full\Classname') */
+    public $importMap = array();
+}
+
+class XRef_Class {
+    /** @var int - index of T_CLASS (T_INTERFACE or T_TRAIT) token */
+    public $index;
+    /** @var int - one of T_CLASS, T_INTERFACE or T_TRAIT constants */
+    public $kind;
+    /** @var string - fully qualified name */
+    public $name;
+    /** @var string[] - list of fq names of extended class (or interfaces) */
+    public $extends = array();
+    /** @var string[] - list of FQ names of implemented interfaces */
+    public $implements = array();
+    /** @var int - index of '{' token or null */
+    public $bodyStarts;
+    /** @var int - index of '}' token or null */
+    public $bodyEnds;
+    /** @var XRef_Function[] - list of all methods */
+    public $methods = array();
+    /** @var XRef_Property[] - list of all properties */
+    public $properties = array();
+    /** @var XRef_Constant[] */
+    public $constants = array();
+}
+
+// common class for functions, methods and closures (anonymous functions)
+class XRef_Function {
+    /** @var int - index of T_FUNCTION token */
+    public $index;
+    /** @var string - FQ name for functions, e.g 'My\Namespace\foo', null for closures */
+    public $name;
+    /** @var string - FQ name of class for methods, null for regular functions */
+    public $className;
+    /** @var int - index of '{' token or null */
+    public $bodyStarts;
+    /** @var int - index of '}' token or null */
+    public $bodyEnds;
+    /** @var boolean */
+    public $returnsReference;
+    /** @var XRef_FunctionParameter[] */
+    public $parameters = array();
+    /** @var XRef_FunctionParameter[] - for closures: list of used variables */
+    public $usedVariables = array();
+    /** @var bool */
+    public $isDeclaration;
+    /** @var int - bitmask of XRef::MASK_* for methods */
+    public $attributes;
+
+    public $nameStartIndex; // TODO: remove this
+}
+
+class XRef_FunctionParameter {
+    /** @var int - the index of the token T_VARIABLE */
+    public $index;
+    /** @var string - e.g. $x */
+    public $name;
+    /** @var string - e.g. 'array' or 'Foo\Bar' or null */
+    public $typeName;
+    /** @var bool */
+    public $isPassedByReference;
+    /** @var bool */
+    public $hasDefaultValue;
+}
+
+class XRef_Constant {
+    /** @var int - index of T_STRING token in const declaration */
+    public $index;
+    /** @var string - e.g. 'FOO' or 'Foo\BAR' for file constants */
+    public $name;
+    /** @var string - class name or null for file constants */
+    public $className;
+    /** @var int - bitmask of XRef::MASK_* for class constants */
+    public $attributes;
+}
+
+class XRef_Property {
+    /** @var int - index of T_VARIABLE token */
+    public $index;
+    /** @var string - e.g. $foo */
+    public $name;
+    /** @var string - e.g. 'string' or 'ClassName' or null */
+    public $typeName;
+    /** @var int - bitmask of XRef::MASK_* constants */
+    public $attributes;
+
 }
 
 // vim: tabstop=4 expandtab

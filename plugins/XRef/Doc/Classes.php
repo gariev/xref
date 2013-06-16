@@ -115,7 +115,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
         $pf_methods = $pf->getMethods();
         foreach ($pf_methods as $pfm) {
             $name = $pfm->name;
-            $className = $pf->getClassAt( $pfm->startIndex );
+            $className = $pf->getClassAt( $pfm->index );
             if (!$className) {
                 // not a class method, regular function
                 continue;

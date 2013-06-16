@@ -129,7 +129,11 @@ foreach ($xref->getFiles() as $filename => $ext) {
         $pf->release();
     } catch (Exception $e) {
         if ($outputFormat=='text') {
-            echo "Can't parse file '$filename':" . $e->getMessage() . "\n";
+            error_log("Can't parse file '$filename': " . $e->getMessage() . "\n");
+            if (XRef::verbose()) {
+                error_log("At " . $e->getFile() . ":" . $e->getLine());
+                error_log($e->getTraceAsString());
+            }
         } else {
             $jsonOutput[] = array(
                 'fileName'      => $filename,
