@@ -387,6 +387,8 @@ class XRef_Class {
     public $extends = array();
     /** @var string[] - list of FQ names of implemented interfaces */
     public $implements = array();
+    /** @var string[] - list of FQ names of used traits */
+    public $uses = array();
     /** @var int - index of '{' token or null */
     public $bodyStarts;
     /** @var int - index of '}' token or null */

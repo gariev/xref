@@ -610,6 +610,41 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
                 continue;
             }
 
+            // used traits:
+            // use TraitA;
+            // use TraitB, TraitC { TraitB::foo insteadof TraitC; }
+            // use TraitD { foo as d_doo }
+            if ($t->kind == T_USE) {
+                $t = $this->nextNS();
+                while (true) {
+                    $trait_name = $this->parseTypeName();
+                    if (!$trait_name) {
+                        throw new XRef_ParseException($t);
+                    }
+                    $class->uses[] = $this->qualifyName($trait_name, $t->index);
+
+                    $t = $this->current();
+                    if ($t->text == ';') {
+                        $this->nextNS();
+                        break;
+                    }
+                    if ($t->text == '{') {
+                        // TODO: parse the trait insteadof/as block
+                        $this->index = $this->getIndexOfPairedBracket( $t->index );
+                        $this->nextNS();
+                        break;
+                    }
+                    if ($t->text == ',') {
+                        $this->nextNS();
+                        continue;
+                    }
+
+                    // shouldn't be here
+                    throw new XRef_ParseException($t);
+                }
+                continue;
+            }
+
             // shouldn't be here
             throw new XRef_ParseException($t);
 
