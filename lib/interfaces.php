@@ -393,7 +393,7 @@ class XRef_Class {
     public $bodyStarts;
     /** @var int - index of '}' token or null */
     public $bodyEnds;
-    /** @var XRef_Function[] - list of all methods */
+    /** @var XRef_Function[] - ordered list of all methods */
     public $methods = array();
     /** @var XRef_Property[] - list of all properties */
     public $properties = array();
@@ -409,13 +409,13 @@ class XRef_Function {
     public $name;
     /** @var string - FQ name of class for methods, null for regular functions */
     public $className;
-    /** @var int - index of '{' token or null */
+    /** @var int - index of '{' token (or null for function declarations) */
     public $bodyStarts;
-    /** @var int - index of '}' token or null */
+    /** @var int - index of '}' token (or ';' token for function declarations)*/
     public $bodyEnds;
     /** @var boolean */
     public $returnsReference;
-    /** @var XRef_FunctionParameter[] */
+    /** @var XRef_FunctionParameter[] - ordered list of parameters */
     public $parameters = array();
     /** @var XRef_FunctionParameter[] - for closures: list of used variables */
     public $usedVariables = array();

@@ -777,7 +777,8 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
         $t = $this->current();
         if ($t->text == ';') {
-            $function->isDeclaration = true;
+            $function->isDeclaration= true;
+            $function->bodyEnds     = $t->index;
         } else if ($t->text == '{') {
             $function->bodyStarts   = $t->index;
             $function->bodyEnds     = $this->getIndexOfPairedBracket($t->index);
