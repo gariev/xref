@@ -46,7 +46,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
         $this->report = array();
 
         // config_constants are initialized here and not in constructor only for
-        // unittest. TODO: make unittest reload plugings after config changes
+        // unittest. TODO: make unittest reload plugins after config changes
         $this->config_constants = array();
         foreach (XRef::getConfigValue("lint.add-constant", array()) as $const_name) {
             $this->config_constants[ $const_name ] = true;
@@ -64,7 +64,8 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
         $ignore_tokens = array();
 
         $tokens = $pf->getTokens();
-        for ($i=0; $i<count($tokens); ++$i) {
+        $tokens_count = count($tokens);
+        for ($i=0; $i<$tokens_count; ++$i) {
             $t = $tokens[$i];
 
             if (isset($ignore_tokens[$i])) {
@@ -147,7 +148,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                     continue;
                 }
 
-                // skip all fully-quilified names (names with namespaces), if any
+                // skip all fully-qualified names (names with namespaces), if any
                 // Foo\Bar\Baz
                 $n = $t->nextNS();
                 while ($n->kind == T_STRING || $n->kind==T_NS_SEPARATOR) {
@@ -223,7 +224,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
                 // is it some known class constant used without prefix?
                 //  class Foo { const BAR = 1; }
-                //  echo BAR; // should be Foo::BAR or self::BAR inside the class
+                //  echo BAR; // should be Foo::BAR (or self::BAR inside the class)
                 if (isset($class_constants[ $t->text ])) {
                     $this->addDefect($t, self::E_UNPREFIXED_CLASS_CONSTANT);
                     $seen_strings[ $t->text ] = 1;

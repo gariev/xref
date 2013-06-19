@@ -46,7 +46,8 @@ class XRef_Lint_StaticThis extends XRef_ALintPlugin {
 
         // TOKEN:
         $tokens = $pf->getTokens();
-        for ($i=0; $i<count($tokens); ++$i) {
+        $tokens_count = count($tokens);
+        for ($i=0; $i<$tokens_count; ++$i) {
             $t = $tokens[$i];
 
             // ignore bodies of non-static functions declared inside classes
@@ -64,21 +65,21 @@ class XRef_Lint_StaticThis extends XRef_ALintPlugin {
                 if ($n->kind == T_USE) {
                     $n = $n->nextNS();
                     if ($n->text != '(') {
-                        throw new Exception();
+                        throw new XRef_ParseException($n);
                     }
                     $n = $pf->getTokenAt( $pf->getIndexOfPairedBracket($n->index) );
                     $n = $n->nextNS();
                 }
 
                 if ($n->text == ';') {
-                    // declaration only or absctract function: function foo();
+                    // declaration only or abstract function: function foo();
                     // do nothing, skip main loop to the next token
                     $i = $n->index;
                 } elseif ($n->text == '{') {
                     // fast-forward main loop to the end of the function body
                     $i = $pf->getIndexOfPairedBracket( $n->index );
                 } else {
-                    throw new Exception("$n found instead of { or ;");
+                    throw new XRef_ParseException($n, "'{' or ';'");
                 }
                 continue;
             }
@@ -92,7 +93,7 @@ class XRef_Lint_StaticThis extends XRef_ALintPlugin {
                 }
             }
 
-            // similar error: self is used ouside of class declaration
+            // similar error: self is used outside of class declaration
             // however, self:: is allowed in static methods
             // also, allow $object->parent
             if (($t->text == 'self' || $t->text == 'parent') && !$pf->getClassAt($t->index)) {
