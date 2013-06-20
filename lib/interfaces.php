@@ -92,6 +92,12 @@ interface XRef_IParsedFile {
     public function &getClasses();
 
     /**
+     * returns array of all constants
+     * @return XRef_Constant[]
+     */
+    public function &getConstants();
+
+    /**
      * returns namespace at the given index
      * @param int $index
      * @return XRef_Namespace

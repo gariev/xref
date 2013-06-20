@@ -59,9 +59,17 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
         $global_constants = array();    // list of all constants defined in global space in this file
         $class_constants = array();     // list of all class constants names defined in this file
-
         // list of token indexes that contains allowed string literals
         $ignore_tokens = array();
+
+        foreach ($pf->getConstants() as $c) {
+            if ($c->className) {
+                $class_constants[ $c->name ] = 1;
+            } else {
+                $global_constants[ $c->name ] = 1; // TODO: this is a namespaced name
+            }
+            $ignore_tokens[ $c->index ] = 1; // don't parse/analyze this token
+        }
 
         $tokens = $pf->getTokens();
         $tokens_count = count($tokens);
@@ -103,27 +111,6 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                 $i = $t->index;
                 continue;
             }
-
-            if ($t->kind == T_CONST) {
-                // const foo = 1, bar = 2;
-                $list = $pf->extractList($t->nextNS(), ',', ';');
-                foreach ($list as $token) {
-                    if ($token->kind != T_STRING) {
-                        throw new Exception($token);
-                    }
-                    // ignore foo and bar in this declaration
-                    $ignore_tokens[ $token->index ] = 1;
-
-                    // add their names to list of known constants or class constants
-                    if ($pf->getClassAt($token->index)) {
-                        $class_constants[ $token->text ] = 1;
-                    } else {
-                        $global_constants[ $token->text ] = 1;
-                    }
-                }
-                continue;
-            }
-
 
             if ($t->kind == T_STRING) {
 

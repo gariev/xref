@@ -152,7 +152,13 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
     // list of all functions (including closures) and methods
     // array of XRef_Function objects
+    /** @var XRef_Function[] */
     protected $functions = array();
+
+   // list of all functions (including closures) and methods
+    // array of XRef_Function objects
+    /** @var XRef_Constant[] */
+    protected $constants = array();
 
     // list of all namespaces, array of XRef_Namespace objects
     protected $namespaces = array();
@@ -232,6 +238,32 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
             }
         }
         return $found_object;
+    }
+
+    /**
+     * returns array of all classes, defined in this file
+     * @return XRef_Function[]
+     */
+    public function &getClasses() {
+        return $this->classes;
+    }
+
+    /**
+     * returns array of all declared/defined functions and methods, including anonymous functions
+     * @return XRef_Function[]
+     */
+    public function &getMethods()
+    {
+        return $this->functions;
+    }
+
+    /**
+     * returns array of all constants, including class constants
+     * @return XRef_Constant[]
+     */
+    public function &getConstants()
+    {
+        return $this->constants;
     }
 
     /**
@@ -694,8 +726,6 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         }
         $t = $this->nextNS();
 
-        $current_namespace = $this->getNamespaceAt($t->index);
-
         while (true) {
             if ($t->kind != T_STRING) {
                 throw new XRef_ParseException($t);
@@ -704,9 +734,11 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
             $const = new XRef_Constant;
             $const->index = $t->index;
             $const->attributes = $attributes;
+            $this->constants[] = $const;
             if ($class) {
                 $const->name = $t->text;
                 $const->className = $class->name;
+                $class->constants[] = $const;
             } else {
                 $const->name = $this->qualifySimpleName($t->text, $t->index);
             }
@@ -977,10 +1009,6 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         return $result;
     }
 
-    public function &getClasses() {
-        return $this->classes;
-    }
-
     public function getNumberOfLines() {
         return $this->numberOfLines;
     }
@@ -997,14 +1025,6 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         }
     }
 
-    /**
-     * returns array of all declared/defined methods
-     * @return XRef_Function[]
-     */
-    public function &getMethods()
-    {
-        return $this->functions;
-    }
 }
 
 // vim: tabstop=4 expandtab
