@@ -105,6 +105,20 @@ interface XRef_IParsedFile {
     public function getNamespaceAt($index);
 
     /**
+     * Returns fully-qualified name according to namespace in effect at given token index.
+     * E.g. (assuming that current namespace is Foo and namespace \Bar\Baz is imported as Baz):
+     *      \string     -> string
+     *      \Foo\bar    -> Foo\bar
+     *      bar         -> Foo\bar
+     *      Baz\quxx    -> Bar\Baz\quxx
+     *
+     * @param string $name
+     * @param int $index
+     * @return string
+     */
+    public function qualifyName($name, $index);
+
+    /**
      * input: index of any paired token (e.g. "["), output: index of the corresponding paired token (here, index of closing "]" token)
      * @param int $i
      * @return int
@@ -208,7 +222,7 @@ class XRef_CodeDefect {
         $this->severity     = $severity;
         $this->message      = $message;
         $this->fileName     = $token->parsedFile->getFileName();
-        $filePos = new XRef_FilePosition($token->parsedFile, $token);
+        $filePos = new XRef_FilePosition($token->parsedFile, $token->index);
         $this->lineNumber   = $filePos->lineNumber;
         $this->inClass      = $filePos->inClass;
         $this->inMethod     = $filePos->inMethod;
@@ -245,11 +259,11 @@ interface XRef_ILintPlugin extends XRef_IPlugin {
  * Abstract class, can be used as base class for other plugins
  */
 abstract class XRef_APlugin implements XRef_IPlugin {
-    /** reference to main XRef class object */
+    /** @var XRef - reference to main XRef class object */
     protected $xref;
-    /** string, uniq id of the plugin */
+    /** @var string - uniq id of the plugin */
     protected $reportId;
-    /** string, text description of the plugin */
+    /** @var string - text description of the plugin */
     protected $reportName;
 
     /**
@@ -343,21 +357,23 @@ class XRef_FilePosition {
     public $lineNumber;
     public $inClass;
     public $inMethod;
-    public $index;
+    public $startIndex;
+    public $endIndex;
 
-    public function __construct(XRef_IParsedFile $pf, $index) {
+    public function __construct(XRef_IParsedFile $pf, $startIndex, $endIndex = 0) {
         $this->fileName     = $pf->getFileName();
+        $this->lineNumber   = $pf->getLineNumberAt($startIndex);
+        $this->startIndex   = $startIndex;
+        $this->endIndex     = ($endIndex) ? $endIndex : $startIndex;
 
-        if (is_a($index, 'XRef_Token')) {
-            $index = $index->index;
-        }
-        $this->lineNumber   = $pf->getLineNumberAt($index);
-        $this->index        = $index;
-
-        $class  = $pf->getClassAt($index);
-        $method = $pf->getMethodAt($index);
+        $class  = $pf->getClassAt($startIndex);
+        $method = $pf->getMethodAt($startIndex);
         $this->inClass  = ($class) ? $class->name : null;
         $this->inMethod = ($method) ? $method->name : null;
+    }
+
+    public function __toString() {
+        return "$this->fileName:$this->lineNumber";
     }
 }
 
@@ -387,12 +403,18 @@ class XRef_Class {
     public $index;
     /** @var int - one of T_CLASS, T_INTERFACE or T_TRAIT constants */
     public $kind;
+    /** @var int - index of the token with the class name */
+    public $nameIndex;
     /** @var string - fully qualified name */
     public $name;
     /** @var string[] - list of fq names of extended class (or interfaces) */
     public $extends = array();
+    /** @var array - map: (name of extended class/interface) -> array(first index of name, last index of name) */
+    public $extendsIndex = array();
     /** @var string[] - list of FQ names of implemented interfaces */
     public $implements = array();
+    /** @var array - map: (name of implemented interface) -> array(first index of name, last index of name) */
+    public $implementsIndex = array();
     /** @var string[] - list of FQ names of used traits */
     public $uses = array();
     /** @var int - index of '{' token or null */
@@ -413,6 +435,8 @@ class XRef_Function {
     public $index;
     /** @var string - FQ name for functions, e.g 'My\Namespace\foo', null for closures */
     public $name;
+    /** @var int - index of the token with the function name */
+    public $nameIndex;
     /** @var string - FQ name of class for methods, null for regular functions */
     public $className;
     /** @var int - index of '{' token (or null for function declarations) */

@@ -539,6 +539,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         $t = $this->nextNS();
         if ($t->kind == T_STRING) {
             $class->name = $this->qualifySimpleName($t->text, $t->index);
+            $class->nameIndex = $t->index;
         } else {
             throw new XRef_ParseException($t);
         }
@@ -549,9 +550,14 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
             // but this code parses interfaces too, and they have
             while (true) {
                 $this->nextNS();    // skip "extends" or ","
-                $extends = $this->parseTypeName();
-                $class->extends[] = $this->qualifyName($extends, $t->index);
                 $t = $this->current();
+                $startIndex = $t->index;
+                $extends = $this->parseTypeName();
+                $t = $this->current();
+                $endIndex = $t->prevNS()->index;
+                $name = $this->qualifyName($extends, $t->index);
+                $class->extends[] = $name;
+                $class->extendsIndex[$name] = array($startIndex, $endIndex);
                 if ($t->text != ',') {
                     break;
                 }
@@ -562,9 +568,14 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         if ($t->kind == T_IMPLEMENTS) {
             while (true) {
                 $this->nextNS();    // skip "implements" or ","
-                $implements = $this->parseTypeName();
-                $class->implements[] = $this->qualifyName($implements, $t->index);
                 $t = $this->current();
+                $startIndex = $t->index;
+                $implements = $this->parseTypeName();
+                $t = $this->current();
+                $endIndex = $t->prevNS()->index;
+                $name = $this->qualifyName($implements, $t->index);
+                $class->implements[] = $name;
+                $class->implementsIndex[$name] = array($startIndex, $endIndex);
                 if ($t->text != ',') {
                     break;
                 }
@@ -780,6 +791,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
         $function->nameStartIndex = $t->index; // TODO: remove this
         if ($t->kind == T_STRING) {
+            $function->nameIndex = $t->index;
             if ($class) {
                 $function->name = $t->text;
                 $function->className = $class->name;
@@ -942,7 +954,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
     // input: simple or complex name, e.g. "Foo", "Foo\Bar" or "namespace\Foo"
     // output: fully-qualified name, e.g. "My\NameSpace\Foo" or "Imported\Bar"
-    private function qualifyName($name, $index) {
+    public function qualifyName($name, $index) {
         if (!$name) {
             return $name;
         }
@@ -969,6 +981,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         }
     }
 
+    // optimization, see also qualifyName()
     // input: simple type name, e.g. 'Foo'
     // output: fully-qualified name, e.g. 'My\NameSpace\Foo'
     private function qualifySimpleName($name, $index) {

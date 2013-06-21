@@ -44,10 +44,15 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
             // const FOO = 10;
             if ($t->kind==T_CONST) {
                 $n = $t->nextNS();
-                $name = $pf->getClassAt($n->index) . "::" . $n->text;
+                $class = $pf->getClassAt($n->index);
+                if ($class) {
+                    $name = $class->name . "::" . $n->text;
+                } else {
+                    $name = $n->text;
+                }
                 $c = $this->getOrCreate($name);
 
-                $filePos = new XRef_FilePosition($pf, $n);
+                $filePos = new XRef_FilePosition($pf, $n->index);
                 $c->declaredAt[] = $filePos;
 
                 // link from source file HTML page to report page "reportId/objectId"
@@ -77,16 +82,17 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
 
                     $className = $p->text;
                     if ($className=='self') {
-                        $className = $pf->getClassAt($p->index);
-                        if (!$className) {
+                        $class = $pf->getClassAt($p->index);
+                        if (!$class) {
                             error_log("Reference to self:: class not inside a class method at " . $pf->getFileName() . ":$p->lineNumber");
                             continue;
                         }
+                        $className = $class->name;
                     }
 
                     $name = $className . "::" . $n->text;
                     $c = $this->getOrCreate($name);
-                    $filePos = new XRef_FilePosition($pf, $n);
+                    $filePos = new XRef_FilePosition($pf, $n->index);
                     $c->usedAt[] = $filePos;
 
                     // link from source file HTML page to report page "reportId/objectId"

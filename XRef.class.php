@@ -368,7 +368,7 @@ class XRef {
                     // skip "." and ".." dirs
                     continue;
                 }
-                $this->findInputFiles("$file/$filename");
+                $this->findInputFiles( ($file=='.') ? $filename : "$file/$filename" );
             }
         } else if (is_file($file)) {
             $ext = strtolower( pathinfo($file, PATHINFO_EXTENSION) );
@@ -392,7 +392,7 @@ class XRef {
         } else {
             $filename = $this->getFileNameForObjectID($objectId, $extension);
 
-            $dirs = split("/", $filename);
+            $dirs = preg_split("#/#", $filename);
             $htmlRoot = '';
             $filePath = "$this->outputDir/$reportId";
             for ($i=0; $i<count($dirs); ++$i)   {
@@ -484,16 +484,19 @@ class XRef {
     //  $linkDatabase[ $filename ][ endTokenIndex ]     = 0;
     protected $linkDatabase = array();
 
-    public function addSourceFileLink(XRef_FilePosition $fp, $reportName, $reportObjectId) {
+    public function addSourceFileLink(XRef_FilePosition $fp, $reportName, $reportObjectId, $caseInsensitive=false) {
         if (!array_key_exists($fp->fileName, $this->linkDatabase)) {
             $this->linkDatabase[$fp->fileName] = array();
+        }
+        if ($caseInsensitive) {
+            $reportObjectId = strtolower($reportObjectId);
         }
         // TODO: this is ugly, rewrite this data structure
         // current syntax:
         //  if element is array(report, id),    then this is an open link   <a href="report/id">
         //  if element is 0,                    then this a closing tag     </a>
-        $this->linkDatabase[$fp->fileName][$fp->index] = array($reportName, $reportObjectId);
-        $this->linkDatabase[$fp->fileName][$fp->index+1] = 0;
+        $this->linkDatabase[$fp->fileName][$fp->startIndex] = array($reportName, $reportObjectId);
+        $this->linkDatabase[$fp->fileName][$fp->endIndex+1] = 0;
     }
 
     public function &getSourceFileLinks($fileName) {
@@ -747,7 +750,12 @@ class XRef {
                     }
                 }
 
-                if (isset($config[$k]) && is_array($config[$k])) {
+                $force_array = false;
+                if (substr($k, strlen($k)-2) == '[]') {
+                    $force_array = true;
+                    $k = substr($k, 0, strlen($k)-2);
+                }
+                if ($force_array || (isset($config[$k]) && is_array($config[$k]))) {
                     if ($v) {
                         $config[$k][] = $v;
                     } else {
