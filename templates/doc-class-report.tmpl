@@ -5,9 +5,9 @@
 <h1>{$title} {$c->name}</h1>
 
 {include file="include-files-list.tmpl"     title="Defined At"      fileList=$c->definedAt                              }
-{include file="include-items-list.tmpl"     title="Extends"         reportId=reportId       itemNames=$c->extends       }
-{include file="include-items-list.tmpl"     title="Implements"      reportId=reportId       itemNames=$c->implements    }
-{include file="include-items-list.tmpl"     title="Inhereted by"    reportId=reportId       itemNames=$c->inheritedBy   }
+{include file="include-items-list.tmpl"     title="Extends"         reportId=$reportId      itemNames=$c->extends       }
+{include file="include-items-list.tmpl"     title="Implements"      reportId=$reportId      itemNames=$c->implements    }
+{include file="include-items-list.tmpl"     title="Inhereted by"    reportId=$reportId      itemNames=$c->inheritedBy   }
 {include file="include-files-list.tmpl"     title="Instantiated at" fileList=$c->instantiatedAt                         }
 {include file="include-files-list.tmpl"     title="Used at"         fileList=$c->usedAt                                 }
 

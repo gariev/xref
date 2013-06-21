@@ -73,6 +73,24 @@ class XRef {
         XRef::ERROR     => "error",
     );
 
+    // bitmasks for attributes fields
+    // e.g. public static function ...
+    const MASK_PUBLIC     = 1;
+    const MASK_PROTECTED  = 2;
+    const MASK_PRIVATE    = 4;
+    const MASK_STATIC     = 8;
+    const MASK_ABSTRACT   = 16;
+    const MASK_FINAL      = 32;
+    // map: token kind --> bitmask
+    static $attributesMasks = array(
+        T_PUBLIC    => XRef::MASK_PUBLIC,
+        T_PROTECTED => XRef::MASK_PROTECTED,
+        T_PRIVATE   => XRef::MASK_PRIVATE,
+        T_STATIC    => XRef::MASK_STATIC,
+        T_ABSTRACT  => XRef::MASK_ABSTRACT,
+        T_FINAL     => XRef::MASK_FINAL,
+    );
+
     /** constructor */
     public function __construct() {
         spl_autoload_register(array($this, "autoload"), true);
@@ -350,7 +368,7 @@ class XRef {
                     // skip "." and ".." dirs
                     continue;
                 }
-                $this->findInputFiles("$file/$filename");
+                $this->findInputFiles( ($file=='.') ? $filename : "$file/$filename" );
             }
         } else if (is_file($file)) {
             $ext = strtolower( pathinfo($file, PATHINFO_EXTENSION) );
@@ -374,7 +392,7 @@ class XRef {
         } else {
             $filename = $this->getFileNameForObjectID($objectId, $extension);
 
-            $dirs = split("/", $filename);
+            $dirs = preg_split("#/#", $filename);
             $htmlRoot = '';
             $filePath = "$this->outputDir/$reportId";
             for ($i=0; $i<count($dirs); ++$i)   {
@@ -466,9 +484,12 @@ class XRef {
     //  $linkDatabase[ $filename ][ endTokenIndex ]     = 0;
     protected $linkDatabase = array();
 
-    public function addSourceFileLink(XRef_FilePosition $fp, $reportName, $reportObjectId) {
+    public function addSourceFileLink(XRef_FilePosition $fp, $reportName, $reportObjectId, $caseInsensitive=false) {
         if (!array_key_exists($fp->fileName, $this->linkDatabase)) {
             $this->linkDatabase[$fp->fileName] = array();
+        }
+        if ($caseInsensitive) {
+            $reportObjectId = strtolower($reportObjectId);
         }
         // TODO: this is ugly, rewrite this data structure
         // current syntax:
@@ -729,7 +750,12 @@ class XRef {
                     }
                 }
 
-                if (isset($config[$k]) && is_array($config[$k])) {
+                $force_array = false;
+                if (substr($k, strlen($k)-2) == '[]') {
+                    $force_array = true;
+                    $k = substr($k, 0, strlen($k)-2);
+                }
+                if ($force_array || (isset($config[$k]) && is_array($config[$k]))) {
                     if ($v) {
                         $config[$k][] = $v;
                     } else {

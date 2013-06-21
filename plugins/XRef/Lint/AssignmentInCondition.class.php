@@ -46,7 +46,7 @@ class XRef_Lint_AssignmentInCondition extends XRef_ALintPlugin {
             if ($t->kind == T_IF || $t->kind == T_ELSEIF) {
                 $n = $t->nextNS();
                 if ($n->text != '(') {
-                    throw new Exception();
+                    throw new XRef_ParseException($n);
                 }
                 $last_index = $pf->getIndexOfPairedBracket( $n->index );
                 while ($n->index < $last_index) {
