@@ -46,7 +46,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
         $this->report = array();
 
         // config_constants are initialized here and not in constructor only for
-        // unittest. TODO: make unittest reload plugings after config changes
+        // unittest. TODO: make unittest reload plugins after config changes
         $this->config_constants = array();
         foreach (XRef::getConfigValue("lint.add-constant", array()) as $const_name) {
             $this->config_constants[ $const_name ] = true;
@@ -59,12 +59,21 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
         $global_constants = array();    // list of all constants defined in global space in this file
         $class_constants = array();     // list of all class constants names defined in this file
-
         // list of token indexes that contains allowed string literals
         $ignore_tokens = array();
 
+        foreach ($pf->getConstants() as $c) {
+            if ($c->className) {
+                $class_constants[ $c->name ] = 1;
+            } else {
+                $global_constants[ $c->name ] = 1; // TODO: this is a namespaced name
+            }
+            $ignore_tokens[ $c->index ] = 1; // don't parse/analyze this token
+        }
+
         $tokens = $pf->getTokens();
-        for ($i=0; $i<count($tokens); ++$i) {
+        $tokens_count = count($tokens);
+        for ($i=0; $i<$tokens_count; ++$i) {
             $t = $tokens[$i];
 
             if (isset($ignore_tokens[$i])) {
@@ -103,27 +112,6 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                 continue;
             }
 
-            if ($t->kind == T_CONST) {
-                // const foo = 1, bar = 2;
-                $list = $pf->extractList($t->nextNS(), ',', ';');
-                foreach ($list as $token) {
-                    if ($token->kind != T_STRING) {
-                        throw new Exception($token);
-                    }
-                    // ignore foo and bar in this declaration
-                    $ignore_tokens[ $token->index ] = 1;
-
-                    // add their names to list of known constants or class constants
-                    if ($pf->getClassAt($token->index)) {
-                        $class_constants[ $token->text ] = 1;
-                    } else {
-                        $global_constants[ $token->text ] = 1;
-                    }
-                }
-                continue;
-            }
-
-
             if ($t->kind == T_STRING) {
 
                 if (isset($seen_strings[ $t->text ])) {
@@ -147,7 +135,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                     continue;
                 }
 
-                // skip all fully-quilified names (names with namespaces), if any
+                // skip all fully-qualified names (names with namespaces), if any
                 // Foo\Bar\Baz
                 $n = $t->nextNS();
                 while ($n->kind == T_STRING || $n->kind==T_NS_SEPARATOR) {
@@ -223,7 +211,7 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
                 // is it some known class constant used without prefix?
                 //  class Foo { const BAR = 1; }
-                //  echo BAR; // should be Foo::BAR or self::BAR inside the class
+                //  echo BAR; // should be Foo::BAR (or self::BAR inside the class)
                 if (isset($class_constants[ $t->text ])) {
                     $this->addDefect($t, self::E_UNPREFIXED_CLASS_CONSTANT);
                     $seen_strings[ $t->text ] = 1;

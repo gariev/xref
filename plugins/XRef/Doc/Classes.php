@@ -20,9 +20,6 @@ class XRef_Plugin_Classes_Class {
     public $definedAt       = array();  // XRef_FilePosition
     public $usedAt          = array();  // XRef_FilePosition -- Class::$foo, extends Class, etc
     public $instantiatedAt  = array();  // XRef_FilePosition -- $c = new Class()
-
-    // explicitly declared methods of the class
-    public $declaredMethods = array();  // map: method name --> stdClass(name => )
 }
 
 class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlugin {
@@ -36,12 +33,14 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
     // map: class/interface name --> XRef_Plugin_Classes_Class object
     protected $classes = array();
 
+    /** @return XRef_Plugin_Classes_Class */
     protected function getOrCreate($className) {
-        if (!array_key_exists($className, $this->classes)) {
-            $this->classes[$className] = new XRef_Plugin_Classes_Class();
-            $this->classes[$className]->name = $className;
+        $lc_name = strtolower($className);
+        if (!array_key_exists($lc_name, $this->classes)) {
+            $this->classes[$lc_name] = new XRef_Plugin_Classes_Class();
+            $this->classes[$lc_name]->name = $className;
         }
-        return $this->classes[$className];
+        return $this->classes[$lc_name];
     }
 
     public function generateFileReport(XRef_IParsedFile $pf) {
@@ -50,85 +49,49 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
         }
 
         // collect all declared classes
-        $pf_classes = $pf->getClasses();
-        foreach ($pf_classes as $pfc) {
-            $name = $pfc->name;
-            $c = $this->getOrCreate($name);
+        foreach ($pf->getClasses() as /** @var $pfc XRef_Class */ $pfc) {
+            $c = $this->getOrCreate($pfc->name);
             $c->isInterface = $pfc->kind==T_INTERFACE;
 
-            $definedAt = new XRef_FilePosition($pf, $pfc);
+            $definedAt = new XRef_FilePosition($pf, $pfc->nameIndex);
             $c->definedAt[] = $definedAt;
 
             // link from source file HTML page to report page "reportId/objectId"
-            $this->xref->addSourceFileLink($definedAt, $this->reportId, $name);
+            $this->xref->addSourceFileLink($definedAt, $this->reportId, $pfc->name, true);
 
-            // extends/implements
-            // "class" <name> "extends" <name> "implements"
-            $t = $pf->getTokenAt( $pfc->nameEndIndex + 1 )->nextNS();
-            if ($t->kind==T_EXTENDS) {
-                $t = $t->nextNS();
-                if ($t->kind!=T_STRING) {
-                    error_log("Unexpected token $t->text at " . $pf->getFileName() . ":$t->lineNumber");
-                }
-
-                $ext_name = $t->text;   // extended (base) class name
+            // extended classes/interfaces
+            foreach ($pfc->extends as $ext_name) {
                 $c->extends[] = $ext_name;
-                $ext = $this->getOrCreate($ext_name);
-                $ext->inheritedBy[] = $name;
+                $ext_class = $this->getOrCreate($ext_name);
+                $ext_class->inheritedBy[] = $pfc->name;
 
-                $filePos = new XRef_FilePosition($pf, $t);
-                $ext->usedAt[] = $filePos;
+                $extendsIndex = $pfc->extendsIndex[$ext_name];
+                $filePos = new XRef_FilePosition($pf, $extendsIndex[0], $extendsIndex[1]);
+                $ext_class->usedAt[] = $filePos;
 
                 // link from source file HTML page to report page "reportId/objectId"
-                $this->xref->addSourceFileLink($filePos, $this->reportId, $ext_name);
-                $t = $t->nextNS();
-            } // if T_EXTENDS
-
-            if ($t->kind==T_IMPLEMENTS) {
-                while (true) {
-                    $t = $t->nextNS();
-                    if ($t->kind!=T_STRING) {
-                        error_log("Unexpected token $t->text at " . $pf->getFileName() . ":$t->lineNumber");
-                    }
-
-                    $int_name = $t->text;   // interface class name
-                    $c->implements[] = $int_name;
-                    $int = $this->getOrCreate($int_name);
-                    $int->inheritedBy[] = $name;
-
-                    $filePos = new XRef_FilePosition($pf, $t);
-                    $int->usedAt[] = $filePos;
-
-                    // link from source file HTML page to report page "reportId/objectId"
-                    $this->xref->addSourceFileLink($filePos, $this->reportId, $int_name);
-                    $t = $t->nextNS();
-                    if ($t->kind==XRef::T_ONE_CHAR && $t->text==",") {
-                        // ok, continue
-                    } else {
-                        break;
-                    }
-                }
-            } // if T_IMPLEMENTS
-        } // foreach declared class
-
-        // fill declared methods
-        $pf_methods = $pf->getMethods();
-        foreach ($pf_methods as $pfm) {
-            $name = $pfm->name;
-            $className = $pf->getClassAt( $pfm->startIndex );
-            if (!$className) {
-                // not a class method, regular function
-                continue;
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $ext_name, true);
             }
-            $class = $this->getOrCreate($className);
-            // TODO: case-insensitive method names for PHP
-            // TODO: multiple-declared classes
-            $class->declaredMethods[$name] = (object) array("name" => $name);
-        }
+
+            // extended classes/interfaces
+            foreach ($pfc->implements as $imp_name) {
+                $c->implements[] = $imp_name;
+                $imp_class = $this->getOrCreate($imp_name);
+                $imp_class->inheritedBy[] = $pfc->name;
+
+                $extendsIndex = $pfc->implementsIndex[$imp_name];
+                $filePos = new XRef_FilePosition($pf, $extendsIndex[0], $extendsIndex[1]);
+                $imp_class->usedAt[] = $filePos;
+
+                // link from source file HTML page to report page "reportId/objectId"
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $imp_name, true);
+            }
+        } // foreach declared class
 
         // collect all places where this class is instantiated or mentioned:
         $tokens = $pf->getTokens();
-        for ($i=0; $i<count($tokens); ++$i) {
+        $tokens_count = count($tokens);
+        for ($i=0; $i<$tokens_count; ++$i) {
             $t = $tokens[$i];
 
             // "new" <name>
@@ -138,27 +101,20 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
             if ($t->kind==T_NEW) {
                 $t = $t->nextNS();
 
-                // AS3 specific
-                // TODO: these are special class names, don't put them in common pile
-                if ($t->kind==XRef::T_ONE_CHAR
-                        && $pf->getFileType()==XRef::FILETYPE_AS3
-                        && ($t->text=="<" || $t->text=="("))
-                {
-                    $t = $t->nextNS();
+                if ($t->kind != T_STRING) {
+                    continue;
                 }
 
-                if ($t->kind!=T_STRING && $t->kind!=T_VARIABLE) {
-                    error_log("Unexpected token $t->text at " . $pf->getFileName() . ":$t->lineNumber");
-                }
+                // TODO: scan for namespaced name, e.g. new \Foo\Bar()
+                $name = $pf->qualifyName($t->text, $t->index);
 
-                $name = $t->text;
                 $new = $this->getOrCreate($name);
 
-                $filePos = new XRef_FilePosition($pf, $t);
+                $filePos = new XRef_FilePosition($pf, $t->index);
                 $new->instantiatedAt[] = $filePos;
 
                 // link from source file HTML page to report page "reportId/objectId"
-                $this->xref->addSourceFileLink($filePos, $this->reportId, $name);
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $name, true);
                 continue;
             } // T_NEW
 
@@ -176,66 +132,64 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                     } elseif ($n->kind==T_STRING) {
                         // method or constant
                         $nn = $n->nextNS();
-                        if ($nn->kind!=XRef::T_ONE_CHAR || $nn->text!='(') {
+                        if ($nn->text != '(') {
                             continue;
                         }
                     } else {
-                        error_log("What's this: $n->text at " . $pf->getFileName() . ":$t->lineNumber");
-                        continue;
+                        throw new XRef_ParseException($n);
                     }
 
-                    $className = $p->text;
+                    $className = $pf->qualifyName($p->text, $p->index);
                     if ($pf->getFileType()==XRef::FILETYPE_PHP) {
                         if ($className=='self') {
-                            $className = $pf->getClassAt($p->index);
-                            if (!$className) {
+                            $class = $pf->getClassAt($p->index);
+                            if (!$class) {
                                 error_log("Reference to self:: class not inside a class method at " . $pf->getFileName() . ":$t->lineNumber");
                                 continue;
                             }
+                            $className = $class->name;
                         }
                         // TODO: super:: class resolution needs 2-pass parser
                     }
 
                     $c = $this->getOrCreate($className);
-                    $filePos = new XRef_FilePosition($pf, $p);
+                    $filePos = new XRef_FilePosition($pf, $p->index);
                     $c->usedAt[] = $filePos;
-                    $this->xref->addSourceFileLink($filePos, $this->reportId, $p->text);
+                    $this->xref->addSourceFileLink($filePos, $this->reportId, $p->text, true);
                 } else {
                     error_log("Unexpected token $t->text at " . $pf->getFileName() . ":$t->lineNumber");
                 }
             }
 
             // $foo isinstanceof Bar
+            // $foo isinstanceof $bar
             if ($t->kind==T_INSTANCEOF) {
                 $n = $t->nextNS();
-                if ($n->kind==T_STRING || $n->kind==T_VARIABLE) {
-                    $className = $n->text;
+                if ($n->kind==T_STRING) {
+                    $className = $pf->qualifyName($n->text, $n->index);
                     $c = $this->getOrCreate($className);
-                    $filePos = new XRef_FilePosition($pf, $n);
+                    $filePos = new XRef_FilePosition($pf, $n->index);
                     $c->usedAt[] = $filePos;
-                    $this->xref->addSourceFileLink($filePos, $this->reportId, $className);
-                } else {
-                    error_log("Invalid argument for isinstanceof at " . $pf->getFileName() . ":$n->lineNumber");
+                    $this->xref->addSourceFileLink($filePos, $this->reportId, $className, true);
                 }
             }
 
             // is_a($foo, "Bar")
             if ($t->kind==T_STRING && $t->text=="is_a") {
                 $n = $t->nextNS();
-                if ($n->kind!=XRef::T_ONE_CHAR || $n->text!='(') {
-                    error_log("Invalid is_a symbol at " . $pf->getFileName() . ":$n->lineNumber");
+                if ($n->text != '(') {
                     continue;
                 }
                 // TODO: add more checks below
                 $n  = $n->nextNS(); // var name. Actually, should skip any expression, e.g.: is_a($user->world, "World")
                 $n  = $n->nextNS(); // comma
                 $n  = $n->nextNS(); // class name literal?
-                $className = preg_replace("#[\'\"]#", '', $n->text);
+                $className = $pf->qualifyName(preg_replace("#[\'\"]#", '', $n->text), $n->index);
 
                 $c = $this->getOrCreate($className);
-                $filePos = new XRef_FilePosition($pf, $n);
+                $filePos = new XRef_FilePosition($pf, $n->index);
                 $c->usedAt[] = $filePos;
-                $this->xref->addSourceFileLink($filePos, $this->reportId, $className);
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $className, true);
             }
 
         } // foreach $token

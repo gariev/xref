@@ -51,11 +51,11 @@ abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumen
             $m = $this->methods[$name];
 
             $m->name = $pfm->name; // preserve original case
-            $definedAt = new XRef_FilePosition($pf, $pfm);
+            $definedAt = new XRef_FilePosition($pf, $pfm->nameIndex);
             $m->definedAt[] = $definedAt;
 
             // link from source file HTML page to report page "reportId/objectId"
-            $this->xref->addSourceFileLink($definedAt, $this->reportId, $name);
+            $this->xref->addSourceFileLink($definedAt, $this->reportId, $name, true);
         }
 
         // collect all method calls
@@ -89,11 +89,11 @@ abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumen
                         }
                         $m = $this->methods[$name];
 
-                        $calledFrom = new XRef_FilePosition($pf, $t);
+                        $calledFrom = new XRef_FilePosition($pf, $t->index);
                         $m->calledFrom[] = $calledFrom;
 
                         // link from source file HTML page to report page "reportId/objectId"
-                        $this->xref->addSourceFileLink($calledFrom, $this->reportId, $name);
+                        $this->xref->addSourceFileLink($calledFrom, $this->reportId, $name, true);
                     }
                 }
             }

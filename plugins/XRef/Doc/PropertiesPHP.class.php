@@ -52,7 +52,7 @@ class XRef_Doc_PropertiesPHP extends XRef_APlugin implements XRef_IDocumentation
                         error_log("Strange property name: $name");
                     }
                     $p = $this->getOrCreate($name);
-                    $filePos = new XRef_FilePosition($pf, $n);
+                    $filePos = new XRef_FilePosition($pf, $n->index);
                     $p->declaredAt[] = $filePos;
                     $this->xref->addSourceFileLink($filePos, $this->reportId, $name);
                 }
@@ -75,7 +75,7 @@ class XRef_Doc_PropertiesPHP extends XRef_APlugin implements XRef_IDocumentation
                 $name = $t->text;
                 $p = $this->getOrCreate($name);
 
-                $filePos = new XRef_FilePosition($pf, $t);
+                $filePos = new XRef_FilePosition($pf, $t->index);
                 $p->usedAt[] = $filePos;
                 // link from source file HTML page to report page "reportId/objectId"
                 $this->xref->addSourceFileLink($filePos, $this->reportId, $name);

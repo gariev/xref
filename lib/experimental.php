@@ -408,10 +408,11 @@ class ProjectLintPrototype extends XRef_APlugin {
                     if ($n->kind == T_STRING) {
                         $name = $n->text;
                         $n = $n->nextNS();
-                        $class_name = $pf->getClassAt( $t->index );
-                        if (!$class_name) {
+                        $class = $pf->getClassAt( $t->index );
+                        if (!$class) {
                             continue;
                         }
+                        $class_name = $class->name;
                         $key = ($n->text == '(') ? 'method' : 'property';
                         $this->addUsedConstruct($class_name, $key, $name, $t->lineNumber, $class_name, false);
                     }
@@ -427,8 +428,9 @@ class ProjectLintPrototype extends XRef_APlugin {
                     // TODO: parent:: class, static::, etc
                     $class_name = $t->text;
                     $from_class = $pf->getClassAt( $t->index );
+                    $from_class_name = ($from_class) ? $from_class->name : '';
                     if ($class_name == 'self') {
-                        $class_name = $from_class;
+                        $class_name = $from_class_name;
                     }
 
                     $n = $n->nextNS();
@@ -436,16 +438,16 @@ class ProjectLintPrototype extends XRef_APlugin {
                         $nn = $n->nextNS();
                         if ($nn->text == '(') {
                             // Foo::bar()
-                            $this->addUsedConstruct($class_name, 'method', $n->text, $t->lineNumber, $from_class, true);
+                            $this->addUsedConstruct($class_name, 'method', $n->text, $t->lineNumber, $from_class_name, true);
                         } else {
                             // Foo:BAR - constant?
                             $const_name = $n->text;
-                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber, $from_class, true);
+                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber, $from_class_name, true);
                         }
                     } elseif ($n->kind == T_VARIABLE) {
                         // Foo::$bar
                         $property_name = substr($n->text, 1);   // skip '$' sign
-                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber, $from_class, true);
+                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber, $from_class_name, true);
                     } else {
                         error_log($n);
                     }

@@ -29,8 +29,8 @@ if (XRef::needHelp()) {
 //
 // report-level:  errors, warnings or notices
 // Option -r <value> is a shortcut for option -d lint.report-level=<value>
-if (isset($options['reportlevel'])) {
-    XRef::setConfigValue("lint.report-level", $options['reportlevel']);
+if (isset($options['report-level'])) {
+    XRef::setConfigValue("lint.report-level", $options['report-level']);
 }
 
 //
@@ -129,7 +129,11 @@ foreach ($xref->getFiles() as $filename => $ext) {
         $pf->release();
     } catch (Exception $e) {
         if ($outputFormat=='text') {
-            echo "Can't parse file '$filename':" . $e->getMessage() . "\n";
+            error_log("Can't parse file '$filename': " . $e->getMessage() . "\n");
+            if (XRef::verbose()) {
+                error_log("At " . $e->getFile() . ":" . $e->getLine());
+                error_log($e->getTraceAsString());
+            }
         } else {
             $jsonOutput[] = array(
                 'fileName'      => $filename,

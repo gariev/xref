@@ -56,7 +56,6 @@ class StaticThisLintTest extends BaseLintTest {
             echo $foo->parent;  // ok
         }
         class Bar {
-            $this->bar;         // error
             public static function foo() {
                 $this;          // error
                 self::foo();    // ok
@@ -82,12 +81,11 @@ class StaticThisLintTest extends BaseLintTest {
             array('self',  6, XRef::ERROR),
             array('parent',7, XRef::ERROR),
             array('parent',8, XRef::ERROR),
-            array('$this', 12, XRef::ERROR),
-            array('$this', 14, XRef::ERROR),
-            array('$this', 24, XRef::ERROR),
-            array('self',  25, XRef::ERROR),
+            array('$this', 13, XRef::ERROR),
+            array('$this', 23, XRef::ERROR),
+            array('self',  24, XRef::ERROR),
+            array('parent',25, XRef::ERROR),
             array('parent',26, XRef::ERROR),
-            array('parent',27, XRef::ERROR),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
 
