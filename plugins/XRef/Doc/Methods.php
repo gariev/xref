@@ -8,32 +8,39 @@
  * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  */
 
-// hate PHP - there are no nested classes, names are long and ugly
 class XRef_Plugin_Methods_Method {
-    public $name;
+    public $name;                   // simple method or function name, without class or namespace prefix
+    public $id;                     // lower-case name
     public $definedAt = array();    // XRef_FilePosition
     public $calledFrom = array();   // XRef_FilePosition
 }
 
 // this class is marked abstract to prevent instantiation; it implements all methods, however
 abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumentationPlugin {
-    protected $isCaseSensitive = false; // php methods are case-insensitive
     protected $supportedFileType = XRef::FILETYPE_PHP;
 
     public function __construct($reportId, $reportName, $isCaseSensitive, $supportedFileType) {
         parent::__construct($reportId, $reportName);
-        $this->isCaseSensitive = $isCaseSensitive;
         $this->supportedFileType = $supportedFileType;
     }
 
     // map: method name --> XRef_Plugin_Methods_Method objects
     protected $methods = array();
 
-    public function getMethodByName($methodName) {
-        if (!$this->isCaseSensitive) {
-            $methodName = strtolower($methodName);
+    /** @return XRef_Plugin_Methods_Method */
+    protected function getOrCreate($methodName) {
+        $id = strtolower($methodName);
+        // remove namespace, if any
+        if (preg_match('#\\\\([^\\\\]+)$#', $id, $matches)) {
+            $id = $matches[1];
         }
-        return (isset($this->methods[$methodName])) ? $this->methods[$methodName] : null;
+        if (!array_key_exists($id, $this->methods)) {
+            $m = new XRef_Plugin_Methods_Method();
+            $m->name = $methodName;
+            $m->id = $id;
+            $this->methods[$id] = $m;
+        }
+        return $this->methods[$id];
     }
 
     public function generateFileReport(XRef_IParsedFile $pf) {
@@ -43,19 +50,13 @@ abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumen
 
         // collect all declared methods
         $pf_methods = $pf->getMethods();
-        foreach ($pf_methods as $pfm) {
-            $name = ($this->isCaseSensitive) ? $pfm->name : strtolower($pfm->name);
-            if (!array_key_exists($name, $this->methods)) {
-                $this->methods[$name] = new XRef_Plugin_Methods_Method();
-            }
-            $m = $this->methods[$name];
-
-            $m->name = $pfm->name; // preserve original case
+        foreach ($pf_methods as /** @var $pfm XRef_Function */ $pfm) {
+            $m = $this->getOrCreate($pfm->name);
             $definedAt = new XRef_FilePosition($pf, $pfm->nameIndex);
             $m->definedAt[] = $definedAt;
 
             // link from source file HTML page to report page "reportId/objectId"
-            $this->xref->addSourceFileLink($definedAt, $this->reportId, $name, true);
+            $this->xref->addSourceFileLink($definedAt, $this->reportId, $m->id, true);
         }
 
         // collect all method calls
@@ -82,18 +83,12 @@ abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumen
                     if (($p->kind!=T_NEW && $p->kind!=T_FUNCTION && $p->kind!=XRef::T_GET && $p->kind!=XRef::T_SET)
                             || $p==null)
                     {
-                        $name = ($this->isCaseSensitive) ? $t->text : strtolower($t->text);
-                        if (!array_key_exists($name, $this->methods)) {
-                            $this->methods[$name] = new XRef_Plugin_Methods_Method();
-                            $this->methods[$name]->name = $t->text; // original case
-                        }
-                        $m = $this->methods[$name];
-
+                        $m = $this->getOrCreate($t->text);
                         $calledFrom = new XRef_FilePosition($pf, $t->index);
                         $m->calledFrom[] = $calledFrom;
 
                         // link from source file HTML page to report page "reportId/objectId"
-                        $this->xref->addSourceFileLink($calledFrom, $this->reportId, $name, true);
+                        $this->xref->addSourceFileLink($calledFrom, $this->reportId, $m->id);
                     }
                 }
             }
@@ -102,9 +97,9 @@ abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumen
 
     public function generateTotalReport() {
 
-        $names = array_keys($this->methods);
-        $count = count($names);
-        sort($names);
+        $ids = array_keys($this->methods);
+        $count = count($ids);
+        sort($ids);
 
         // index page
         list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, null);
@@ -115,7 +110,7 @@ abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumen
                     'reportName' => $this->getName(),
                     'reportId'   => $this->getid(),
                     'root'       => $root,
-                    'names'      => $names,
+                    'names'      => $ids,
                     'objects'    => $this->methods,
                 )
             )
@@ -123,10 +118,10 @@ abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumen
         fclose($fh);
 
         // page for each method
-        foreach ($names as $name) {
-            $m = $this->methods[$name];
+        foreach ($ids as $id) {
+            $m = $this->methods[$id];
 
-            list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, $name);
+            list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, $id);
             fwrite($fh,
                 $this->xref->fillTemplate(
                     'doc-method-report.tmpl',

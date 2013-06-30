@@ -484,12 +484,9 @@ class XRef {
     //  $linkDatabase[ $filename ][ endTokenIndex ]     = 0;
     protected $linkDatabase = array();
 
-    public function addSourceFileLink(XRef_FilePosition $fp, $reportName, $reportObjectId, $caseInsensitive=false) {
+    public function addSourceFileLink(XRef_FilePosition $fp, $reportName, $reportObjectId) {
         if (!array_key_exists($fp->fileName, $this->linkDatabase)) {
             $this->linkDatabase[$fp->fileName] = array();
-        }
-        if ($caseInsensitive) {
-            $reportObjectId = strtolower($reportObjectId);
         }
         // TODO: this is ugly, rewrite this data structure
         // current syntax:

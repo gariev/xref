@@ -433,7 +433,7 @@ class XRef_Class {
 class XRef_Function {
     /** @var int - index of T_FUNCTION token */
     public $index;
-    /** @var string - FQ name for functions, e.g 'My\Namespace\foo', null for closures */
+    /** @var string - FQ name for functions, e.g 'My\Namespace\foo', simple name for class methods, null for closures */
     public $name;
     /** @var int - index of the token with the function name */
     public $nameIndex;
