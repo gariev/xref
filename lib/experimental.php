@@ -4,15 +4,6 @@
 
 class ProjectLintPrototype extends XRef_APlugin {
 
-    private static $masks = array(
-        T_PUBLIC    => 1,
-        T_PROTECTED => 2,
-        T_PRIVATE   => 4,
-        T_STATIC    => 8,
-        T_ABSTRACT  => 16,
-        T_FINAL     => 32,
-    );
-
     /** map: file name --> array with classes, consts, method etc that this file provides */
     private $provides = array( );
 
@@ -127,7 +118,7 @@ class ProjectLintPrototype extends XRef_APlugin {
 
     public function addFile(XRef_IParsedFile $pf) {
         $file_name = $pf->getFileName();
-        $this->provides[$file_name] = $this->parseClasses($pf);
+        $this->provides[$file_name] = $pf->getClasses();
         $this->uses[$file_name] = $this->collectUsedConstructs($pf);
     }
 
@@ -137,9 +128,9 @@ class ProjectLintPrototype extends XRef_APlugin {
 
         $class_defined_in_file = array();
         foreach ($this->provides as $file_name => $list_of_classes) {
-            foreach ($list_of_classes as $class_description) {
-                $class_name = $class_description['name'];
-                $this->classes[$class_name][] = $class_description;
+            foreach ($list_of_classes as $class) {
+                $class_name = strtolower($class->name);
+                $this->classes[$class_name][] = $class;
                 $class_defined_in_file[$class_name][] = $file_name;
             }
         }
@@ -223,14 +214,14 @@ class ProjectLintPrototype extends XRef_APlugin {
             // 1. static vs. instance
             if ($key != 'constant') {
                 if ($is_static) {
-                    if ( ($def["mask"] & self::$masks[T_STATIC]) == 0 ) {
+                    if (!XRef::isStatic($def->attributes)) {
                         $error_code = "exp03";
                         $severity = XRef::ERROR;
                         $message = "Trying to access instance $key as static one";
                         return array($error_code, $severity, $message);
                     }
                 } else {
-                    if ( ($def["mask"] & self::$masks[T_STATIC]) != 0 && $key == 'property') {
+                    if (XRef::isStatic($def->attributes) && $key == 'property') {
                         $error_code = "exp03";
                         $severity = XRef::ERROR;
                         $message = "Trying to access static $key as instance one";
@@ -240,30 +231,34 @@ class ProjectLintPrototype extends XRef_APlugin {
             }
 
             // 2. public, private, protected
-            if ($def["mask"] & self::$masks[T_PUBLIC]) {
+            if (XRef::isPublic($def->attributes)) {
                 // ok
-            } elseif ($def["mask"] & self::$masks[T_PRIVATE]) {
-                if ($found_in_class != $from_class) {
+            } elseif (XRef::isPrivate($def->attributes)) {
+                if (!$from_class || $found_in_class != strtolower($from_class)) {
                     $error_code = "exp04";
                     $severity = XRef::ERROR;
                     $message = "Attempt to access private $key of class $found_in_class";
                     return array($error_code, $severity, $message);
                 }
-            } elseif ($def["mask"] & self::$masks[T_PROTECTED]) {
-                if ($found_in_class != $from_class && (!$from_class || !$this->isSubclassOf($from_class, $found_in_class))) {
+            } elseif (XRef::isProtected($def->attributes)) {
+                if (!$from_class || !$this->isSubclassOf($from_class, $found_in_class)) {
                     $error_code = "exp04";
                     $severity = XRef::ERROR;
                     $message = "Attempt to access protected $key of class $found_in_class";
                     return array($error_code, $severity, $message);
                 }
             } else {
-                // default access == public
+                // shouldn't be here
+                throw new Exception("Should be public? $def->attributes");
             }
         }
         return;
     }
 
     private function isSubclassOf($child_class, $parent_class) {
+        $child_class = strtolower($child_class);
+        $parent_class = strtolower($parent_class);
+
         if ($child_class == $parent_class) {
             return true;
         }
@@ -275,11 +270,9 @@ class ProjectLintPrototype extends XRef_APlugin {
         }
 
         foreach ($this->classes[$child_class] as $c) {
-            if (isset($c['extends'])) {
-                foreach ($c['extends'] as $parent_class_name) {
-                    if ($this->isSubclassOf($parent_class_name, $parent_class)) {
-                        return true;
-                    }
+            foreach ($c->extends as $parent_class_name) {
+                if ($this->isSubclassOf($parent_class_name, $parent_class)) {
+                    return true;
                 }
             }
         }
@@ -295,87 +288,48 @@ class ProjectLintPrototype extends XRef_APlugin {
     //  true if missing some of base classes
     //  null if definitely can't found
     private function getDefinition($class_name, $key, $name) {
+        $class_name = strtolower($class_name);
         if (!isset($this->classes[$class_name])) {
             return true;
         }
         if ($key == 'method') {
             $name = strtolower($name);
         }
-        foreach ($this->classes[$class_name] as $c) {
-            if (isset($c[$key]) && isset($c[$key][$name])) {
-                return array($class_name, $c[$key][$name]);
+        foreach ($this->classes[$class_name] as /** @var $c XRef_Class */$c) {
+            if ($key == 'method') {
+                $name = strtolower($name);
+                foreach ($c->methods as $m) {
+                    if (strtolower($m->name) == $name) {
+                        return array($class_name, $m);
+                    }
+                }
+            } elseif ($key == 'property') {
+                foreach ($c->properties as $p) {
+                    if ($p->name == $name) {
+                        return array($class_name, $p);
+                    }
+                }
+            } elseif ($key == 'constant') {
+                foreach ($c->constants as $c) {
+                    if ($c->name == $name) {
+                        return array($class_name, $c);
+                    }
+                }
+             } else {
+                throw new Exception($key);
             }
         }
+
+
         foreach ($this->classes[$class_name] as $c) {
-            if (isset($c['extends'])) {
-                foreach ($c['extends'] as $parent_class_name) {
-                    $d = $this->getDefinition($parent_class_name, $key, $name);
-                    if ($d) {
-                        return $d;
-                    }
+            foreach ($c->extends as $parent_class_name) {
+                $d = $this->getDefinition($parent_class_name, $key, $name);
+                if ($d) {
+                    return $d;
                 }
             }
         }
         return null;
-    }
-
-    // input: XRef_IParsedFile object
-    // output: array of all classes defined in this file
-    private function parseClasses(XRef_IParsedFile $pf) {
-        $classes = array();
-        $tokens = $pf->getTokens();
-        for ($i=0; $i<count($tokens); ++$i) {
-            $t = $tokens[$i];
-
-            // class ...
-            if ($t->kind == T_CLASS || $t->kind == T_INTERFACE || $t->kind==T_TRAIT) {
-                $class_descr = array();
-                $class_descr['kind'] = token_name($t->kind);
-                $t = $t->nextNS();
-
-                // get name
-                if ($t->kind != T_STRING) {
-                    throw new Exception($t);
-                }
-                $name = $t->text;
-                $t = $t->nextNS();
-                $class_descr['name'] = $name;
-
-                // extends ...
-                if ($t->kind == T_EXTENDS) {
-                    $t = $t->nextNS();
-                    list($t, $extendsList) = $this->extractCommaSeparatedStringsList($t);
-                    $class_descr['extends'] = $extendsList;
-                }
-
-                // implements
-                if ($t->kind == T_IMPLEMENTS) {
-                    $t = $t->nextNS();
-                    list($t, $implementsList) = $this->extractCommaSeparatedStringsList($t);
-                    $class_descr['implements'] = $implementsList;
-                }
-
-                if ($t->text == '{') {
-                    $t = $t->nextNS();
-                    list($t, $content) = $this->parseClassContent($pf, $t);
-                    foreach ($content as $k => $v) {
-                        $class_descr[$k] = $v;
-                    }
-                } elseif ($t->text == ';') {
-                    $t = $t->nextNS();
-                } else {
-                    throw new Exception($t);
-                }
-
-                $classes[] = $class_descr;
-
-                if (!$t) {
-                    break;
-                }
-                $i = $t->index - 1;
-            }
-        }
-        return $classes;
     }
 
     // report each used construct only once
@@ -456,176 +410,6 @@ class ProjectLintPrototype extends XRef_APlugin {
             }
         }
         return $this->used;
-    }
-
-    private function extractCommaSeparatedStringsList($t) {
-        if ($t->kind != T_STRING && $t->kind != T_NS_SEPARATOR) {
-            throw new Exception($t);
-        }
-
-        $list = array();
-        while (true) {
-            $parts = array();
-            while ($t->kind==T_STRING || $t->kind == T_NS_SEPARATOR) {
-                $parts[] = $t->text;
-                $t = $t->nextNS();
-            }
-            $list[] = implode($parts);
-            if ($t->text != ',') {
-                break;
-            }
-            $t = $t->nextNS();
-        }
-        return array($t, $list);
-    }
-
-    private function parseClassContent($pf, $t) {
-        $content = array(
-            'constant'  => array(),
-            'property'  => array(),
-            'method'    => array(),
-        );
-
-        $mask = 0;
-        while (true) {
-            if ($t->text == '}') {
-                $t = $t->nextNS();
-                break;
-            }
-
-            while ($t->kind == T_PUBLIC || $t->kind == T_PRIVATE || $t->kind == T_STATIC || $t->kind == T_PROTECTED || $t->kind == T_ABSTRACT || $t->kind==T_FINAL) {
-                $mask |= self::$masks[ $t->kind ];
-                $t = $t->nextNS();
-            }
-
-            if ($t->kind == T_CONST) {
-                $t = $t->nextNS();
-                list($t, $c) = $this->parseConstant($t);
-                $c["mask"] = $mask;
-                $content['constant'][ $c['name'] ] = $c;
-                while ($t->text == ',') {
-                    $t = $t->nextNS();
-                    list($t, $c) = $this->parseConstant($t);
-                    $c["mask"] = $mask;
-                    $content['constant'][ $c['name'] ] = $c;
-                }
-                if ($t->text == ';') {
-                    $t = $t->nextNS();
-                } else {
-                    throw new Exception("$t");
-                }
-                $mask = 0;
-            } else if ($t->kind == T_VAR) {
-                $t = $t->nextNS();
-                if ($t->kind != T_VARIABLE) {
-                    throw new Exception($t);
-                }
-                // do nothing here,
-                // the next iteration will fall in the next if()
-            } else if ($t->kind == T_VARIABLE) {
-                while (true) {
-                    if ($t->kind != T_VARIABLE) {
-                        throw new Exception($t);
-                    }
-                    list ($t, $var) = $this->parseProperties($pf, $t);
-                    $property_name = substr($var['name'], 1);   // skip '$' sign
-                    $var["mask"] = $mask;
-                    $content['property'][$property_name] = $var;
-                    if ($t->text == ';') {
-                        $t = $t->nextNS();
-                        break;
-                    } elseif ($t->text == ',') {
-                        $t = $t->nextNS();
-                    } else {
-                        throw new Exception($t);
-                    }
-                }
-                $mask = 0;
-            } else if ($t->kind == T_FUNCTION) {
-                list ($t, $f) = $this->parseMethods($pf, $t);
-                $f["mask"] = $mask;
-                $content['method'][ strtolower($f['name']) ] = $f;
-                $mask = 0;
-            } else {
-                throw new Exception($t);
-            }
-        }
-        return array($t, $content);
-    }
-
-    private function parseConstant($t) {
-        if ($t->kind != T_STRING) {
-            throw new Exception("$t");
-        }
-        $name = $t->text;
-        $t = $t->nextNS();
-
-        if ($t->text != '=') {
-            throw new Exception("$t");
-        }
-        $t = $t->nextNS();
-
-        $value = $t->text;
-        $t = $t->nextNS();  // TODO: value can be an expression, not a single literal
-        while ($t->text != ',' && $t->text != ';') {
-            $t = $t->nextNS();
-        }
-        $constant = array('name' => $name, 'value' => $value);
-        return array($t, $constant);
-    }
-
-    private function parseProperties($pf, $t) {
-        if ($t->kind != T_VARIABLE) {
-            throw new Exception($t);
-        }
-        $name = $t->text;
-        $t = $t->nextNS();
-        if ($t->text == '=') {
-            // TODO: parse const expression
-            while ($t->text != ';' && $t->text != ',') {
-                $t = $t->nextNS();
-                if ($t->text == '(') {
-                    $t = $pf->getTokenAt( $pf->getIndexOfPairedBracket($t->index) );
-                }
-            }
-        }
-        $var = array('name' => $name, 'defaultValue' => '');
-        return array($t, $var);
-    }
-
-    private function parseMethods($pf, $t) {
-        if ($t->kind != T_FUNCTION) {
-            throw new Exception($t);
-        }
-        $t = $t->nextNS();
-
-        if ($t->text == '&') {
-            $t = $t->nextNS();
-        }
-
-        if ($t->kind != T_STRING) {
-            throw new Exception($t);
-        }
-        $name = $t->text;
-        $t = $t->nextNS();
-
-        if ($t->text != '(') {
-            throw new Exception($t);
-        }
-        // TODO: parse argument list here
-        $t = $pf->getTokenAt( $pf->getIndexOfPairedBracket($t->index) );
-        $t = $t->nextNS();
-
-        if ($t->text == ';') {
-            $t = $t->nextNS();
-        } else if ($t->text == '{') {
-            $t = $pf->getTokenAt( $pf->getIndexOfPairedBracket($t->index) );
-            $t = $t->nextNS();
-        } else {
-            throw new Exception();
-        }
-        $function = array('name' => $name);
-        return array($t, $function);
     }
 }
 

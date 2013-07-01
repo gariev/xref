@@ -1048,6 +1048,25 @@ class XRef {
         return ($params['html']) ? "<span class='$str'>$str</span>" : $str;
     }
 
+    public static function isPublic($attriburtes) {
+        // either explicit public, or no visibility modifier at all (compat mode with php 4)
+        return
+            ($attriburtes & self::MASK_PUBLIC) != 0
+            || ($attriburtes & self::MASK_PRIVATE) == 0 && ($attriburtes & self::MASK_PROTECTED) == 0;
+
+    }
+
+    public static function isPrivate($attriburtes) {
+        return ($attriburtes & self::MASK_PRIVATE);
+    }
+    public static function isProtected($attriburtes) {
+        return ($attriburtes & self::MASK_PROTECTED);
+    }
+    public static function isStatic($attriburtes) {
+        return ($attriburtes & self::MASK_STATIC);
+    }
+
+
 }
 
 // vim: tabstop=4 expandtab

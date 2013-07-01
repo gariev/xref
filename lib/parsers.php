@@ -710,9 +710,9 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         }
 
         $prop = new XRef_Property();
-        $prop->name = $t->text;
+        $prop->name = substr($t->text, 1); // strip the leading '$' sign
         $prop->index = $t->index;
-        $prop->attribures = $attributes;
+        $prop->attributes = $attributes;
         $class->properties[] = $prop;
 
         $t = $this->nextNS();
