@@ -114,7 +114,7 @@ class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
      * @param boolean $failOnError
      * @return string[]|string
      */
-    private function git($arguments, $wantarray = false, $failOnError=true) {
+    private static function git($arguments, $wantarray = false, $failOnError=true) {
         $gitDir     = XRef::getConfigValue("git.repository-dir") . "/.git";
 
         $arguments = array_merge(array("git", "--git-dir=$gitDir"), $arguments);
