@@ -46,8 +46,8 @@ class BaseLintTest extends PHPUnit_Framework_TestCase {
     // see also test class for each plugin
     public function testBasicLintUsage() {
         // Can't use nowdocs before php 5.3.0, and heredocs strings are interpolated :(
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
 
         // ---------------
         // Variables usages

@@ -217,7 +217,8 @@ class XRef_CodeDefect {
     public $inMethod;       // string, may be null
 
     public function __construct($token, $errorCode, $severity, $message) {
-        $this->tokenText    = $token->text;
+        // replace unprintable characters with their hexadecimal representations
+        $this->tokenText    = preg_replace_callback('#[^\\x20-\\x7f]#', array('self', 'chr_replace'), $token->text);
         $this->errorCode    = $errorCode;
         $this->severity     = $severity;
         $this->message      = $message;
@@ -226,6 +227,10 @@ class XRef_CodeDefect {
         $this->lineNumber   = $filePos->lineNumber;
         $this->inClass      = $filePos->inClass;
         $this->inMethod     = $filePos->inMethod;
+    }
+
+    private static function chr_replace($matches) {
+        return '\\x' . sprintf('%02x', ord($matches[0]));
     }
 }
 

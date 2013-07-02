@@ -5,8 +5,8 @@ require_once dirname(__FILE__) . "/BaseLintTest.php";
 class UndefinedVarsLintTest extends BaseLintTest {
 
     public function testSuperGlobals() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             // globals cant triggers at all, neither in global scope or in funcitons
             echo $GLOBALS["i"];                                         // ok
             $var = $_REQUEST["foo"] + $_GET["bar"] + $_POST["baz"]      // ok + ok + ok
@@ -47,8 +47,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
     }
 
     public function testGlobals() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             // globals can be used in global scope only and triggers error in local scope (unless explicitly imported)
             echo $argc;     // ok
             echo $argv;     // ok
@@ -81,8 +81,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
     }
 
     public function testAutovivification() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             function foo () {
                 echo $i;                // error
                 $j = 10;
@@ -137,8 +137,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
         //      parsing of current file                 // overwrite or not?
         //
 
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             function foo () {
                 // internal functions
                 preg_match("#pattern#", "string-to-be-mateched", $matches);     // ok
@@ -205,8 +205,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             class Foo {
                 public function preg_match() {}
                 public function sort(&$x)    {}
@@ -265,8 +265,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
         //
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             $arraysort = array();
             array_multisort($arraysort, SORT_ASC);  // ok, no error on second arg
             echo $expectedError;
@@ -287,8 +287,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
                 '?::qux(&$a, &$b)',
             )
         );
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             function t() {
                 foo($x);                    // ok
                 foo($y, $z);                // error on $z
@@ -318,8 +318,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             class Foo {
                 public $bar = array();
                 public static $baz = array();
@@ -354,8 +354,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
     //  }
     // as well as other static constructs
     public function testStaticDecl () {
-        $testPhpCode = '
-            <?php
+        $testPhpCode = '<?php
+
 
             function foo () {
                 static $foo;                    // ok
@@ -388,8 +388,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
      }
 
     public function testNestedFunctions() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             function foo($x) {
                 $y = 10;                                // ok
                 $f = function ($z) use ($x, & $y) {     // ok
@@ -414,8 +414,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
 
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             class Foo {
                 public static function bar($arg) {
                     $closure = function($v) use ($arg) {
@@ -432,8 +432,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
     }
 
     public function testRelaxedMode() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             echo $globalScopeVar;  // warning - in relaxed mode
             function foo($x) {
                 echo $y;            // error
@@ -475,8 +475,8 @@ class UndefinedVarsLintTest extends BaseLintTest {
     }
 
     public function testLoops() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             function foo() {            // implementation of implode :)
                 foreach ($foo as $f)    // error for $foo
                 {
@@ -590,8 +590,8 @@ Some introductory text
     }
 
     public function testDocCommentRelaxedMode() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             echo $globalScopeVar;               // warning - in relaxed mode
             /** @var $known_global_var */       // annotation
             echo $known_global_var;             // ok
@@ -615,8 +615,8 @@ Some introductory text
 
 
     public function testDocCommentAnnotatedVarTypes() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             class Foo {
                 public function initVar(&$var) { $var = 1; }
             }

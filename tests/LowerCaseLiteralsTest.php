@@ -5,8 +5,8 @@ require_once dirname(__FILE__) . "/BaseLintTest.php";
 class LowerCaseLiteralsTest extends BaseLintTest {
 
    public function testBasicLiteral() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             echo time;                                  // warning
             echo Foo::bar();                            // ok
             function foo(Exception $a, ClassName &$b);  // ok
@@ -23,8 +23,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
     }
 
     public function testNamespacedNames() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             namespace foo\bar;                  // ok
             use bar\foo as anotherFoo;          // ok
             function foo( \bar\foo\baz $x ) {}  // ok
@@ -41,8 +41,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
 
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             namespace foo\bar {
                 use bar\foo as anotherFoo;          // ok
                 function foo( \bar\foo\baz $x ) {}  // ok
@@ -64,8 +64,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
      }
 
     public function testTraits() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             trait Foo {
             }
         ';
@@ -75,8 +75,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
     }
 
     public function testClassConstants() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             class Foo {
                 const bar = 1;      // ok
                 const Baz = 2;      // ok
@@ -92,8 +92,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
     }
 
     public function testLocallyDefinedConstants() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             define("foo", 2);
             echo foo;               // ok
             define(\'bar\', 2);
@@ -114,8 +114,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
     }
 
     public function testConstants() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             const foo = 1;          // ok
             echo foo;               // ok
 
@@ -141,8 +141,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
     }
 
     public function testPredefinedConstants() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             if (true) ;                 // ok
             if (false);                 // ok
             if (null);                  // ok
@@ -163,8 +163,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
     }
 
     public function testLabels() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             goto my_label;
             $x = 1;
             my_label:
@@ -175,8 +175,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
     }
 
     public function testClassConstants2() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             class Foo {
                 const Bar = 1, BAZ = 10;
                 const Bar2 = 1, BAZ2 = 10;  // each error reported only once,
@@ -224,8 +224,8 @@ class LowerCaseLiteralsTest extends BaseLintTest {
             )
         );
 
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             class Foo {
                 const BAZ = 10;
             }

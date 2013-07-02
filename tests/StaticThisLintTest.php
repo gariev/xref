@@ -30,8 +30,8 @@ All other cases:
 class StaticThisLintTest extends BaseLintTest {
 
    public function testOuterScopeThis() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             echo $this->foo;
             self::foo();
             parent::foo();
@@ -45,8 +45,8 @@ class StaticThisLintTest extends BaseLintTest {
     }
 
     public function testOutOfContextThis() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
         echo $this->foo;        // error
         function foo () {
             echo $this->foo;    // error
@@ -92,8 +92,8 @@ class StaticThisLintTest extends BaseLintTest {
     }
 
     public function testTraits() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             trait Foo {
                 function bar () {
                     echo $this->foo;        // ok

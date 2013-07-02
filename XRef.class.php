@@ -707,6 +707,7 @@ class XRef {
                 'XRef_Lint_UninitializedVars',
                 'XRef_Lint_LowerCaseLiterals',
                 'XRef_Lint_StaticThis',
+                'XRef_Lint_ClosingTag',
                 'XRef_Doc_LintReport',          // this plugin creates a documentation page with list of errors found by 3 lint plugins above
              ),
 
@@ -718,6 +719,7 @@ class XRef {
                 'XRef_Lint_LowerCaseLiterals',
                 'XRef_Lint_StaticThis',
                 'XRef_Lint_AssignmentInCondition',
+                'XRef_Lint_ClosingTag',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
             ),
             'lint.ignore-error'       => array(),
