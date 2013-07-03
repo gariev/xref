@@ -41,6 +41,10 @@ class XRef_Lint_ClosingTag extends XRef_ALintPlugin {
         $this->report = array();
 
         $tokens = $pf->getTokens();
+        if (!$tokens) {
+            return;     // skip empty php files
+        }
+
         $skip_closing_tag_checks = false;
 
         // do we have text before the opening tag?

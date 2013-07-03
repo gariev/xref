@@ -580,28 +580,30 @@ class XRef {
         $report = array();
         foreach ($plugins as $pluginId => $plugin) {
             $found_defects = $plugin->getReport($pf);
-            foreach ($found_defects as $d) {
-                list($token, $error_code) = $d;
+            if ($found_defects) {
+                foreach ($found_defects as $d) {
+                    list($token, $error_code) = $d;
 
-                if (isset($this->lintIgnoredErrors[ $error_code ])) {
-                    continue;
-                }
+                    if (isset($this->lintIgnoredErrors[ $error_code ])) {
+                        continue;
+                    }
 
-                if (! isset($this->lintErrorMap[$error_code])) {
-                    error_log("No descriptions for error code '$error_code'");
-                    continue;
-                }
+                    if (! isset($this->lintErrorMap[$error_code])) {
+                        error_log("No descriptions for error code '$error_code'");
+                        continue;
+                    }
 
-                $description = $this->lintErrorMap[ $error_code ];
-                if (! isset($description["severity"]) || ! isset($description["message"])) {
-                    error_log("Invalid description for error code '$error_code'");
-                    continue;
-                }
+                    $description = $this->lintErrorMap[ $error_code ];
+                    if (! isset($description["severity"]) || ! isset($description["message"])) {
+                        error_log("Invalid description for error code '$error_code'");
+                        continue;
+                    }
 
-                if ($description["severity"] < $this->lintReportLevel) {
-                    continue;
+                    if ($description["severity"] < $this->lintReportLevel) {
+                        continue;
+                    }
+                    $report[] = new XRef_CodeDefect($token, $error_code, $description["severity"], $description["message"]);
                 }
-                $report[] = new XRef_CodeDefect($token, $error_code, $description["severity"], $description["message"]);
             }
         }
 
