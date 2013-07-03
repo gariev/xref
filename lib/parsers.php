@@ -536,6 +536,12 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         $class->index = $t->index;
         $class->kind = $t->kind;
 
+        // ugly part: backtracking
+        $p = $t->prevNS();
+        if ($p->kind == T_ABSTRACT) {
+            $class->isAbstract = true;
+        }
+
         $t = $this->nextNS();
         if ($t->kind == T_STRING) {
             $class->name = $this->qualifySimpleName($t->text, $t->index);

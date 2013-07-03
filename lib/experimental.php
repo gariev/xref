@@ -295,6 +295,7 @@ class ProjectLintPrototype extends XRef_APlugin {
         if ($key == 'method') {
             $name = strtolower($name);
         }
+
         foreach ($this->classes[$class_name] as /** @var $c XRef_Class */$c) {
             if ($key == 'method') {
                 $name = strtolower($name);
@@ -340,7 +341,8 @@ class ProjectLintPrototype extends XRef_APlugin {
             }
 
             // constants can be inherited from interfaces too
-            if ($key == 'constant') {
+            // and abstract classes can use methods inherited from interfaces
+            if ($key == 'constant' || ($key == 'method' && $c->isAbstract)) {
                 foreach ($c->implements as $parent_class_name) {
                     $d = $this->getDefinition($parent_class_name, $key, $name);
                     if ($d) {

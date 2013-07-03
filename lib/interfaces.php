@@ -431,6 +431,8 @@ class XRef_Class {
     public $properties = array();
     /** @var XRef_Constant[] */
     public $constants = array();
+    /** @var bool */
+    public $isAbstract = false;
 }
 
 // common class for functions, methods and closures (anonymous functions)

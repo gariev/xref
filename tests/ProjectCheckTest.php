@@ -429,6 +429,31 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
                 array('fileA.php', 'D_CONST', XRef::ERROR, 15),
             )
         );
+
+        // allow abstract classes to call methods inherited from interfaces
+        $codeA = '<?php
+
+            interface A {
+                public function foo();
+            }
+            abstract class B implements A {
+                public function test() {
+                    echo $this->foo();      // ok
+                }
+            }
+            class C implements A {
+                public function test() {
+                    echo $this->foo();      // actually, 2 errors should be here,
+                                            // since C doesnt implement the promised foo()
+                }
+            }
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA, ),
+            array(
+                array('fileA.php', 'foo', XRef::ERROR, 13),
+            )
+        );
     }
 
     public function testInheritedFromTraits() {
@@ -455,5 +480,4 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             )
         );
     }
-
 }
