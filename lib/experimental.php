@@ -328,6 +328,26 @@ class ProjectLintPrototype extends XRef_APlugin {
                     return $d;
                 }
             }
+
+            // constants and methods can be inherited from used traits
+            if ($key == 'constant' || $key == 'method') {
+                foreach ($c->uses as $parent_class_name) {
+                    $d = $this->getDefinition($parent_class_name, $key, $name);
+                    if ($d) {
+                        return $d;
+                    }
+                }
+            }
+
+            // constants can be inherited from interfaces too
+            if ($key == 'constant') {
+                foreach ($c->implements as $parent_class_name) {
+                    $d = $this->getDefinition($parent_class_name, $key, $name);
+                    if ($d) {
+                        return $d;
+                    }
+                }
+            }
         }
         return null;
     }

@@ -403,4 +403,57 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             )
         );
     }
+
+    public function testInheritedFromInterfaces() {
+        $codeA = '<?php
+
+            class A {
+                const A_CONST = 1;
+            }
+            interface B {
+                const B_CONST = 2;
+            }
+            class C extends A implements B {
+                const C_CONST = 3;
+                public function test() {
+                    echo self::A_CONST;     // ok
+                    echo self::B_CONST;     // ok (!)
+                    echo self::C_CONST;     // ok
+                    echo self::D_CONST;     // warning
+                }
+            }
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA, ),
+            array(
+                array('fileA.php', 'D_CONST', XRef::ERROR, 15),
+            )
+        );
+    }
+
+    public function testInheritedFromTraits() {
+        $codeA = '<?php
+
+            trait A {
+                const A_CONST = 1;
+                public function foo() {}
+                private function bar() {}
+            }
+            class B {
+                use A;
+                public function test() {
+                    echo $this->foo();      // ok
+                    echo $this->bar();      // error
+                    echo self::A_CONST;     // ok
+                }
+            }
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA, ),
+            array(
+                array('fileA.php', 'bar', XRef::ERROR, 12),
+            )
+        );
+    }
+
 }
