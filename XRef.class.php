@@ -9,6 +9,7 @@
 $includeDir =  ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) : "@php_dir@/XRef";
 require_once "$includeDir/lib/interfaces.php";
 require_once "$includeDir/lib/parsers.php";
+require_once "$includeDir/lib/utils.php";
 
 /**
  *
@@ -242,6 +243,19 @@ class XRef {
         return $this->storageManager;
     }
 
+    protected $removePathPrefix;
+
+    /** starting common part of the path that can be removed from file names */
+    public function removeStartingPath($pathPrefix) {
+        $this->removePathPrefix = $pathPrefix;
+    }
+
+    /** directory where the cross-reference will be stored */
+    public function setOutputDir($outputDir) {
+        $this->outputDir = $outputDir;
+        self::createDirIfNotExist($outputDir);
+    }
+
     /**
      * Method finds parser for given fileType and returns parsed file object
      * If $content is null, it will be read from $filename
@@ -298,91 +312,12 @@ class XRef {
 
     /*----------------------------------------------------------------
      *
-     * CROSS-REFERENCE DOCUMENTATION: SOURCE FILE TRAVERSING AND REPORT FILENAMES FUNCTIONS
+     * CROSS-REFERENCE DOCUMENTATION
      *
-     * TODO: move this to plugin; add more config variables
      ---------------------------------------------------------------*/
-    protected $paths        = array();
-    protected $excludePath  = array();
-    protected $seenFiles    = array();
-    protected $inputFiles   = array(); // ($filename => $file_extension)
-    protected $removePathPrefix;
 
     protected $outputDir;
 
-    /** path where to look for source files */
-    public function addPath($path) {
-        $this->paths[] = $path;
-        $this->inputFiles = null; // invalidate cache
-    }
-
-    public function excludePath($path) {
-        $this->excludePath[] = $path;
-        $this->inputFiles = null; // invalidate cache
-    }
-
-    /** starting common part of the path that can be removed from file names */
-    public function removeStartingPath($pathPrefix) {
-        $this->removePathPrefix = $pathPrefix;
-    }
-
-    /** directory where the cross-reference will be stored */
-    public function setOutputDir($outputDir) {
-        $this->outputDir = $outputDir;
-        self::createDirIfNotExist($outputDir);
-    }
-
-    /**
-     * Method traversed given root paths and return found filenames.
-     *
-     * @return string[]
-     */
-    public function getFiles() {
-        if (!$this->inputFiles) {
-            $this->inputFiles = array();
-            $this->seenFiles = array_fill_keys($this->excludePath, true);
-            foreach ($this->paths as $p) {
-                $this->findInputFiles($p);
-            }
-        }
-
-        return $this->inputFiles;
-    }
-
-    /**
-     * Internal method to traverse source files from given root; called recursively.
-     * No return value, $this->inputFiles is filled with found filenames.
-     *
-     * @param string $file - file or directory name
-     */
-    protected function findInputFiles($file) {
-        // prevent visiting the same dir several times
-        if (isset($this->seenFiles[$file])) {
-            return;
-        } else {
-            $this->seenFiles[$file] = 1;
-        }
-
-        if (is_dir($file)) {
-            foreach (scandir($file) as $filename) {
-                // skip svn/git directories
-                // TODO: create ignore config list
-                if ($filename == '.svn' || $filename == '.git' || $filename == '.build.sand.mk') {
-                    continue;
-                }
-                if ($filename == '.' || $filename == '..') {
-                    // skip "." and ".." dirs
-                    continue;
-                }
-                $this->findInputFiles( ($file == '.') ? $filename : "$file/$filename");
-            }
-        } else if (is_file($file)) {
-            $ext = strtolower( pathinfo($file, PATHINFO_EXTENSION) );
-            if (array_key_exists($ext, $this->parsers)) {
-                $this->inputFiles[$file] = $ext;
-            }
-        }
-    }
 
     /**
      * Utility method to create file names for given reportId/objectId report

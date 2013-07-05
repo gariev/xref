@@ -103,9 +103,9 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
     public function testMissingBaseClass() {
         $codeA = '
         <?php
-            class B extends A{
+            class B extends A {
                 function foo() {
-                    self::bar();        // ok, since there is no definition of class A
+                    self::bar();        // warning, since there is no definition of class A
                 }
             }
             class C {
@@ -117,6 +117,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA ),
             array(
+                array('fileA.php', 'bar', XRef::WARNING, 5),
                 array('fileA.php', 'bar', XRef::ERROR, 10),
             )
         );
@@ -139,13 +140,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             echo B::BAR;        // ok
             echo A::FOO;        // warning
             echo B::FOO;        // ok
-            echo C::FOO;        // ok, because class C extends unknown class
-            echo D::FOO;        // ok, because no class D is found
+            echo C::FOO;        // warning, because class C extends unknown class
+            echo D::FOO;        // warning, because no class D is found
         ';
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB, ),
             array(
                 array('fileB.php', 'FOO', XRef::ERROR, 5),
+                array('fileB.php', 'FOO', XRef::WARNING, 7),
+                array('fileB.php', 'FOO', XRef::WARNING, 8),
             )
         );
     }
@@ -167,13 +170,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             echo B::BAR;        // ok
             echo A::FOO;        // warning
             echo B::FOO;        // ok
-            echo C::FOO;        // ok, because class C extends unknown class
-            echo D::FOO;        // ok, because no class D is found
+            echo C::FOO;        // warning, because class C extends unknown class
+            echo D::FOO;        // warning, because no class D is found
         ';
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB, ),
             array(
                 array('fileB.php', 'FOO', XRef::ERROR, 5),
+                array('fileB.php', 'FOO', XRef::WARNING, 7),
+                array('fileB.php', 'FOO', XRef::WARNING, 8),
             )
         );
     }

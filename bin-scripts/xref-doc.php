@@ -22,12 +22,9 @@ if (XRef::needHelp() || count($arguments)) {
 }
 
 $xref = new XRef();
-foreach (XRef::getConfigValue("doc.source-code-dir") as $path) {
-    $xref->addPath($path);
-}
-foreach (XRef::getConfigValue("doc.exclude-path", array()) as $exclude_path) {
-    $xref->excludePath($exclude_path);
-}
+$file_iterator = new XRef_FileIterator( XRef::getConfigValue("doc.source-code-dir") );
+$file_iterator->excludePath( XRef::getConfigValue("doc.exclude-path", array()) );
+
 $xref->removeStartingPath( XRef::getConfigValue("doc.remove-path", '') );
 $xref->setOutputDir( XRef::getConfigValue("doc.output-dir") );
 $xref->loadPluginGroup("doc");
@@ -36,7 +33,7 @@ $numberOfFiles = 0;
 $numberOfCodeLines = 0;
 
 // 1. Call each plugin once for each input file
-foreach ($xref->getFiles() as $filename => $ext) {
+foreach ($file_iterator->getFiles() as $filename => $ext) {
     try {
         $pf = $xref->getParsedFile($filename, $ext);
         foreach ($plugins as $pluginId => $plugin) {

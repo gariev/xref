@@ -13,6 +13,7 @@ require_once("$includeDir/lib/ci-tools.php");
 XRef::registerCmdOption("x:", "revision=", "", "");
 XRef::registerCmdOption("y:", "other=", "", "");
 XRef::registerCmdOption("e:", "exclude=", "", "", true);
+XRef::registerCmdOption("l:", "library=", "", "", true);
 
 $xref = new XRef();
 $xref->addParser( new XRef_Parser_PHP() );
@@ -26,18 +27,26 @@ XRef::setConfigValue("ci.source-code-manager", "XRef_SourceCodeManager_Git");
 list($options, $arguments) = XRef::getCmdOptions();
 
 $report = null;
+$library_files = null;
+if (isset($options['library'])) {
+    $library_files = new XRef_FileIterator($options['library']);
+}
+
 if (isset($options["revision"])) {
     // if we got git revision, try to load the project state
     // of this revision and save it for future use
     $revision = $options["revision"];
     $project_lint->loadOrCreateProject($revision);
     $project_lint->saveProject($revision);
+    $project_lint->addLibraryFiles($library_files);
+
     $errors = $project_lint->getErrors();
     if (isset($options["other"])) {
         // compare 2 repository versions
         $other_revision = $options["other"];
         $project_lint->loadOrCreateProject($other_revision);
         $project_lint->saveProject($other_revision);
+        $project_lint->addLibraryFiles($library_files);
         $other_errors = $project_lint->getErrors();
         $report = XRef_getNewProjectErrors($errors, $other_errors);
     } else {
@@ -45,22 +54,12 @@ if (isset($options["revision"])) {
     }
 } else {
     // otherwise, just iterate over all files in dir
-    $path = ($arguments) ? $arguments[0] : ".";
-    $xref->addPath($path);
+    $file_iterator = new XRef_FileIterator( ($arguments) ? $arguments : '.' );
     if (isset($options["exclude"])) {
-        foreach ($options["exclude"] as $exclude_path) {
-            $xref->excludePath($exclude_path);
-        }
+        $file_iterator->excludePath($options["exclude"]);
     }
-    foreach ($xref->getFiles() as $filename => $ext) {
-        try {
-            $pf = $xref->getParsedFile($filename, $ext);
-            $project_lint->addFile($pf);
-            $pf->release(); // help PHP garbage collector to free memory
-        } catch(Exception $e) {
-            error_log("Can't process file '$filename': " . $e->getMessage() . "\n" . $e->getLine() . "\n");
-        }
-    }
+    $project_lint->addFiles($file_iterator);
+    $project_lint->addLibraryFiles($library_files);
     $report = $project_lint->getErrors();
 }
 
