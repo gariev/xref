@@ -11,17 +11,17 @@
 
 // input:arrays of XRef_CodeDefect objects
 // output: array of XRef_CodeDefect that are new
-function XRef_getNewErrors($oldErrors, $curentErrors) {
+function XRef_getNewErrors($oldErrors, $currentErrors) {
     // 1. create array of text messages without line number
     $a1 = XRef_createErrorsDigest($oldErrors);
-    $a2 = XRef_createErrorsDigest($curentErrors);
+    $a2 = XRef_createErrorsDigest($currentErrors);
     // 2. compare arrays using string equality
     $diff = XRef_phpDiff($a1, $a2);
     $newErrors = array();
     foreach ($diff as $d) {
         if ($d[0]==-1) {
-            // this line is in $curentErrors/$a2 only
-            $newErrors[] = $curentErrors[ $d[1] ];
+            // this line is in $currentErrors/$a2 only
+            $newErrors[] = $currentErrors[ $d[1] ];
         }
     }
     return $newErrors;
@@ -29,9 +29,9 @@ function XRef_getNewErrors($oldErrors, $curentErrors) {
 
 // input: arrays (file name => array of XRef_CodeDefect objects)
 // output: array (file name => array of XRef_CodeDefect objects)
-function XRef_getNewProjectErrors($oldErrors, $curentErrors) {
+function XRef_getNewProjectErrors($oldErrors, $currentErrors) {
     $result = array();
-    foreach ($curentErrors as $filename => $errors_list) {
+    foreach ($currentErrors as $filename => $errors_list) {
         if (!isset($oldErrors[$filename])) {
             $result[$filename] = $errors_list;
         } else {

@@ -23,8 +23,13 @@ class XRef_FileIterator {
 
     public function excludePath($path) {
         if (is_array($path)) {
-            $this->excludePath = array_merge($this->excludePath, $path);
+            foreach ($path as $p) {
+                $this->excludePath($p);
+            }
         } else {
+            // remove starting "./" and trailing "/" if any
+            $path = preg_replace('#^\\.[/\\\\]+#', '', $path);
+            $path = preg_replace('#[/\\\\]+$#', '', $path);
             $this->excludePath[] = $path;
         }
         $this->inputFiles = null; // invalidate cache
