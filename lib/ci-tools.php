@@ -71,7 +71,7 @@ function XRef_getErrorsList(XRef $xref, $file, $rev) {
     if (isset($data) && isset($data["xrefVersion"]) && $data["xrefVersion"]==$xrefVersion) {
         return $data["errors"];
     } else {
-        $parsedFile = $xref->getParsedFile($file, "php", $content);
+        $parsedFile = $xref->getParsedFile($file, $content);
         $errors = $xref->getLintReport($parsedFile);
         $parsedFile->release();
         $data = array("errors" => $errors, "file" => $file, "rev" => $rev, "xrefVersion" => $xrefVersion);

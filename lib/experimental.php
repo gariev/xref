@@ -96,7 +96,7 @@ class ProjectLintPrototype extends XRef_APlugin {
             $this->projectFiles[$filename] = $shasum;
             if (!$this->loadFile($filename, $shasum)) {
                 try {
-                    $pf = $this->xref->getParsedFile($filename, "php", $content);
+                    $pf = $this->xref->getParsedFile($filename, $content);
                     $this->addFile($pf);
                     $pf->release();
                 } catch (Exception $e) {
@@ -126,10 +126,10 @@ class ProjectLintPrototype extends XRef_APlugin {
         $this->uses[$file_name] = $this->collectUsedConstructs($pf);
     }
 
-    public function addFiles(XRef_FileIterator $file_iterator) {
-        foreach ($file_iterator->getFiles() as $filename => $ext) {
+    public function addFiles(XRef_IFileProvider $file_provider) {
+        foreach ($file_provider->getFiles() as $filename) {
             try {
-                $pf = $this->xref->getParsedFile($filename, $ext);
+                $pf = $this->xref->getParsedFile($filename);
                 $this->addFile($pf);
                 $pf->release(); // help PHP garbage collector to free memory
             } catch(Exception $e) {
@@ -144,11 +144,11 @@ class ProjectLintPrototype extends XRef_APlugin {
         $this->uses[$file_name] = array();
     }
 
-    public function addLibraryFiles(XRef_FileIterator $file_iterator = null) {
-        if ($file_iterator) {
-            foreach ($file_iterator->getFiles() as $filename => $ext) {
+    public function addLibraryFiles(XRef_IFileProvider $file_provider = null) {
+        if ($file_provider) {
+            foreach ($file_provider->getFiles() as $filename) {
                 try {
-                    $pf = $this->xref->getParsedFile($filename, $ext);
+                    $pf = $this->xref->getParsedFile($filename);
                     $this->addLibraryFile($pf);
                     $pf->release(); // help PHP garbage collector to free memory
                 } catch(Exception $e) {

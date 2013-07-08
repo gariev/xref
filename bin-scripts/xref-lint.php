@@ -60,7 +60,7 @@ $colorMap = array(
 
 $xref = new XRef();
 $xref->loadPluginGroup("lint");
-$file_iterator = new XRef_FileIterator( ($arguments) ? $arguments : array(".") );
+$file_provider = new XRef_FileProvider_FileSystem( ($arguments) ? $arguments : array(".") );
 
 $totalFiles         = 0;
 $filesWithDefects   = 0;
@@ -71,9 +71,9 @@ $numberOfErrors     = 0;
 $jsonOutput = array();
 
 // main loop over all files
-foreach ($file_iterator->getFiles() as $filename => $ext) {
+foreach ($file_provider->getFiles() as $filename) {
     try {
-        $pf = $xref->getParsedFile( $filename, $ext );
+        $pf = $xref->getParsedFile($filename);
         $report = $xref->getLintReport($pf);
 
         $totalFiles++;

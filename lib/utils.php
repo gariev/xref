@@ -1,39 +1,58 @@
 <?php
-class XRef_FileIterator {
-    protected $paths        = array();
-    protected $excludePath  = array();
-    protected $seenFiles    = array();
-    protected $inputFiles   = array(); // ($filename => $file_extension)
 
-    public function __construct($paths = null) {
-        if ($paths) {
-            $this->paths = (is_array($paths)) ? $paths : array($paths);
-        }
+interface XRef_IFileProvider {
+    public function getFiles();
+    public function getFileContent($filename);
+}
+
+class XRef_FileProvider_Git implements XRef_IFileProvider {
+    /** @var XRef_ISourceCodeManager */
+    private $sourceCodeManager = null;
+    /** @var string */
+    private $revision = null;
+
+    public function __construct(XRef_ISourceCodeManager $sourceCodeManager, $revision) {
+        $this->sourceCodeManager = $sourceCodeManager;
+        $this->revision = $revision;
     }
 
-    /** path where to look for source files */
-    public function addPath($path) {
-        if (is_array($path)) {
-            $this->paths = array_merge($this->paths, $path);
-        } else {
-            $this->paths[] = $path;
-        }
-        $this->inputFiles = null; // invalidate cache
-    }
-
-    public function excludePath($path) {
-        if (is_array($path)) {
-            foreach ($path as $p) {
-                $this->excludePath($p);
+    public function getFiles() {
+        $files = array();
+        foreach ($this->sourceCodeManager->getListOfFiles($this->revision) as $filename) {
+            $ext = strtolower( pathinfo($filename, PATHINFO_EXTENSION) );
+            // TODO: this is hardcoded by now
+            if ($ext == 'php') {
+                $files[] = $filename;
             }
-        } else {
-            // remove starting "./" and trailing "/" if any
-            $path = preg_replace('#^\\.[/\\\\]+#', '', $path);
-            $path = preg_replace('#[/\\\\]+$#', '', $path);
-            $this->excludePath[] = $path;
         }
-        $this->inputFiles = null; // invalidate cache
+        return $files;
     }
+
+    public function getFileContent($filename) {
+        return $this->sourceCodeManager->getFileContent($this->revision, $filename);
+    }
+}
+
+class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
+    protected $paths        = array();
+    protected $seenFiles    = array();
+    protected $files        = null;     // array ($filename => $file_extension)
+
+    public function __construct($paths, $excludePaths = null) {
+        $this->paths = (is_array($paths)) ? $paths : array($paths);
+        if ($excludePaths) {
+            if (!is_array($excludePaths)) {
+                $excludePaths = array($excludePaths);
+            }
+            foreach ($excludePaths as $path) {
+                // remove starting "./" and trailing "/" if any
+                $path = preg_replace('#^\\.[/\\\\]+#', '', $path);
+                $path = preg_replace('#[/\\\\]+$#', '', $path);
+                $this->seenFiles[$path] = true;
+            }
+        }
+    }
+
 
    /**
      * Method traverses given root paths and return found filenames.
@@ -41,15 +60,18 @@ class XRef_FileIterator {
      * @return string[]
      */
     public function getFiles() {
-        if (!$this->inputFiles) {
-            $this->inputFiles = array();
-            $this->seenFiles = array_fill_keys($this->excludePath, true);
+        if (!$this->files) {
+            $this->files = array();
             foreach ($this->paths as $p) {
                 $this->findInputFiles($p);
             }
         }
 
-        return $this->inputFiles;
+        return $this->files;
+    }
+
+    public function getFileContent($filename) {
+        return file_get_contents($filename);
     }
 
     /**
@@ -83,7 +105,7 @@ class XRef_FileIterator {
             $ext = strtolower( pathinfo($file, PATHINFO_EXTENSION) );
             // TODO: this is hardcoded by now
             if ($ext == 'php') {
-                $this->inputFiles[$file] = $ext;
+                $this->files[] = $file;
             }
         }
     }

@@ -29,7 +29,7 @@ if ($sourcePlugin) {
     $css = $sourcePlugin->getDefaultCSS();
     $scm = $xref->getSourceCodeManager();
     $source = $scm->getFileContent($revision, $filename);
-    $parsedFile = $xref->getParsedFile("unknown", "php", $source);
+    $parsedFile = $xref->getParsedFile("unknown.php", $source);
     $formattedText = $sourcePlugin->getFormattedText($parsedFile, "");
 
     echo "<html><head><style>$css</style></head><body>";

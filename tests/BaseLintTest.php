@@ -22,7 +22,7 @@ class BaseLintTest extends PHPUnit_Framework_TestCase {
     }
 
     protected function checkPhpCode($phpCode, $expectedDefectsList) {
-        $pf = $this->xref->getParsedFile("filename.php", "php", $phpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $phpCode);
         $report = $this->xref->getLintReport($pf);
         $pf->release();
 

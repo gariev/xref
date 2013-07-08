@@ -21,7 +21,7 @@ class TestParsers extends PHPUnit_Framework_TestCase {
                 }
             }
         ';
-        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
         $classes = $pf->getClasses();
         $methods = $pf->getMethods();
         $this->assertTrue(count($classes)==1);
@@ -49,7 +49,7 @@ class TestParsers extends PHPUnit_Framework_TestCase {
                 $bar(10);
             }
         ';
-        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
         $tokens = $pf->getTokens();
 
         // checking "namespace" statement
@@ -113,7 +113,7 @@ class TestParsers extends PHPUnit_Framework_TestCase {
             namespace foo;
             trait Foo { }
         ';
-        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
         $tokens = $pf->getTokens();
 
         $is_namespace_found = false;
@@ -143,7 +143,7 @@ class TestParsers extends PHPUnit_Framework_TestCase {
                 }
             }
         ';
-        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
         $tokens = $pf->getTokens();
 
         $is_namespace_found = false;

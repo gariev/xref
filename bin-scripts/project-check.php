@@ -29,7 +29,7 @@ list($options, $arguments) = XRef::getCmdOptions();
 $report = null;
 $library_files = null;
 if (isset($options['library'])) {
-    $library_files = new XRef_FileIterator($options['library']);
+    $library_files = new XRef_FileProvider_FileSystem($options['library']);
 }
 
 if (isset($options["revision"])) {
@@ -54,11 +54,10 @@ if (isset($options["revision"])) {
     }
 } else {
     // otherwise, just iterate over all files in dir
-    $file_iterator = new XRef_FileIterator( ($arguments) ? $arguments : '.' );
-    if (isset($options["exclude"])) {
-        $file_iterator->excludePath($options["exclude"]);
-    }
-    $project_lint->addFiles($file_iterator);
+    $paths = ($arguments) ? $arguments : '.';
+    $exclude_paths = (isset($options["exclude"])) ? $options["exclude"] : null;
+    $file_provider = new XRef_FileProvider_FileSystem( $paths, $exclude_paths  );
+    $project_lint->addFiles($file_provider);
     $project_lint->addLibraryFiles($library_files);
     $report = $project_lint->getErrors();
 }

@@ -29,7 +29,7 @@ $formattedText = null;
 if (isset($_REQUEST["source"])) {
     $source = (get_magic_quotes_gpc()) ? stripslashes($_REQUEST["source"]) : $_REQUEST["source"];
     try {
-        $parsedFile = $xref->getParsedFile("unknown.php", "php", $source);
+        $parsedFile = $xref->getParsedFile("unknown.php", $source);
         if (count($parsedFile->getTokens()) > 1) {
             $report = $xref->getLintReport($parsedFile);
             $formattedText = $sourcePlugin->getFormattedText($parsedFile, "");

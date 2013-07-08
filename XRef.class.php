@@ -262,14 +262,14 @@ class XRef {
      * TODO: made fileType optional param - take it from filename
      *
      * @param string $filename
-     * @param enum $fileType
      * @param string $content
      * @return XRef_IParsedFile
      */
-    public function getParsedFile($filename, $fileType, $content = null) {
-        $parser = $this->parsers[$fileType];
+    public function getParsedFile($filename, $content = null) {
+        $file_type = strtolower( pathinfo($filename, PATHINFO_EXTENSION) );
+        $parser = $this->parsers[$file_type];
         if (!$parser) {
-            throw new Exception("No parser is registered for filetype $fileType ($filename)");
+            throw new Exception("No parser is registered for filetype $file_type ($filename)");
         }
         if ($content==null) {
             $content = file_get_contents($filename);

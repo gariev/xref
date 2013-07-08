@@ -29,7 +29,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
     protected function checkProject($files, $expectedDefectsList) {
         $this->project_check->clearProject();
         foreach ($files as $file_name => $file_content) {
-            $pf = $this->xref->getParsedFile($file_name, "php", $file_content);
+            $pf = $this->xref->getParsedFile($file_name, $file_content);
             $this->project_check->addFile($pf);
             $pf->release();
         }
