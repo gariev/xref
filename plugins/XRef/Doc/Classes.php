@@ -8,9 +8,10 @@
  * @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  */
 
-// PHP 5.2 - there are no nested classes or namepsaces, names are long and ugly :(
+// PHP 5.2 - there are no nested classes or namespaces, names are long and ugly :(
 class XRef_Plugin_Classes_Class {
-    public $name;
+    public $name;                       // fully qualified name e.g. Foo\Bar\MyClassName
+    public $id;                         // class id, lowercase of the the class name
     public $extends         = array();  // list(?) of class names
     public $implements      = array();  // list of interfaces names
     public $inheritedBy     = array();
@@ -35,12 +36,14 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
 
     /** @return XRef_Plugin_Classes_Class */
     protected function getOrCreate($className) {
-        $lc_name = strtolower($className);
-        if (!array_key_exists($lc_name, $this->classes)) {
-            $this->classes[$lc_name] = new XRef_Plugin_Classes_Class();
-            $this->classes[$lc_name]->name = $className;
+        $id = strtolower($className);
+        if (!array_key_exists($id, $this->classes)) {
+            $c = new XRef_Plugin_Classes_Class();
+            $c->name = $className;
+            $c->id = $id;
+            $this->classes[$id] = $c;
         }
-        return $this->classes[$lc_name];
+        return $this->classes[$id];
     }
 
     public function generateFileReport(XRef_IParsedFile $pf) {
@@ -57,7 +60,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
             $c->definedAt[] = $definedAt;
 
             // link from source file HTML page to report page "reportId/objectId"
-            $this->xref->addSourceFileLink($definedAt, $this->reportId, $pfc->name, true);
+            $this->xref->addSourceFileLink($definedAt, $this->reportId, $c->id);
 
             // extended classes/interfaces
             foreach ($pfc->extends as $ext_name) {
@@ -70,7 +73,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                 $ext_class->usedAt[] = $filePos;
 
                 // link from source file HTML page to report page "reportId/objectId"
-                $this->xref->addSourceFileLink($filePos, $this->reportId, $ext_name, true);
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $ext_class->id);
             }
 
             // extended classes/interfaces
@@ -84,7 +87,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                 $imp_class->usedAt[] = $filePos;
 
                 // link from source file HTML page to report page "reportId/objectId"
-                $this->xref->addSourceFileLink($filePos, $this->reportId, $imp_name, true);
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $imp_class->id);
             }
         } // foreach declared class
 
@@ -114,7 +117,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                 $new->instantiatedAt[] = $filePos;
 
                 // link from source file HTML page to report page "reportId/objectId"
-                $this->xref->addSourceFileLink($filePos, $this->reportId, $name, true);
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $new->id);
                 continue;
             } // T_NEW
 
@@ -155,7 +158,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                     $c = $this->getOrCreate($className);
                     $filePos = new XRef_FilePosition($pf, $p->index);
                     $c->usedAt[] = $filePos;
-                    $this->xref->addSourceFileLink($filePos, $this->reportId, $p->text, true);
+                    $this->xref->addSourceFileLink($filePos, $this->reportId, $c->id);
                 } else {
                     error_log("Unexpected token $t->text at " . $pf->getFileName() . ":$t->lineNumber");
                 }
@@ -170,7 +173,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                     $c = $this->getOrCreate($className);
                     $filePos = new XRef_FilePosition($pf, $n->index);
                     $c->usedAt[] = $filePos;
-                    $this->xref->addSourceFileLink($filePos, $this->reportId, $className, true);
+                    $this->xref->addSourceFileLink($filePos, $this->reportId, $c->id);
                 }
             }
 
@@ -189,7 +192,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                 $c = $this->getOrCreate($className);
                 $filePos = new XRef_FilePosition($pf, $n->index);
                 $c->usedAt[] = $filePos;
-                $this->xref->addSourceFileLink($filePos, $this->reportId, $className, true);
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $c->id);
             }
 
         } // foreach $token
@@ -197,8 +200,8 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
 
     public function generateTotalReport() {
 
-        $names = array_keys($this->classes);
-        sort($names);
+        $ids = array_keys($this->classes);
+        sort($ids);
 
         // index page
         list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, null);
@@ -209,7 +212,7 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                     'reportName' => $this->getName(),
                     'reportId'   => $this->getId(),
                     'root'       => $root,
-                    'names'      => $names,
+                    'names'      => $ids,
                     'objects'    => $this->classes,
                 )
             )
@@ -217,14 +220,14 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
         fclose($fh);
 
         // page for each class
-        foreach ($names as $name) {
-            $c = $this->classes[$name];
+        foreach ($ids as $id) {
+            $c = $this->classes[$id];
 
             sort($c->extends);
             sort($c->implements);
             sort($c->inheritedBy);
 
-            list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, $name);
+            list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, $id);
             fwrite($fh,
                 $this->xref->fillTemplate(
                     'doc-class-report.tmpl',

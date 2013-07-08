@@ -7,7 +7,7 @@
 
 
 class XRef_Plugin_Properties_Property {
-    public $name;
+    public $name;           // property name, e.g. 'name' without '$' sign or class name
     public $declaredAt      = array();  // public $bar;
     public $usedAt          = array();  // XRef_FilePosition -- $foo->bar
 }

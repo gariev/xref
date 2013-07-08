@@ -13,8 +13,8 @@ class TestParsers extends PHPUnit_Framework_TestCase {
      }
 
     public function testBasicUsage() {
-        $testPhpCode = '
-            <?php
+        $testPhpCode = '<?php
+
             class Foo {
                 public function bar() {
                     return 42;
@@ -41,8 +41,8 @@ class TestParsers extends PHPUnit_Framework_TestCase {
         $this->assertTrue(defined("T_USE"), "T_USE");
 
         $testPhpCode =
-        '
-            <?php
+        '<?php
+
             namespace foo\bar;
             function foo ($x) {
                 $bar = function ($y) use ($x) { return $x*$y; }
@@ -108,8 +108,8 @@ class TestParsers extends PHPUnit_Framework_TestCase {
         // correctly parse namespaces and traits statements, even in compat mode
         //
         $testPhpCode =
-        '
-            <?php
+        '<?php
+
             namespace foo;
             trait Foo { }
         ';
@@ -134,8 +134,8 @@ class TestParsers extends PHPUnit_Framework_TestCase {
         // namespaces and traits are not reserved word!
         //
         $testPhpCode =
-        '
-            <?php
+        '<?php
+
             class Foo {
                 public function bar() {
                     echo $this->namespace;

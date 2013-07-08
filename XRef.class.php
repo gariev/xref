@@ -425,12 +425,9 @@ class XRef {
     //  $linkDatabase[ $filename ][ endTokenIndex ]     = 0;
     protected $linkDatabase = array();
 
-    public function addSourceFileLink(XRef_FilePosition $fp, $reportName, $reportObjectId, $caseInsensitive=false) {
+    public function addSourceFileLink(XRef_FilePosition $fp, $reportName, $reportObjectId) {
         if (!array_key_exists($fp->fileName, $this->linkDatabase)) {
             $this->linkDatabase[$fp->fileName] = array();
-        }
-        if ($caseInsensitive) {
-            $reportObjectId = strtolower($reportObjectId);
         }
         // TODO: this is ugly, rewrite this data structure
         // current syntax:
@@ -524,28 +521,31 @@ class XRef {
         $report = array();
         foreach ($plugins as $pluginId => $plugin) {
             $found_defects = $plugin->getReport($pf);
-            foreach ($found_defects as $d) {
-                list($token, $error_code) = $d;
+            if ($found_defects) {
+                foreach ($found_defects as $d) {
+                    list($token, $error_code) = $d;
 
-                if (isset($this->lintIgnoredErrors[ $error_code ])) {
-                    continue;
-                }
+                    if (isset($this->lintIgnoredErrors[ $error_code ])) {
+                        continue;
+                    }
 
-                if (! isset($this->lintErrorMap[$error_code])) {
-                    error_log("No descriptions for error code '$error_code'");
-                    continue;
-                }
+                    if (! isset($this->lintErrorMap[$error_code])) {
+                        error_log("No descriptions for error code '$error_code'");
+                        continue;
+                    }
 
-                $description = $this->lintErrorMap[ $error_code ];
-                if (! isset($description["severity"]) || ! isset($description["message"])) {
-                    error_log("Invalid description for error code '$error_code'");
-                    continue;
-                }
+                    $description = $this->lintErrorMap[ $error_code ];
+                    if (! isset($description["severity"]) || ! isset($description["message"])) {
+                        error_log("Invalid description for error code '$error_code'");
+                        continue;
+                    }
 
-                if ($description["severity"] < $this->lintReportLevel) {
-                    continue;
+                    if ($description["severity"] < $this->lintReportLevel) {
+                        continue;
+                    }
+
+                    $report[] = XRef_CodeDefect::fromToken($token, $error_code, $description["severity"], $description["message"]);
                 }
-                $report[] = XRef_CodeDefect::fromToken($token, $error_code, $description["severity"], $description["message"]);
             }
         }
 
@@ -651,6 +651,7 @@ class XRef {
                 'XRef_Lint_UninitializedVars',
                 'XRef_Lint_LowerCaseLiterals',
                 'XRef_Lint_StaticThis',
+                'XRef_Lint_ClosingTag',
                 'XRef_Doc_LintReport',          // this plugin creates a documentation page with list of errors found by 3 lint plugins above
              ),
 
@@ -662,6 +663,7 @@ class XRef {
                 'XRef_Lint_LowerCaseLiterals',
                 'XRef_Lint_StaticThis',
                 'XRef_Lint_AssignmentInCondition',
+                'XRef_Lint_ClosingTag',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
             ),
             'lint.ignore-error'       => array(),

@@ -7,7 +7,8 @@
 
 
 class XRef_Plugin_Constants_Constant {
-    public $name;
+    public $name;                       // Fully-qualified name, e.g. Foo\Bar::Baz
+    public $id;                         // e.g. foo\bar::Baz
     public $declaredAt      = array();  // public $bar;
     public $usedAt          = array();  // XRef_FilePosition -- $foo->bar
 }
@@ -19,15 +20,21 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
         parent::__construct("php-constants", "List of PHP class constants");
     }
 
-    // map: const name ("class::const") --> XRef_Plugin_Constants_Constant object
+    // map: const id ("class::ConstName") --> XRef_Plugin_Constants_Constant object
     protected $constants = array();
 
     protected function getOrCreate($constName) {
-        if (!array_key_exists($constName, $this->constants)) {
-            $this->constants[$constName] = new XRef_Plugin_Constants_Constant();
-            $this->constants[$constName]->name = $constName;
+
+        $parts = preg_split('#::#', $constName, 2);
+        $id = (count($parts)>1) ? strtolower($parts[0]) . '::' . $parts[1] : $constName;
+
+        if (!array_key_exists($id, $this->constants)) {
+            $c = new XRef_Plugin_Constants_Constant();
+            $c->name = $constName;
+            $c->id = $id;
+            $this->constants[$id] = $c;
         }
-        return $this->constants[$constName];
+        return $this->constants[$id];
     }
 
     public function generateFileReport(XRef_IParsedFile $pf) {
@@ -56,7 +63,7 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
                 $c->declaredAt[] = $filePos;
 
                 // link from source file HTML page to report page "reportId/objectId"
-                $this->xref->addSourceFileLink($filePos, $this->reportId, $name);
+                $this->xref->addSourceFileLink($filePos, $this->reportId, $c->id);
             }
 
             // Const used:
@@ -96,7 +103,7 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
                     $c->usedAt[] = $filePos;
 
                     // link from source file HTML page to report page "reportId/objectId"
-                    $this->xref->addSourceFileLink($filePos, $this->reportId, $name);
+                    $this->xref->addSourceFileLink($filePos, $this->reportId, $c->id);
 
                 }
             }
@@ -106,9 +113,9 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
 
     public function generateTotalReport() {
 
-        $names = array_keys($this->constants);
-        sort($names);
-        $count = count($names);
+        $ids = array_keys($this->constants);
+        sort($ids);
+        $count = count($ids);
 
         // index page
         list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, null);
@@ -119,7 +126,7 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
                     'reportName' => $this->getName(),
                     'reportId'   => $this->getId(),
                     'root'       => $root,
-                    'names'      => $names,
+                    'names'      => $ids,
                     'objects'    => $this->constants,
                 )
             )
@@ -127,10 +134,10 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
         fclose($fh);
 
         // page for each constant
-        foreach ($names as $name) {
-            $c = $this->constants[$name];
+        foreach ($ids as $id) {
+            $c = $this->constants[$id];
 
-            list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, $name);
+            list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, $id);
             fwrite($fh,
                 $this->xref->fillTemplate(
                     'doc-constant-report.tmpl',

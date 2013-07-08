@@ -5,8 +5,8 @@ require_once dirname(__FILE__) . "/BaseLintTest.php";
 class AssignmentInConditionTest extends BaseLintTest {
 
     public function testClassConstants() {
-        $testPhpCode = '
-        <?php
+        $testPhpCode = '<?php
+
             $foo = 1; $bar = 2; $baz = 3; $a = 4; $b = 5;
 
             if ($foo = null) ;              // warning

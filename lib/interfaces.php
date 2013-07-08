@@ -220,7 +220,7 @@ class XRef_CodeDefect {
     public static function fromToken($token, $errorCode, $severity, $message) {
         $filePos = new XRef_FilePosition($token->parsedFile, $token->index);
         $codeDefect = new XRef_CodeDefect();
-        $codeDefect->tokenText    = $token->text;
+        $codeDefect->tokenText    = preg_replace_callback('#[^\\x20-\\x7f]#', array('self', 'chr_replace'), $token->text);
         $codeDefect->errorCode    = $errorCode;
         $codeDefect->severity     = $severity;
         $codeDefect->message      = $message;
@@ -229,6 +229,10 @@ class XRef_CodeDefect {
         $codeDefect->inClass      = $filePos->inClass;
         $codeDefect->inMethod     = $filePos->inMethod;
         return $codeDefect;
+    }
+
+    private static function chr_replace($matches) {
+        return '\\x' . sprintf('%02x', ord($matches[0]));
     }
 }
 
@@ -439,7 +443,7 @@ class XRef_Class {
 class XRef_Function {
     /** @var int - index of T_FUNCTION token */
     public $index;
-    /** @var string - FQ name for functions, e.g 'My\Namespace\foo', null for closures */
+    /** @var string - FQ name for functions, e.g 'My\Namespace\foo', simple name for class methods, null for closures */
     public $name;
     /** @var int - index of the token with the function name */
     public $nameIndex;
