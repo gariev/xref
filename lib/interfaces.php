@@ -391,6 +391,7 @@ interface XRef_ISourceCodeManager {
     public function getListOfModifiedFiles($revision1, $revision2); // returns array("filename1", "filename2", ...)
     public function getFileContent($revision, $filename);           // returns the content of given file in the given revision
     public function getRevisionInfo($revision);                     // SCM-specific, returns key-value array with info for the given commit
+    public function getFileProvider($revision);
 }
 
 class XRef_Namespace {

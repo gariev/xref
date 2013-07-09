@@ -105,6 +105,10 @@ class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
         return $commitInfo;
     }
 
+    public function getFileProvider($revision) {
+        return new XRef_FileProvider_Git($this, $revision);
+    }
+
     /**
      * Internal wrapper to run git executable, returns git output
      * Warning: extra spaces/newlines at command output are trimmed

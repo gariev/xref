@@ -15,15 +15,15 @@ XRef::registerCmdOption("y:", "other=", "", "");
 XRef::registerCmdOption("e:", "exclude=", "", "", true);
 XRef::registerCmdOption("l:", "library=", "", "", true);
 
+XRef::setConfigValue("xref.storage-manager", "XRef_Storage_File");
+XRef::setConfigValue("xref.data-dir", ".xref");
+XRef::setConfigValue("git.repository-dir", ".");
+XRef::setConfigValue("ci.source-code-manager", "XRef_SourceCodeManager_Git");
+
 $xref = new XRef();
 $xref->addParser( new XRef_Parser_PHP() );
 $project_lint = new ProjectLintPrototype();
 $project_lint->setXRef($xref);
-
-XRef::setConfigValue("xref.storage-manager", "XRef_Storage_File");
-XRef::setConfigValue("xref.data-dir", ".");
-XRef::setConfigValue("git.repository-dir", ".");
-XRef::setConfigValue("ci.source-code-manager", "XRef_SourceCodeManager_Git");
 list($options, $arguments) = XRef::getCmdOptions();
 
 $report = null;
@@ -33,33 +33,37 @@ if (isset($options['library'])) {
 }
 
 if (isset($options["revision"])) {
+
     // if we got git revision, try to load the project state
     // of this revision and save it for future use
     $revision = $options["revision"];
-    $project_lint->loadOrCreateProject($revision);
-    $project_lint->saveProject($revision);
-    $project_lint->addLibraryFiles($library_files);
+    $source_code_manager = $xref->getSourceCodeManager();
+    $file_provider = $source_code_manager->getFileProvider($revision);
+    $project_database = new XRef_ProjectDatabase_Persistent($revision, $xref, $file_provider);
+    $project_database->save($revision);
+    $errors = $project_lint->getErrors( $project_database );
+    $project_database->clear();
 
-    $errors = $project_lint->getErrors();
     if (isset($options["other"])) {
         // compare 2 repository versions
         $other_revision = $options["other"];
-        $project_lint->loadOrCreateProject($other_revision);
-        $project_lint->saveProject($other_revision);
-        $project_lint->addLibraryFiles($library_files);
-        $other_errors = $project_lint->getErrors();
+        $file_provider = $source_code_manager->getFileProvider($other_revision);
+        $project_database = new XRef_ProjectDatabase_Persistent($other_revision, $xref, $file_provider);
+        $project_database->save($other_revision);
+        $other_errors = $project_lint->getErrors( $project_database );
         $report = XRef_getNewProjectErrors($errors, $other_errors);
     } else {
         $report = $errors;
     }
+
 } else {
     // otherwise, just iterate over all files in dir
     $paths = ($arguments) ? $arguments : '.';
     $exclude_paths = (isset($options["exclude"])) ? $options["exclude"] : null;
     $file_provider = new XRef_FileProvider_FileSystem( $paths, $exclude_paths  );
-    $project_lint->addFiles($file_provider);
-    $project_lint->addLibraryFiles($library_files);
-    $report = $project_lint->getErrors();
+    $project_database = new XRef_ProjectDatabase_Persistent(null, $xref, $file_provider);
+    //$project_database->addLibraryFiles($library_files);
+    $report = $project_lint->getErrors( $project_database );
 }
 
 $colorMap = array(

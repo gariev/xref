@@ -1,182 +1,50 @@
 <?php
 
-//TODO: separate storage/update/initialization logic and error-finding logic in 2 classes (?)
 
-class ProjectLintPrototype extends XRef_APlugin {
-
+class XRef_ProjectDatabase {
     /** map: file name --> array with classes, consts, method etc that this file provides */
-    private $provides = array( );
+    public $provides = array( );
 
     /** map: file name --> array with used constructs */
-    private $uses = array();
+    public $uses = array();
 
-    /** map: class name -> array with all classes of this name */
-    private $classes = array();
-
-    /** map: file name --> sha1 sum of the file content */
-    private $projectFiles = array();
-
-    /** list of file names for files we've had to parse */
-    private $filesToSave = array();
-
-    private $projectName;
-
-    private $internalClasses = null;
+    private static $internalClasses = null;
 
     public function __construct() {
-        parent::__construct("project-check", "Cross-reference integrity check");
         $this->addInternalClasses();
     }
 
-    public function clearProject() {
+    public function clear() {
         $this->provides = array();
         $this->uses = array();
-        $this->addInternalClasses();
     }
 
-    public function loadOrCreateProject($revision) {
-        $this->clearProject();
-        $storage_manager = $this->xref->getStorageManager();
-        $source_code_manager = $this->xref->getSourceCodeManager();
-
-        // get the list of files for this project
-        $this->projectFiles = $storage_manager->restoreData("project-check", $revision);
-        if (is_null($this->projectFiles)) {
-            $this->projectFiles = array();
-            $filenames = $source_code_manager->getListOfFiles($revision);
-            foreach ($filenames as $filename) {
-                if (!preg_match("#\\.php\$#", $filename)) {
-                    continue;
-                }
-                $this->projectFiles[ $filename ] = null;    // temporary, see 'updateFile' below
-            }
-        }
-
-        // load the parsed data for each file,
-        // or parse file if the data is missing
-        $files_to_load = array();
-        foreach ($this->projectFiles as $filename => $shasum) {
-            if (!$shasum || !$this->loadFile($filename, $shasum)) {
-                $files_to_load[] = $filename;
-            }
-        }
-        foreach ($files_to_load as $filename) {
-            $this->updateFile($revision, $filename);
-        }
-    }
-
-    private function loadFile($filename, $shasum) {
-        if (!$shasum) {
-            return false;
-        }
-        $storage_manager = $this->xref->getStorageManager();
-        $data = $storage_manager->restoreData("project-files", $shasum);
-        if ($data && isset($data["xrefVersion"]) && $data["xrefVersion"] == XRef::version()) {
-            if ($data["provides"]) {
-                $this->provides[ $filename ] = $data["provides"];
-            }
-            if ($data["uses"]) {
-                $this->uses[ $filename ] = $data["uses"];
-            }
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    public function updateFile($new_revision, $filename) {
-        $source_code_manager = $this->xref->getSourceCodeManager();
-        $content = $source_code_manager->getFileContent($new_revision, $filename);
-        if (!$content) {
-            unset($this->projectFiles[$filename]);
-            unset($this->provides[$filename]);
-            unset($this->uses[$filename]);
-        } else {
-            $shasum = sha1($content);
-            $this->projectFiles[$filename] = $shasum;
-            if (!$this->loadFile($filename, $shasum)) {
-                try {
-                    $pf = $this->xref->getParsedFile($filename, $content);
-                    $this->addFile($pf);
-                    $pf->release();
-                } catch (Exception $e) {
-                    error_log($e->getMessage());
-                }
-                $data = array(
-                    "filename"      => $filename,
-                    "version"       => $new_revision,
-                    "xrefVersion"   => XRef::version(),
-                    "provides"      => isset($this->provides[$filename])    ? $this->provides[$filename]    : null,
-                    "uses"          => isset($this->uses[$filename])        ? $this->uses[$filename]        : null,
-                );
-                $storage_manager = $this->xref->getStorageManager();
-                $storage_manager->saveData("project-files", $shasum, $data);
-            }
-        }
-    }
-
-    public function saveProject($revision) {
-        $storage_manager = $this->xref->getStorageManager();
-        $storage_manager->saveData("project-check", $revision, $this->projectFiles);
-    }
-
-    public function addFile(XRef_IParsedFile $pf) {
+    public function addParsedFile(XRef_IParsedFile $pf, $isLibraryFile = false) {
         $file_name = $pf->getFileName();
         $this->provides[$file_name] = $pf->getClasses();
-        $this->uses[$file_name] = $this->collectUsedConstructs($pf);
-    }
-
-    public function addFiles(XRef_IFileProvider $file_provider) {
-        foreach ($file_provider->getFiles() as $filename) {
-            try {
-                $pf = $this->xref->getParsedFile($filename);
-                $this->addFile($pf);
-                $pf->release(); // help PHP garbage collector to free memory
-            } catch(Exception $e) {
-                error_log("Can't process file '$filename': " . $e->getMessage() . "\n" . $e->getLine() . "\n");
-            }
-        }
-    }
-
-    public function addLibraryFile(XRef_IParsedFile $pf) {
-        $file_name = $pf->getFileName();
-        $this->provides[$file_name] = $pf->getClasses();
-        $this->uses[$file_name] = array();
-    }
-
-    public function addLibraryFiles(XRef_IFileProvider $file_provider = null) {
-        if ($file_provider) {
-            foreach ($file_provider->getFiles() as $filename) {
-                try {
-                    $pf = $this->xref->getParsedFile($filename);
-                    $this->addLibraryFile($pf);
-                    $pf->release(); // help PHP garbage collector to free memory
-                } catch(Exception $e) {
-                    error_log("Can't process file '$filename': " . $e->getMessage() . "\n" . $e->getLine() . "\n");
-                }
-            }
+        if (!$isLibraryFile) {
+            $this->uses[$file_name] = $this->collectUsedConstructs($pf);
         }
     }
 
     private function addInternalClasses() {
-        if (! $this->internalClasses) {
-            $this->internalClasses = array();
+        if (! self::$internalClasses) {
+            self::$internalClasses = array();
             foreach (get_declared_classes() as $class_name) {
                 $rc = new ReflectionClass($class_name);
                 if ($rc->isInternal()) {
-                    $this->internalClasses[] = $this->getClass($rc);
+                    self::$internalClasses[] = $this->getClass($rc);
                 }
             }
             foreach (get_declared_interfaces() as $class_name) {
                 $rc = new ReflectionClass($class_name);
                 if ($rc->isInternal()) {
-                    $this->internalClasses[] = $this->getClass($rc);
+                    self::$internalClasses[] = $this->getClass($rc);
                 }
             }
         }
-        $this->provides["<internal>"] = $this->internalClasses;
+        $this->provides["<internal>"] = self::$internalClasses;
     }
-
 
     private function getClass(ReflectionClass $rc) {
         $class_name = $rc->getName();
@@ -248,7 +116,6 @@ class ProjectLintPrototype extends XRef_APlugin {
         return $p;
     }
 
-
     private function getAttributes($r, $isMethod = false) {
         $attributes = 0;
         if ($r->isPrivate()) {
@@ -272,13 +139,233 @@ class ProjectLintPrototype extends XRef_APlugin {
         return $attributes;
     }
 
-    public function getErrors() {
+    // report each used construct only once
+    private $already_seen = array();
+    // className, kind (method|property|const), name
+    private $used = array();
+
+    private function addUsedConstruct($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only) {
+        $uniq_key = "$class_name##$key##$name##$from_class##$is_static";
+        if (!isset($this->already_seen[$uniq_key])) {
+            $this->already_seen[$uniq_key] = true;
+            $this->used[] = array($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only);
+        }
+    }
+
+    private function collectUsedConstructs(XRef_IParsedFile $pf) {
+        $this->used = array();
+        $this->already_seen = array();
+
+        $tokens = $pf->getTokens();
+        for ($i=0; $i<count($tokens); ++$i) {
+            $t = $tokens[$i];
+
+            // $this->foo();
+            // $this->bar;
+            if ($t->text == '$this') {
+                $n = $t->nextNS();
+                if ($n->text == '->') {
+                    $n = $n->nextNS();
+                    if ($n->kind == T_STRING) {
+                        $name = $n->text;
+                        $n = $n->nextNS();
+                        $class = $pf->getClassAt( $t->index );
+                        if (!$class) {
+                            continue;
+                        }
+                        $class_name = $class->name;
+                        $key = ($n->text == '(') ? 'method' : 'property';
+                        $this->addUsedConstruct($class_name, $key, $name, $t->lineNumber, $class_name, false, false);
+                    }
+                }
+                continue;
+            }
+
+            // Foo::bar();
+            if ($t->kind == T_STRING) {
+                $n = $t->nextNS();
+                if ($n->kind == T_DOUBLE_COLON) {
+
+                    // TODO: parent:: class, static::, etc
+                    $class_name = $t->text;
+                    $from_class = $pf->getClassAt( $t->index );
+                    $from_method = $pf->getMethodAt( $t->index );
+
+                    $from_class_name = ($from_class) ? $from_class->name : '';
+                    $is_static_context = true;
+                    $check_parent_only = false;
+                    if ($class_name == 'self') {
+                        $class_name = $from_class_name;
+                    } elseif ($class_name == 'static') {
+                        $class_name = $from_class_name;
+                        $is_static_context = !$from_class || !$from_method || XRef::isStatic($from_method->attributes);
+                    } elseif ($class_name == 'parent') {
+                        $class_name = $from_class_name;
+                        $is_static_context = !$from_class || !$from_method || XRef::isStatic($from_method->attributes);
+                        $check_parent_only = true;
+                    }
+
+                    $n = $n->nextNS();
+                    if ($n->kind == T_STRING) {
+                        $nn = $n->nextNS();
+                        if ($nn->text == '(') {
+                            // Foo::bar()
+                            $this->addUsedConstruct($class_name, 'method', $n->text, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
+                        } else {
+                            // Foo:BAR - constant?
+                            $const_name = $n->text;
+                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
+                        }
+                    } elseif ($n->kind == T_VARIABLE) {
+                        // Foo::$bar
+                        $property_name = substr($n->text, 1);   // skip '$' sign
+                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
+                    } else {
+                        error_log($n);
+                    }
+                    continue;
+                }
+            }
+        }
+        return $this->used;
+    }
+
+}
+
+class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
+
+    /** map: file name --> sha1 sum of the file content */
+    private $projectFiles = array();
+
+    /** @var XRef_IPersistentStorage */
+    private $storageManager;
+
+    /** @var XRef */
+    private $xref;
+
+    /** @var XRef_IFileProvider */
+    private $fileProvider;
+
+    public function __construct($projectName, XRef $xref, XRef_IFileProvider $fileProvider) {
+        parent::__construct();
+        $this->xref = $xref;
+        $this->storageManager = $xref->getStorageManager();
+        $this->fileProvider = $fileProvider;
+
+        if ($projectName) {
+            $this->projectFiles = $this->storageManager->restoreData("project-check", $projectName);
+        }
+
+        if (! $this->projectFiles) {
+            $this->projectFiles = array();
+            foreach ($this->fileProvider->getFiles() as $filename) {
+                $this->projectFiles[ $filename ] = null;    // temporary, see 'updateFile' below
+            }
+        }
+
+        // load the parsed data for each file,
+        // or parse file if the data is missing
+        $files_to_load = array();
+        foreach ($this->projectFiles as $filename => $shasum) {
+            if (!$shasum || !$this->loadFile($filename, $shasum, false)) {
+                $files_to_load[] = $filename;
+            }
+        }
+        foreach ($files_to_load as $filename) {
+            $this->updateFile($filename, false);
+        }
+    }
+
+    public function clear() {
+        $this->projectFiles = array();
+        parent::clear();
+    }
+
+    // TODO: don't rely on provided list_of_files
+    public function update(XRef_IFileProvider $newProvider, $list_of_files) {
+        $this->fileProvider = $newProvider;
+        foreach ($list_of_files as $filename) {
+            // TODO! hardcoded php extension
+            if (preg_match("#\\.php\$#", $filename)) {
+                $this->updateFile($filename, false);
+            }
+        }
+    }
+
+    public function save($projectName) {
+        $this->storageManager->saveData("project-check", $projectName, $this->projectFiles);
+    }
+
+    private function updateFile($filename, $isLibraryFile) {
+        $content = $this->fileProvider->getFileContent($filename);
+        if (!$content) {
+            unset($this->projectFiles[$filename]);
+            unset($this->provides[$filename]);
+            unset($this->uses[$filename]);
+        } else {
+            $shasum = sha1($content);
+            $this->projectFiles[$filename] = $shasum;
+            if (!$this->loadFile($filename, $shasum, $isLibraryFile)) {
+                try {
+                    $pf = $this->xref->getParsedFile($filename, $content);
+                    $this->addParsedFile($pf);
+                    $pf->release();
+                } catch (Exception $e) {
+                    error_log($e->getMessage());
+                }
+                $this->saveFile($filename, $shasum, $isLibraryFile);
+            }
+        }
+    }
+
+    private function loadFile($filename, $shasum, $isLibraryFile) {
+        if (!$shasum) {
+            return false;
+        }
+        $key = ($isLibraryFile) ? "library-files" : "project-files";
+        $data = $this->storageManager->restoreData($key, $shasum);
+        if ($data && isset($data["xrefVersion"]) && $data["xrefVersion"] == XRef::version()) {
+            if ($data["provides"]) {
+                $this->provides[ $filename ] = $data["provides"];
+            }
+            if ($data["uses"]) {
+                $this->uses[ $filename ] = $data["uses"];
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private function saveFile($filename, $shasum, $isLibraryFile) {
+        $key = ($isLibraryFile) ? "library-files" : "project-files";
+        $data = array(
+            "filename"      => $filename,
+            "xrefVersion"   => XRef::version(),
+            "provides"      => isset($this->provides[$filename])    ? $this->provides[$filename]    : null,
+            "uses"          => isset($this->uses[$filename])        ? $this->uses[$filename]        : null,
+        );
+        $this->storageManager->saveData($key, $shasum, $data);
+    }
+}
+
+class ProjectLintPrototype extends XRef_APlugin {
+
+    /** @var array - map: (class name -> array of all definition of this class) */
+    private $classes = null;
+
+    public function __construct() {
+        parent::__construct("project-check", "Cross-reference integrity check");
+    }
+
+
+    public function getErrors(XRef_ProjectDatabase $pd) {
         $this->classes = array();
         $errors = array(); // map: fileName --> array of XRef_CodeDefect objects
         $seen_errors = array();
 
         $class_defined_in_file = array();
-        foreach ($this->provides as $file_name => $list_of_classes) {
+        foreach ($pd->provides as $file_name => $list_of_classes) {
             foreach ($list_of_classes as $class) {
                 $class_name = strtolower($class->name);
                 $this->classes[$class_name][] = $class;
@@ -304,7 +391,7 @@ class ProjectLintPrototype extends XRef_APlugin {
         // TODO
 
         // are there references to missed methods/properties?
-        foreach ($this->uses as $file_name => $usage_list) {
+        foreach ($pd->uses as $file_name => $usage_list) {
             foreach ($usage_list as $u) {
                 list($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only) = $u;
                 $e = $this->checkAccessError($class_name, $key, $name, $from_class, $is_static, $check_parent_only);
@@ -521,96 +608,6 @@ class ProjectLintPrototype extends XRef_APlugin {
         return array(null, null);
     }
 
-    // report each used construct only once
-    private $already_seen = array();
-    // className, kind (method|property|const), name
-    private $used = array();
-
-    private function addUsedConstruct($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only) {
-        $uniq_key = "$class_name##$key##$name##$from_class##$is_static";
-        if (!isset($this->already_seen[$uniq_key])) {
-            $this->already_seen[$uniq_key] = true;
-            $this->used[] = array($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only);
-        }
-    }
-
-    private function collectUsedConstructs(XRef_IParsedFile $pf) {
-        $this->used = array();
-        $this->already_seen = array();
-
-        $tokens = $pf->getTokens();
-        for ($i=0; $i<count($tokens); ++$i) {
-            $t = $tokens[$i];
-
-            // $this->foo();
-            // $this->bar;
-            if ($t->text == '$this') {
-                $n = $t->nextNS();
-                if ($n->text == '->') {
-                    $n = $n->nextNS();
-                    if ($n->kind == T_STRING) {
-                        $name = $n->text;
-                        $n = $n->nextNS();
-                        $class = $pf->getClassAt( $t->index );
-                        if (!$class) {
-                            continue;
-                        }
-                        $class_name = $class->name;
-                        $key = ($n->text == '(') ? 'method' : 'property';
-                        $this->addUsedConstruct($class_name, $key, $name, $t->lineNumber, $class_name, false, false);
-                    }
-                }
-                continue;
-            }
-
-            // Foo::bar();
-            if ($t->kind == T_STRING) {
-                $n = $t->nextNS();
-                if ($n->kind == T_DOUBLE_COLON) {
-
-                    // TODO: parent:: class, static::, etc
-                    $class_name = $t->text;
-                    $from_class = $pf->getClassAt( $t->index );
-                    $from_method = $pf->getMethodAt( $t->index );
-
-                    $from_class_name = ($from_class) ? $from_class->name : '';
-                    $is_static_context = true;
-                    $check_parent_only = false;
-                    if ($class_name == 'self') {
-                        $class_name = $from_class_name;
-                    } elseif ($class_name == 'static') {
-                        $class_name = $from_class_name;
-                        $is_static_context = !$from_class || !$from_method || XRef::isStatic($from_method->attributes);
-                    } elseif ($class_name == 'parent') {
-                        $class_name = $from_class_name;
-                        $is_static_context = !$from_class || !$from_method || XRef::isStatic($from_method->attributes);
-                        $check_parent_only = true;
-                    }
-
-                    $n = $n->nextNS();
-                    if ($n->kind == T_STRING) {
-                        $nn = $n->nextNS();
-                        if ($nn->text == '(') {
-                            // Foo::bar()
-                            $this->addUsedConstruct($class_name, 'method', $n->text, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
-                        } else {
-                            // Foo:BAR - constant?
-                            $const_name = $n->text;
-                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
-                        }
-                    } elseif ($n->kind == T_VARIABLE) {
-                        // Foo::$bar
-                        $property_name = substr($n->text, 1);   // skip '$' sign
-                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
-                    } else {
-                        error_log($n);
-                    }
-                    continue;
-                }
-            }
-        }
-        return $this->used;
-    }
 }
 
 

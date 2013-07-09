@@ -142,16 +142,17 @@ foreach ($branches as $branchName => $currentRev) {
     $projectErrors = array();
     $project_lint = new ProjectLintPrototype();
     $project_lint->setXRef($xref);
-    $project_lint->loadOrCreateProject($oldRev);
-    $old_errors = $project_lint->getErrors();
-    foreach ($listOfFiles as $file) {
-        if (!preg_match("#\\.php\$#", $file)) {
-            continue;
-        }
-        $project_lint->updateFile($currentRev, $file);
-    }
-    $current_errors = $project_lint->getErrors();
-    $project_lint->saveProject($currentRev);
+
+    $file_provider = $scm->getFileProvider($oldRev);
+    $project_database = new XRef_ProjectDatabase_Persistent($oldRev, $xref, $file_provider);
+    $project_database->save($oldRev);
+    $old_errors = $project_lint->getErrors( $project_database );
+
+    $new_file_provider = $scm->getFileProvider($currentRev);
+    $project_database->update($new_file_provider, $listOfFiles);
+    $project_database->save($currentRev);
+
+    $current_errors = $project_lint->getErrors( $project_database );
     $projectErrors = XRef_getNewProjectErrors($old_errors, $current_errors);
     /* ------------------------------------------------------------
      * END OF EXPERIMENTAL PART

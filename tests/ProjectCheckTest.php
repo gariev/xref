@@ -7,15 +7,19 @@ require_once "$includeDir/lib/experimental.php";
 class ProjectCheckTest extends PHPUnit_Framework_TestCase {
 
     private $xref;
-    private $project_check;
+    private $projectDatabase;
+    private $projectCheck;
 
     public function __construct() {
         $xref = new XRef();
         $xref->addParser( new XRef_Parser_PHP() );
+        $this->xref = $xref;
+
+        $this->projectDatabase = new XRef_ProjectDatabase();
+
         $project_check = new ProjectLintPrototype();
         $project_check->setXRef($xref);
-        $this->xref = $xref;
-        $this->project_check = $project_check;
+        $this->projectCheck = $project_check;
     }
 
     protected function checkFoundDefect($foundDefect, $file_name, $expected_file_name, $tokenText, $lineNumber, $severity) {
@@ -27,14 +31,14 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
     }
 
     protected function checkProject($files, $expectedDefectsList) {
-        $this->project_check->clearProject();
+        $this->projectDatabase->clear();
         foreach ($files as $file_name => $file_content) {
             $pf = $this->xref->getParsedFile($file_name, $file_content);
-            $this->project_check->addFile($pf);
+            $this->projectDatabase->addParsedFile($pf);
             $pf->release();
         }
         // report: array (filename => array(list of errors))
-        $report = $this->project_check->getErrors();
+        $report = $this->projectCheck->getErrors( $this->projectDatabase );
 
         // 1. count errors
         $countFound = 0;

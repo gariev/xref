@@ -11,25 +11,23 @@ include_once dirname(__FILE__) . "/../../../lib/experimental.php";
 class XRef_Doc_ProjectCheck extends XRef_APlugin implements XRef_IDocumentationPlugin {
     protected $supportedFileType    = XRef::FILETYPE_PHP;
 
-    protected $project_lint;
+    protected $projectDatabase;
     public function __construct() {
         parent::__construct("php-project-check", "Project integrity check");
-        $this->project_lint = new ProjectLintPrototype();
-    }
-
-    public function setXRef(XRef $xref) {
-        parent::setXRef($xref);
-        $this->project_lint->setXRef($xref);
+        $this->projectDatabase = new XRef_ProjectDatabase();    // in-memory database
     }
 
     public function generateFileReport(XRef_IParsedFile $pf) {
         if ($pf->getFileType() != $this->supportedFileType) {
             return;
         }
-        $this->project_lint->addFile($pf);
+        $this->projectDatabase->addParsedFile($pf);
     }
 
     public function generateTotalReport() {
+        $project_lint = new ProjectLintPrototype();
+        $project_lint->setXRef($this->xref);
+        $errors = $project_lint->getErrors( $this->projectDatabase );
         list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, null);
         fwrite($fh,
             $this->xref->fillTemplate(
@@ -38,7 +36,7 @@ class XRef_Doc_ProjectCheck extends XRef_APlugin implements XRef_IDocumentationP
                     'reportName' => $this->getName(),
                     'reportId'   => $this->getId(),
                     'root'       => $root,
-                    'report'     => $this->project_lint->getErrors(),
+                    'report'     => $errors,
                 )
             )
         );
