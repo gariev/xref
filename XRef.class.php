@@ -823,7 +823,7 @@ class XRef {
         $args = ($testArgs) ? $testArgs : $getopt->readPHPArgv();
         $getoptResult = $getopt->getopt( $args, implode('', $shortOptionsList), $longOptionsList);
         if (PEAR::isError($getoptResult)) {
-            throw new Exception('Error: ' . $getoptResult->getMessage());
+            throw new Exception( $getoptResult->getMessage() );
         }
         error_reporting($error_reporting);
         // end of Console_Getopt dependent code

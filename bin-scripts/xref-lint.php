@@ -17,7 +17,14 @@ require_once("$includeDir/XRef.class.php");
 // command-line arguments
 XRef::registerCmdOption('o:', "output=",        '-o, --output=TYPE',    "either 'text' (default) or 'json'");
 XRef::registerCmdOption('r:', "report-level=",  '-r, --report-level=',  "either 'error', 'warning' or 'notice'");
-list ($options, $arguments) = XRef::getCmdOptions();
+try {
+    list ($options, $arguments) = XRef::getCmdOptions();
+} catch (Exception $e) {
+    error_log($e->getMessage());
+    error_log("See 'xref-lint --help'");
+    exit(1);
+}
+
 if (XRef::needHelp()) {
     XRef::showHelpScreen(
         "xref-lint - tool to find problems in PHP source code",

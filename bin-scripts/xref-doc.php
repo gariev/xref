@@ -13,7 +13,13 @@ $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@ph
 require_once("$includeDir/XRef.class.php");
 
 // command-line arguments
-list ($options, $arguments) = XRef::getCmdOptions();
+try {
+    list ($options, $arguments) = XRef::getCmdOptions();
+} catch (Exception $e) {
+    error_log($e->getMessage());
+    error_log("See 'xref-doc --help'");
+    exit(1);
+}
 
 //help
 if (XRef::needHelp() || count($arguments)) {

@@ -18,7 +18,14 @@ require_once "$includeDir/XRef.class.php";
 require_once "$includeDir/lib/ci-tools.php";
 require_once "$includeDir/lib/experimental.php";
 
-list ($options, $arguments) = XRef::getCmdOptions();
+try {
+    list ($options, $arguments) = XRef::getCmdOptions();
+} catch (Exception $e) {
+    error_log($e->getMessage());
+    error_log("See 'xref-ci --help'");
+    exit(1);
+}
+
 if (XRef::needHelp() || count($arguments)) {
     XRef::showHelpScreen("xref-ci - continuous integration server");
     exit(1);
