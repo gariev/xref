@@ -327,6 +327,7 @@ CONFIG FILE
 XRef tools will look for the config file in the following places in order:
 * command-line options -c or --config, command-line scripts only
 * environment variable XREF\_CONFIG
+* file named xref.ini in the current directory, or in any of it's parent directories
 * file named xref.ini in the directory where xref.init.sample was installed (@data\_dir@/XRef/config)
 
 If no file found, default values will be used - they are good enough to run lint (both command-line and web version),

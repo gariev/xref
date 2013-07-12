@@ -590,6 +590,21 @@ class XRef {
             $filename = getenv("XREF_CONFIG");
         }
 
+        // config file in .xref dir in current dir, or in any parent dirs
+        $dir = getcwd();
+        while ($dir) {
+            if (file_exists("$dir/.xref/xref.ini")) {
+                $filename = "$dir/.xref/xref.ini";
+                break;
+            }
+            $parent_dir = dirname($dir); // one step up
+            if ($parent_dir == $dir) {
+                // top level, can't go up
+                break;
+            }
+            $dir = $parent_dir;
+        }
+
         // config in installation dir?
         if (!$filename) {
             $f = ("@data_dir@" == "@"."data_dir@") ? dirname(__FILE__) . "/config/xref.ini" : "@data_dir@/XRef/config/xref.ini";
@@ -620,7 +635,7 @@ class XRef {
                 throw new Exception("Error: can parse ini file '$filename'");
             }
         } else {
-            // if no file explicitely specified, and default config doesn't exist,
+            // if no file explicitly specified, and default config doesn't exist,
             // don't throw error and provide default config values
             if (XRef::verbose()) {
                 echo "Using default config\n";
