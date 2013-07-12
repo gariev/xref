@@ -198,7 +198,7 @@ class XRef {
 
     /**
      * Method to load plugins defined in config file.
-     * For the name $gloupName, plugins/parsers config-defined as $groupName.plugins[] and $groupName.parsers[] will be loaded.
+     * For the name $groupName, plugins/parsers config-defined as $groupName.plugins[] and $groupName.parsers[] will be loaded.
      *
      * @param string $groupName
      */
@@ -797,12 +797,20 @@ class XRef {
         $renameMap = array();           // array( 'h' => 'help', 'c' => 'config' )
         $isArrayMap = array();          // array( 'help' => false, 'define' => true, )
         foreach (self::$optionsList as $o) {
-            $shortOptionsList[] = $o[0];
-            $longOptionsList[] = $o[1];
-            $short = preg_replace('/\W$/', '', $o[0]); // remove ':' and '=' at the end of specificators
-            $long = preg_replace('/\W$/', '', $o[1]);
-            $renameMap[ $short ] = $long;
-            $isArrayMap[ $long ] = $o[4];
+            $short = $o[0];
+            $long = $o[1];
+            if ($short) {
+                $shortOptionsList[] = $short;
+            }
+            if ($long) {
+                $longOptionsList[] = $long;
+            }
+            $short = preg_replace('/\W$/', '', $short); // remove ':' and '=' at the end of specificatios
+            $long = preg_replace('/\W$/', '', $long);
+            if ($short && $long) {
+                $renameMap[ $short ] = $long;
+            }
+            $isArrayMap[ ($long) ? $long : $short ] = $o[4];
         }
 
         // TODO: write a better command-line parser
