@@ -67,7 +67,7 @@ $colorMap = array(
 
 $xref = new XRef();
 $xref->loadPluginGroup("lint");
-$file_provider = new XRef_FileProvider_FileSystem( ($arguments) ? $arguments : array(".") );
+$file_provider = new XRef_FileProvider_FileSystem( ($arguments) ? $arguments : '.' );
 
 $totalFiles         = 0;
 $filesWithDefects   = 0;

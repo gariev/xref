@@ -39,6 +39,9 @@ if (isset($options["revision"])) {
     $revision = $options["revision"];
     $source_code_manager = $xref->getSourceCodeManager();
     $file_provider = $source_code_manager->getFileProvider($revision);
+    if (isset($options["exclude"])) {
+        $file_provider->excludePath($options["exclude"]);
+    }
     $project_database = new XRef_ProjectDatabase_Persistent($revision, $xref, $file_provider);
     $project_database->save($revision);
     $errors = $project_lint->getErrors( $project_database );
@@ -48,6 +51,9 @@ if (isset($options["revision"])) {
         // compare 2 repository versions
         $other_revision = $options["other"];
         $file_provider = $source_code_manager->getFileProvider($other_revision);
+        if (isset($options["exclude"])) {
+            $file_provider->excludePath($options["exclude"]);
+        }
         $project_database = new XRef_ProjectDatabase_Persistent($other_revision, $xref, $file_provider);
         $project_database->save($other_revision);
         $other_errors = $project_lint->getErrors( $project_database );
@@ -59,8 +65,10 @@ if (isset($options["revision"])) {
 } else {
     // otherwise, just iterate over all files in dir
     $paths = ($arguments) ? $arguments : '.';
-    $exclude_paths = (isset($options["exclude"])) ? $options["exclude"] : null;
-    $file_provider = new XRef_FileProvider_FileSystem( $paths, $exclude_paths  );
+    $file_provider = new XRef_FileProvider_FileSystem( $paths );
+    if (isset($options["exclude"])) {
+        $file_provider->excludePath($options["exclude"]);
+    }
     $project_database = new XRef_ProjectDatabase_Persistent(null, $xref, $file_provider);
     //$project_database->addLibraryFiles($library_files);
     $report = $project_lint->getErrors( $project_database );

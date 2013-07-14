@@ -504,4 +504,22 @@ class XRef_Property {
 
 }
 
+/*
+ * Simple interface to list files and access their content
+ */
+interface XRef_IFileProvider {
+    /** @param array $paths - list of paths (dir and files) that should be excluded from output */
+    public function excludePaths(array $paths);
+    /**
+     * @param array $filter_by_extensions
+     * @return string[] - list of file names
+     */
+    public function getFiles(array $filter_by_extensions = array('php'));
+    /**
+     * @param string $filename
+     * @return string
+     */
+    public function getFileContent($filename);
+}
+
 // vim: tabstop=4 expandtab

@@ -9,7 +9,6 @@
 $includeDir =  ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) : "@php_dir@/XRef";
 require_once "$includeDir/lib/interfaces.php";
 require_once "$includeDir/lib/parsers.php";
-require_once "$includeDir/lib/utils.php";
 
 /**
  *

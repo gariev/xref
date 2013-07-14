@@ -28,7 +28,7 @@ check_clean:
 doctest:
 	bin/xref-doc \
 		-d 'doc.source-code-dir[]=.' \
-		-d doc.exclude-dir=tmp \
+		-d 'doc.exclude-path[]=tmp' \
 		-d doc.output-dir=tmp \
 		-d xref.data-dir=tmp \
 		-d xref.smarty-class=/Users/igariev/dev/Smarty-2.6.27/libs/Smarty.class.php
