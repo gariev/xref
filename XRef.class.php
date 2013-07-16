@@ -375,7 +375,7 @@ class XRef {
         // TODO: create case insensitive file names for Windows
         $objectId = preg_replace("#\\\\#", '/', $objectId);
         $objectId = preg_replace("#[^a-zA-Z0-9\\.\\-\\/]#", '-', $objectId);
-        $objectId = preg_replace("#\.\.#", '--', $objectId);
+        $objectId = preg_replace("#\\.\\.#", '--', $objectId);
         return "$objectId.$extension";
     }
 
@@ -532,11 +532,24 @@ class XRef {
         $report = array();
         foreach ($plugins as /** @var $plugin XRef_IProjectLintPlugin */ $plugin) {
             $plugin_report = $plugin->getProjectReport($db);
-            foreach ($plugin_report as $file_name => $r) {
-                if (isset($report[$file_name])) {
-                    $report[$file_name] = array_merge($report[$file_name], $r);
-                } else {
-                    $report[$file_name] = $r;
+            foreach ($plugin_report as $file_name => $defects_list) {
+                $filtered_list = array();
+                foreach ($defects_list as /** @var $d XRef_CodeDefect */$d) {
+                    if ($d->severity < $this->lintReportLevel) {
+                        continue;
+                    }
+                    if (isset($this->lintIgnoredErrors[ $d->errorCode ])) {
+                        continue;
+                    }
+                    $filtered_list[] = $d;
+                }
+
+                if ($filtered_list) {
+                    if (!isset($report[$file_name])) {
+                        $report[$file_name] = $filtered_list;
+                    } else {
+                        $report[$file_name] = array_merge($report[$file_name], $filtered_list);
+                    }
                 }
             }
         }
