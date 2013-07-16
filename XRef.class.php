@@ -9,6 +9,7 @@
 $includeDir =  ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) : "@php_dir@/XRef";
 require_once "$includeDir/lib/interfaces.php";
 require_once "$includeDir/lib/parsers.php";
+require_once "$includeDir/lib/experimental.php";
 
 /**
  *
@@ -477,6 +478,7 @@ class XRef {
         $plugins = $this->getPlugins("XRef_ILintPlugin");
 
         // init once
+        $this->initCommonLintStuff();
         if (is_null($this->lintErrorMap)) {
             $this->lintErrorMap = array();
             foreach ($plugins as $pluginId => $plugin) {
@@ -487,34 +489,6 @@ class XRef {
                     $this->lintErrorMap[$error_code] = $error_description;
                 }
             }
-        }
-
-        // also init once
-        if (is_null($this->lintIgnoredErrors)) {
-            $this->lintIgnoredErrors = array();
-            foreach (self::getConfigValue("lint.ignore-error", array()) as $error_code) {
-                if (! isset($this->lintErrorMap[$error_code])) {
-                    error_log("Unknown error code '$error_code'");
-                }
-                $this->lintIgnoredErrors[$error_code] = true;
-            }
-        }
-
-        // also once
-        if (is_null($this->lintReportLevel)) {
-            $r = XRef::getConfigValue("lint.report-level", "warning");
-            if ($r == "errors" || $r == "error") {
-                $reportLevel = XRef::ERROR;
-            } elseif ($r == "warnings" || $r == "warning") {
-                $reportLevel = XRef::WARNING;
-            } elseif ($r == "notice" || $r == "notices") {
-                $reportLevel = XRef::NOTICE;
-            } elseif (is_numeric($r)) {
-                $reportLevel = (int) $r;
-            } else {
-                throw new Exception("unknown value for config var 'lint.report-level': $r");
-            }
-            $this->lintReportLevel = $reportLevel;
         }
 
         $report = array();
@@ -550,6 +524,57 @@ class XRef {
 
         usort($report, array("XRef", "_sortLintReportByLineNumber"));
         return $report;
+    }
+
+    public function getProjectReport(XRef_IProjectDatabase $db) {
+        $this->initCommonLintStuff();
+        $plugins = $this->getPlugins("XRef_IProjectLintPlugin");
+        $report = array();
+        foreach ($plugins as /** @var $plugin XRef_IProjectLintPlugin */ $plugin) {
+            $plugin_report = $plugin->getProjectReport($db);
+            foreach ($plugin_report as $file_name => $r) {
+                if (isset($report[$file_name])) {
+                    $report[$file_name] = array_merge($report[$file_name], $r);
+                } else {
+                    $report[$file_name] = $r;
+                }
+            }
+        }
+
+        ksort($report); // sort report by file names
+        foreach ($report as $file_name => $r) {
+            // sort by line numbers
+            usort($r, array("XRef", "_sortLintReportByLineNumber"));
+        }
+
+        return $report;
+    }
+
+    private function initCommonLintStuff() {
+        // init once
+        if (is_null($this->lintIgnoredErrors)) {
+            $this->lintIgnoredErrors = array();
+            foreach (self::getConfigValue("lint.ignore-error", array()) as $error_code) {
+                $this->lintIgnoredErrors[$error_code] = true;
+            }
+        }
+
+        // also init once
+        if (is_null($this->lintReportLevel)) {
+            $r = XRef::getConfigValue("lint.report-level", "warning");
+            if ($r == "errors" || $r == "error") {
+                $reportLevel = XRef::ERROR;
+            } elseif ($r == "warnings" || $r == "warning") {
+                $reportLevel = XRef::WARNING;
+            } elseif ($r == "notice" || $r == "notices") {
+                $reportLevel = XRef::NOTICE;
+            } elseif (is_numeric($r)) {
+                $reportLevel = (int) $r;
+            } else {
+                throw new Exception("unknown value for config var 'lint.report-level': $r");
+            }
+            $this->lintReportLevel = $reportLevel;
+        }
     }
 
     static function _sortLintReportByLineNumber ($a, $b) {
@@ -679,6 +704,7 @@ class XRef {
                 'XRef_Lint_AssignmentInCondition',
                 'XRef_Lint_ClosingTag',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
+                'ProjectLintPrototype'          // experimental
             ),
             'lint.ignore-error'       => array(),
             'lint.add-constant'             => array(),

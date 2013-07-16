@@ -522,4 +522,12 @@ interface XRef_IFileProvider {
     public function getFileContent($filename);
 }
 
+// experimental, empty for now
+interface XRef_IProjectDatabase {}
+
+interface XRef_IProjectLintPlugin {
+    /** @return array - map (file name -> list of errors) */
+    public function getProjectReport(XRef_IProjectDatabase $db);
+}
+
 // vim: tabstop=4 expandtab

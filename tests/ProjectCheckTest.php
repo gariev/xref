@@ -8,18 +8,13 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
 
     private $xref;
     private $projectDatabase;
-    private $projectCheck;
 
     public function __construct() {
         $xref = new XRef();
-        $xref->addParser( new XRef_Parser_PHP() );
+        $xref->loadPluginGroup('lint');
         $this->xref = $xref;
 
         $this->projectDatabase = new XRef_ProjectDatabase();
-
-        $project_check = new ProjectLintPrototype();
-        $project_check->setXRef($xref);
-        $this->projectCheck = $project_check;
     }
 
     protected function checkFoundDefect($foundDefect, $file_name, $expected_file_name, $tokenText, $lineNumber, $severity) {
@@ -38,7 +33,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             $pf->release();
         }
         // report: array (filename => array(list of errors))
-        $report = $this->projectCheck->getErrors( $this->projectDatabase );
+        $report = $this->xref->getProjectReport( $this->projectDatabase );
 
         // 1. count errors
         $countFound = 0;

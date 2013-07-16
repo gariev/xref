@@ -1,7 +1,7 @@
 <?php
 
 
-class XRef_ProjectDatabase {
+class XRef_ProjectDatabase implements XRef_IProjectDatabase {
     /** map: file name --> array with classes, consts, method etc that this file provides */
     public $provides = array( );
 
@@ -349,7 +349,7 @@ class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
     }
 }
 
-class ProjectLintPrototype extends XRef_APlugin {
+class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlugin {
 
     /** @var array - map: (class name -> array of all definition of this class) */
     private $classes = null;
@@ -359,7 +359,7 @@ class ProjectLintPrototype extends XRef_APlugin {
     }
 
 
-    public function getErrors(XRef_ProjectDatabase $pd) {
+    public function getProjectReport(XRef_IProjectDatabase $pd) {
         $this->classes = array();
         $errors = array(); // map: fileName --> array of XRef_CodeDefect objects
         $seen_errors = array();
@@ -411,20 +411,7 @@ class ProjectLintPrototype extends XRef_APlugin {
                 }
             }
         }
-        ksort($errors); // sort by the file names
-        foreach ($errors as $filename => &$errors_list) {
-            usort($errors_list, array("self", "sort_by_line_number_and_token"));
-        }
         return $errors;
-    }
-
-    private static function sort_by_line_number_and_token($a, $b) {
-        if ($a->lineNumber <  $b->lineNumber) {
-            return -1;
-        } else if ($a->lineNumber >  $b->lineNumber) {
-            return 1;
-        }
-        return strcmp($a->tokenText, $b->tokenText);
     }
 
     // is $key( = 'property|method') named $name defined in class $class_name?

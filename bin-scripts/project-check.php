@@ -21,9 +21,7 @@ XRef::setConfigValue("git.repository-dir", ".");
 XRef::setConfigValue("ci.source-code-manager", "XRef_SourceCodeManager_Git");
 
 $xref = new XRef();
-$xref->addParser( new XRef_Parser_PHP() );
-$project_lint = new ProjectLintPrototype();
-$project_lint->setXRef($xref);
+$xref->loadPluginGroup("lint");
 list($options, $arguments) = XRef::getCmdOptions();
 
 $report = null;
@@ -44,7 +42,7 @@ if (isset($options["revision"])) {
     }
     $project_database = new XRef_ProjectDatabase_Persistent($revision, $xref, $file_provider);
     $project_database->save($revision);
-    $errors = $project_lint->getErrors( $project_database );
+    $errors = $xref->getProjectReport($project_database);
     $project_database->clear();
 
     if (isset($options["other"])) {
@@ -56,7 +54,7 @@ if (isset($options["revision"])) {
         }
         $project_database = new XRef_ProjectDatabase_Persistent($other_revision, $xref, $file_provider);
         $project_database->save($other_revision);
-        $other_errors = $project_lint->getErrors( $project_database );
+        $other_errors = $xref->getProjectReport($project_database);
         $report = XRef_getNewProjectErrors($errors, $other_errors);
     } else {
         $report = $errors;
@@ -71,7 +69,7 @@ if (isset($options["revision"])) {
     }
     $project_database = new XRef_ProjectDatabase_Persistent(null, $xref, $file_provider);
     //$project_database->addLibraryFiles($library_files);
-    $report = $project_lint->getErrors( $project_database );
+    $report = $xref->getProjectReport($project_database);
 }
 
 $colorMap = array(
