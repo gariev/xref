@@ -534,7 +534,7 @@ class XRef {
             $plugin_report = $plugin->getProjectReport($db);
             foreach ($plugin_report as $file_name => $defects_list) {
                 $filtered_list = array();
-                foreach ($defects_list as /** @var $d XRef_CodeDefect */$d) {
+                foreach ($defects_list as /** @var XRef_CodeDefect $d */$d) {
                     if ($d->severity < $this->lintReportLevel) {
                         continue;
                     }
@@ -717,7 +717,8 @@ class XRef {
                 'XRef_Lint_AssignmentInCondition',
                 'XRef_Lint_ClosingTag',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
-                'ProjectLintPrototype'          // experimental
+                'ProjectLintPrototype',                     // experimental
+                'XRef_ProjectLint_MissedParentConstructor', // experimental
             ),
             'lint.ignore-error'       => array(),
             'lint.add-constant'             => array(),

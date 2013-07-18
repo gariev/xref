@@ -484,4 +484,29 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             )
         );
     }
+
+    public function testMissedConstructor() {
+        $code = '
+        <?php
+            class A { }             // ok
+            class B extends A {}    // ok
+            class C extends A {     // ok
+                public function __construct() {
+                }
+            }
+            class D extends C {}    // ok, php will create a default constructor that will call parent\'s constructor
+            class E extends C {     // warning
+                public function __construct() {
+                }
+            }
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $code ),
+            array(
+                array('fileA.php', 'E', XRef::WARNING, 0),  // TODO: change the line number from 0 to real 8
+            )
+        );
+    }
+
+
 }

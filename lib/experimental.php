@@ -598,3 +598,94 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
 }
 
 
+class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements XRef_IProjectLintPlugin {
+
+    /** @var array - map: (class name -> { "sublasses" => [], hasConstructor=>true|false, callsParent=>true|false } */
+    private $classes = null;
+
+    public function __construct() {
+        parent::__construct("project-check-missed-parent-constructor", "Project Lint: Missed Parent Constructor");
+    }
+
+    private function getOrCreate($class_name, $file_name = null) {
+        $lc_name = strtolower($class_name);
+        if (!isset($this->classes[$lc_name])) {
+            $this->classes[$lc_name] = (object) array (
+                "name" => $class_name,
+                "fileName" => $file_name,
+                "subclasses" => array(),
+                "hasConstructor" => false,
+                "callsParentConstructor" => false,
+            );
+        }
+        if ($file_name) {
+            $this->classes[$lc_name]->fileName = $file_name;
+        }
+        return $this->classes[$lc_name];
+    }
+
+    public function getProjectReport(XRef_IProjectDatabase $pd) {
+        $this->classes = array();
+
+        // find classes with constructors and all their subclasses
+        foreach ($pd->provides as $file_name => $list_of_classes) {
+            foreach ($list_of_classes as /** @var $class XRef_Class */$class) {
+
+                // skip internal classes, like SplFileObject
+                // TODO: add explicit flag for internal classes/methods etc
+                if ($class->index < 0) {
+                    continue;
+                }
+
+                $c = $this->getOrCreate($class->name, $file_name);
+                foreach ($class->extends as $parent_name) {
+                    $parent = $this->getOrCreate($parent_name);
+                    $parent->subclasses[] = $class->name;
+                }
+                foreach ($class->methods as $method) {
+                    if ($method->name == '__construct') {
+                        $c->hasConstructor = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // find which classes actually calls parent constructors
+        foreach ($pd->uses as $file_name => $usage_list) {
+            foreach ($usage_list as $u) {
+                list($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only) = $u;
+                if ($check_parent_only && $from_class && $key == 'method' && $name == '__construct') {
+                    $c = $this->getOrCreate($from_class);
+                    // TODO: check that it calls constructor from its own constructor
+                    $c->callsParentConstructor = true;
+                }
+            }
+        }
+
+        $errors = array();
+
+        foreach ($this->classes as $c) {
+            if ($c->hasConstructor) {
+                $class_name = $c->name;
+                foreach ($c->subclasses as $subclass_name) {
+                    $subclass = $this->getOrCreate($subclass_name);
+                    if ($subclass->hasConstructor && !$subclass->callsParentConstructor) {
+                        $subclass_name = $subclass->name;
+                        $file_name = $subclass->fileName;
+                        $cd = new XRef_CodeDefect();
+                        $cd->tokenText = $subclass->name;
+                        $cd->errorCode = "exp05";
+                        $cd->severity = XRef::WARNING;
+                        $cd->message = "Class $subclass_name doesn't call constructor of it's base class $class_name";
+                        $cd->fileName = $file_name;
+                        $cd->lineNumber = 0;
+                        $errors[ $file_name ][] = $cd;
+                    }
+                }
+            }
+        }
+        return $errors;
+    }
+}
+
