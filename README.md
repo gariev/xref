@@ -184,7 +184,7 @@ REPORTED ERRORS
     Sample code:
 
 ```php
-    // COUNTEREXAMAPLE
+    // COUNTEREXAMPLE
     $text = explode('', $str);
     $test[] = '!';  // <-- a new array $test is instantiated here.
                     // is it intended or array $text should be here?
@@ -311,7 +311,7 @@ class Foo {
     Sample code:
 
 ```php
-    // COUNTEREXMAPLE
+    // COUNTEREXAMPLE
     if ($foo = 0) { ... }       // <-- did you mean ($foo == 0)?
     if ($bar = $baz) { ... }    // <-- ($bar == $baz) ?
 
@@ -423,7 +423,7 @@ List of config file parameters:
     because a global scope variable can be initialized in other included file.
     Choose an option that suits your project best; default is true (do check global space).
 
-* **lint.ignore-error** (array of strings; optional)
+* **lint.ignore-error[]** (array of strings; optional)
 
     List of error codes not to report for this project.
 

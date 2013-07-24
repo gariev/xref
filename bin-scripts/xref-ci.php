@@ -102,44 +102,26 @@ foreach ($branches as $branchName => $currentRev) {
 
     // $fileErrors: array(file name => scalar or array with errors)
     $fileErrors = array();
-    $listOfFiles = $scm->getListOfModifiedFiles($oldRev, $currentRev);
-    foreach ($listOfFiles as $file) {
-        if (!preg_match("#\\.php\$#", $file)) {
-            continue;
-        }
+    $modified_files = $scm->getListOfModifiedFiles($oldRev, $currentRev);
+    $file_provider_old = $scm->getFileProvider($oldRev);
+    $file_provider_new = $scm->getFileProvider($currentRev);
+    foreach ($modified_files as $filename) {
         if (XRef::verbose()) {
-            error_log(" ... file $file");
+            error_log(" ... file $filename");
         }
 
         if ($incremental) {
             // incremental mode - find only the errors that are new from the old version of the same file
-            try {
-                $oldErrors = XRef_getErrorsList($xref, $file, $oldRev);
-            } catch (Exception $e) {
-                // oops, syntax errors in previsous version of the file?
-                // let's report all errors in the file then.
-                $oldErrors = array();
-            }
-
-            try {
-                $curErrors = XRef_getErrorsList($xref, $file, $currentRev);
-            } catch (Exception $e) {
-                $fileErrors[$file] = "Can't parse file, syntax error? (" . $e->getMessage() . ")";
-                continue;
-            }
-            $errors = XRef_getNewErrors($oldErrors, $curErrors);
+            $old_errors = XRef_getErrorsList($xref, $file_provider_old, $filename);
+            $new_errors = XRef_getErrorsList($xref, $file_provider_new, $filename);
+            $errors = XRef_getNewErrors($old_errors, $new_errors);
         } else {
             // normal mode - report about every error in file
-            try {
-                $errors = XRef_getErrorsList($xref, $file, $currentRev);
-            } catch (Exception $e) {
-                $fileErrors[$file] = "Can't parse file, syntax error? (" . $e->getMessage() . ")";
-                continue;
-            }
+            $errors = XRef_getErrorsList($xref, $file_provider_new, $filename);
         }
 
-        if (count($errors)) {
-            $fileErrors[$file] = $errors;
+        if ($errors) {
+            $fileErrors[$filename] = $errors;
         }
     }
 
@@ -147,29 +129,33 @@ foreach ($branches as $branchName => $currentRev) {
      * EXPERIMENTAL PART
      * ------------------------------------------------------------*/
     $projectErrors = array();
-    $project_lint = new ProjectLintPrototype();
-    $project_lint->setXRef($xref);
 
-    $file_provider = $scm->getFileProvider($oldRev);
-    $project_database = new XRef_ProjectDatabase_Persistent($oldRev, $xref, $file_provider);
-    $project_database->save($oldRev);
-    $old_errors = $project_lint->getErrors( $project_database );
+    if ($incremental) {
+        $project_database = new XRef_ProjectDatabase_Persistent($oldRev, $xref, $file_provider_old);
+        $project_database->save($oldRev);
+        $old_errors = $xref->getProjectReport($project_database);
 
-    $new_file_provider = $scm->getFileProvider($currentRev);
-    $project_database->update($new_file_provider, $listOfFiles);
-    $project_database->save($currentRev);
+        $project_database->update($file_provider_new, $modified_files);
+        $project_database->save($currentRev);
+        $current_errors = $xref->getProjectReport($project_database);
 
-    $current_errors = $project_lint->getErrors( $project_database );
-    $projectErrors = XRef_getNewProjectErrors($old_errors, $current_errors);
+        $projectErrors = XRef_getNewProjectErrors($old_errors, $current_errors);
+    } else {
+        $project_database = new XRef_ProjectDatabase_Persistent($currentRev, $xref, $file_provider_new);
+        $project_database->save($currentRev);
+        $projectErrors = $xref->getProjectReport($project_database);
+    }
+    $fileErrors = array_merge_recursive($fileErrors, $projectErrors);
     /* ------------------------------------------------------------
      * END OF EXPERIMENTAL PART
      * ------------------------------------------------------------*/
 
-    if (count($fileErrors) || count($projectErrors)) {
+    $fileErrors = $xref->sortAndFilterReport($fileErrors);
+    if (count($fileErrors)) {
         if (XRef::verbose()) {
             error_log(count($fileErrors) . " files with errors found");
         }
-        XRef_notifyAuthor($xref, $fileErrors, $projectErrors, $branchName, $oldRev, $currentRev);
+        XRef_notifyAuthor($xref, $fileErrors, $branchName, $oldRev, $currentRev);
         $db["numberOfSentLetters"]++;
     }
 
@@ -180,7 +166,7 @@ foreach ($branches as $branchName => $currentRev) {
 }
 $storage->releaseLock("ci");
 
-function XRef_notifyAuthor(XRef $xref, $fileErrors, $projectErrors, $branchName, $oldRev, $currentRev) {
+function XRef_notifyAuthor(XRef $xref, $fileErrors, $branchName, $oldRev, $currentRev) {
     $replyTo    = XRef::getConfigValue('mail.reply-to');
     $from       = XRef::getConfigValue('mail.from');
     $recepients = XRef::getConfigValue('mail.to');
@@ -206,7 +192,6 @@ function XRef_notifyAuthor(XRef $xref, $fileErrors, $projectErrors, $branchName,
         'currentRev'        => $currentRev,
         'currentRevShort'   => $currentRevShort,
         'fileErrors'        => $fileErrors,
-        'projectErrors'     => $projectErrors,
         'commitInfo'        => $commitInfo,
     ));
 

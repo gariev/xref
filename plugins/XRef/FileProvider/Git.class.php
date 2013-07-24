@@ -64,5 +64,9 @@ class XRef_FileProvider_Git implements XRef_IFileProvider {
     public function getFileContent($filename) {
         return $this->sourceCodeManager->getFileContent($this->revision, $filename);
     }
+
+    public function getVersion() {
+        return "git:" . $this->revision;
+    }
 }
 

@@ -477,8 +477,6 @@ class XRef {
 
         $plugins = $this->getPlugins("XRef_ILintPlugin");
 
-        // init once
-        $this->initCommonLintStuff();
         if (is_null($this->lintErrorMap)) {
             $this->lintErrorMap = array();
             foreach ($plugins as $pluginId => $plugin) {
@@ -497,11 +495,6 @@ class XRef {
             if ($found_defects) {
                 foreach ($found_defects as $d) {
                     list($token, $error_code) = $d;
-
-                    if (isset($this->lintIgnoredErrors[ $error_code ])) {
-                        continue;
-                    }
-
                     if (! isset($this->lintErrorMap[$error_code])) {
                         error_log("No descriptions for error code '$error_code'");
                         continue;
@@ -513,57 +506,29 @@ class XRef {
                         continue;
                     }
 
-                    if ($description["severity"] < $this->lintReportLevel) {
-                        continue;
-                    }
-
                     $report[] = XRef_CodeDefect::fromToken($token, $error_code, $description["severity"], $description["message"]);
                 }
             }
         }
-
         usort($report, array("XRef", "_sortLintReportByLineNumber"));
         return $report;
     }
 
     public function getProjectReport(XRef_IProjectDatabase $db) {
-        $this->initCommonLintStuff();
         $plugins = $this->getPlugins("XRef_IProjectLintPlugin");
         $report = array();
         foreach ($plugins as /** @var $plugin XRef_IProjectLintPlugin */ $plugin) {
             $plugin_report = $plugin->getProjectReport($db);
-            foreach ($plugin_report as $file_name => $defects_list) {
-                $filtered_list = array();
-                foreach ($defects_list as /** @var XRef_CodeDefect $d */$d) {
-                    if ($d->severity < $this->lintReportLevel) {
-                        continue;
-                    }
-                    if (isset($this->lintIgnoredErrors[ $d->errorCode ])) {
-                        continue;
-                    }
-                    $filtered_list[] = $d;
-                }
-
-                if ($filtered_list) {
-                    if (!isset($report[$file_name])) {
-                        $report[$file_name] = $filtered_list;
-                    } else {
-                        $report[$file_name] = array_merge($report[$file_name], $filtered_list);
-                    }
-                }
-            }
-        }
-
-        ksort($report); // sort report by file names
-        foreach ($report as $file_name => $r) {
-            // sort by line numbers
-            usort($r, array("XRef", "_sortLintReportByLineNumber"));
+            $report = array_merge_recursive($report, $plugin_report);
         }
 
         return $report;
     }
 
-    private function initCommonLintStuff() {
+    /**
+     * @param array $report - array(filename => list of XRef_CodeDefects)
+     */
+    public function sortAndFilterReport(array $report) {
         // init once
         if (is_null($this->lintIgnoredErrors)) {
             $this->lintIgnoredErrors = array();
@@ -588,6 +553,31 @@ class XRef {
             }
             $this->lintReportLevel = $reportLevel;
         }
+
+        $filtered_report = array();
+        foreach ($report as $file_name => $defects_list) {
+            $filtered_list = array();
+            foreach ($defects_list as /** @var XRef_CodeDefect $d */$d) {
+                if ($d->severity < $this->lintReportLevel) {
+                    continue;
+                }
+                if (isset($this->lintIgnoredErrors[ $d->errorCode ])) {
+                    continue;
+                }
+                $filtered_list[] = $d;
+            }
+
+            if ($filtered_list) {
+                $filtered_report[$file_name] = $filtered_list;
+            }
+
+        }
+        ksort($filtered_report); // sort report by file names
+        foreach ($filtered_report as $file_name => $r) {
+            // sort by line numbers
+            usort($filtered_report[$file_name], array("XRef", "_sortLintReportByLineNumber"));
+        }
+        return $filtered_report;
     }
 
     static function _sortLintReportByLineNumber ($a, $b) {
@@ -720,7 +710,6 @@ class XRef {
                 'ProjectLintPrototype',                     // experimental
                 'XRef_ProjectLint_MissedParentConstructor', // experimental
             ),
-            'lint.ignore-error'       => array(),
             'lint.add-constant'             => array(),
             'lint.add-function-signature'   => array(),
             'lint.add-global-var'           => array(),
@@ -766,6 +755,64 @@ class XRef {
 
         self::$config = $config;
         return self::$config;
+    }
+
+    public function init() {
+
+        $cwd = getcwd();
+        // create data dir
+        if (!file_exists(".xref")) {
+            echo "Creating dir .xref\n";
+            if (!mkdir(".xref")) {
+                throw new Exception("Can't create dir .xref");
+            }
+        }
+
+        $config_filename = ".xref/xref.ini";
+        if (file_exists($config_filename)) {
+            echo "Config file $config_filename exists; won't overwrite\n";
+        } else {
+            echo "Creating config file $config_filename";
+            // create config file
+            $fh = fopen($config_filename, "w");
+            if (!$fh) {
+                throw new Exception("Can't create file $config_filename");
+            }
+            $config = array(
+                "[xref]",
+                "data-dir=\"$cwd/.xref\"",
+                "[git]",
+                "repository-dir=\"$cwd\"",
+            );
+            foreach ($config as $line) {
+                fwrite($fh, $line . "\n");
+            }
+            fclose($fh);
+
+            // re-read config values from the file
+            self::getConfig(true);
+        }
+
+        // index files for the first time
+        // create an empty persistent storage
+        $file_provider = new XRef_FileProvider_FileSystem( $cwd );
+        $project_database = new XRef_ProjectDatabase_Persistent(null, $this, null);
+        $project_database->update($file_provider, array());
+        // and update it manually with each file to display file progress
+        $files = $file_provider->getFiles();
+        $files_count = count($files);
+        echo "Indexing files\n";
+        foreach ($files as $i => $file) {
+            $strlen = strlen($file);
+            $display_file = ($strlen < 60)
+                    ? str_pad($file, 60)
+                    : "..." . substr($file, $strlen-57);
+            echo sprintf("\r%4d/%4d %s", $i+1, $files_count, $display_file);
+            $project_database->updateFile($file, false);
+        }
+        echo "\n";
+
+        // done
     }
 
     /**

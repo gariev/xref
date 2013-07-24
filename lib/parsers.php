@@ -10,7 +10,11 @@
  */
 
 class XRef_ParseException extends Exception {
-    function __construct($token, $expected_text = null) {
+    /** @var XRef_Token */
+    public $token;
+
+    function __construct(XRef_Token $token, $expected_text = null) {
+        $this->token = $token;
         $filename = $token->parsedFile->getFileName();
         $message = ($expected_text)
                 ? "Found '$token->text' instead of $expected_text at $filename:$token->lineNumber"

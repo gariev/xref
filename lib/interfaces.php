@@ -231,6 +231,11 @@ class XRef_CodeDefect {
         return $codeDefect;
     }
 
+    // helper constructor
+    public static function fromParseException(XRef_ParseException $e) {
+        return self::fromToken($e->token, 'xr01', XRef::FATAL, "Can't parse file");
+    }
+
     private static function chr_replace($matches) {
         return '\\x' . sprintf('%02x', ord($matches[0]));
     }
@@ -520,6 +525,11 @@ interface XRef_IFileProvider {
      * @return string
      */
     public function getFileContent($filename);
+    /**
+     * returns optional info describing this file provider
+     * @return string
+     */
+    public function getVersion();
 }
 
 // experimental, empty for now

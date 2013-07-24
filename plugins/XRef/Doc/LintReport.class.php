@@ -22,14 +22,11 @@ class XRef_Doc_LintReport extends XRef_APlugin implements XRef_IDocumentationPlu
             return;
         }
 
-        $report = $this->xref->getLintReport($pf);
-        if (count($report)) {
-            $this->totalReport[ $pf->getFileName() ] = $report;
-        }
+        $this->totalReport[ $pf->getFileName() ] = $this->xref->getLintReport($pf);
     }
 
     public function generateTotalReport() {
-        ksort($this->totalReport);
+        $this->totalReport = $this->xref->sortAndFilterReport( $this->totalReport );
 
         list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, null);
         fwrite($fh,

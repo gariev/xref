@@ -57,17 +57,22 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
         }
 
         if (is_dir($file)) {
-            foreach (scandir($file) as $filename) {
-                // skip svn/git directories
-                // TODO: create ignore config list
-                if ($filename == '.svn' || $filename == '.git' || $filename == '.build.sand.mk') {
-                    continue;
+            $dir_files = scandir($file);
+            if ($dir_files === false) {
+                error_log("Can't read dir '$file'");
+            } else {
+                foreach ($dir_files as $filename) {
+                    // skip svn/git directories
+                    // TODO: create ignore config list
+                    if ($filename == '.svn' || $filename == '.git' || $filename == '.build.sand.mk') {
+                        continue;
+                    }
+                    if ($filename == '.' || $filename == '..') {
+                        // skip "." and ".." dirs
+                        continue;
+                    }
+                    $this->findInputFiles( ($file == '.') ? $filename : "$file/$filename");
                 }
-                if ($filename == '.' || $filename == '..') {
-                    // skip "." and ".." dirs
-                    continue;
-                }
-                $this->findInputFiles( ($file == '.') ? $filename : "$file/$filename");
             }
         } else if (is_file($file)) {
             if ($this->extensions) {
@@ -79,6 +84,10 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
                 $this->files[] = $file;
             }
         }
+    }
+
+    public function getVersion() {
+        return "filesystem";
     }
 }
 

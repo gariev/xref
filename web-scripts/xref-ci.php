@@ -24,27 +24,15 @@ $rev2 = isset($_REQUEST["rev2"]) ? preg_replace('#[^\w\-/}{ @]#', '', $_REQUEST[
 
 if ($rev1 && $rev2) {
     $fileErrors = array();
-    $listOfFiles = $scm->getListOfModifiedFiles($rev1, $rev2);
-    foreach ($listOfFiles as $file) {
-        if (!preg_match("#\\.php\$#", $file)) {
-            continue;
-        }
-        try {
-            $oldErrors = XRef_getErrorsList($xref, $file, $rev1);
-        } catch (Exception $e) {
-            // oops, syntax errors in previsous version of the file?
-            // let's report all errors in the file then.
-            $oldErrors = array();
-        }
-        try {
-            $curErrors = XRef_getErrorsList($xref, $file, $rev2);
-        } catch (Exception $e) {
-            $fileErrors[$file] = "Can't parse file, syntax error? (" . $e->getMessage() . ")";
-            continue;
-        }
-        $errors = XRef_getNewErrors($oldErrors, $curErrors);
+    $modified_files = $scm->getListOfModifiedFiles($rev1, $rev2);
+    $file_provider1 = $scm->getFileProvider($rev1);
+    $file_provider2 = $scm->getFileProvider($rev2);
+    foreach ($modified_files as $filename) {
+        $old_errors = XRef_getErrorsList($xref, $file_provider1, $filename);
+        $new_errors = XRef_getErrorsList($xref, $file_provider2, $filename);
+        $errors = XRef_getNewErrors($old_errors, $new_errors);
         if (count($errors)) {
-            $fileErrors[$file] = $errors;
+            $fileErrors[$filename] = $errors;
         }
     }
 }

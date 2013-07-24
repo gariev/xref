@@ -221,7 +221,8 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
                         $property_name = substr($n->text, 1);   // skip '$' sign
                         $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
                     } else {
-                        error_log($n);
+                        // e.g. self::$$keyName
+                        //error_log($n);
                     }
                     continue;
                 }
@@ -246,7 +247,7 @@ class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
     /** @var XRef_IFileProvider */
     private $fileProvider;
 
-    public function __construct($projectName, XRef $xref, XRef_IFileProvider $fileProvider) {
+    public function __construct($projectName, XRef $xref, XRef_IFileProvider $fileProvider = null) {
         parent::__construct();
         $this->xref = $xref;
         $this->storageManager = $xref->getStorageManager();
@@ -258,8 +259,10 @@ class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
 
         if (! $this->projectFiles) {
             $this->projectFiles = array();
-            foreach ($this->fileProvider->getFiles() as $filename) {
-                $this->projectFiles[ $filename ] = null;    // temporary, see 'updateFile' below
+            if ($this->fileProvider) {
+                foreach ($this->fileProvider->getFiles() as $filename) {
+                    $this->projectFiles[ $filename ] = null;    // temporary, see 'updateFile' below
+                }
             }
         }
 
@@ -285,10 +288,7 @@ class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
     public function update(XRef_IFileProvider $newProvider, $list_of_files) {
         $this->fileProvider = $newProvider;
         foreach ($list_of_files as $filename) {
-            // TODO! hardcoded php extension
-            if (preg_match("#\\.php\$#", $filename)) {
-                $this->updateFile($filename, false);
-            }
+            $this->updateFile($filename, false);
         }
     }
 
@@ -296,7 +296,7 @@ class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
         $this->storageManager->saveData("project-check", $projectName, $this->projectFiles);
     }
 
-    private function updateFile($filename, $isLibraryFile) {
+    public function updateFile($filename, $isLibraryFile) {
         $content = $this->fileProvider->getFileContent($filename);
         if (!$content) {
             unset($this->projectFiles[$filename]);

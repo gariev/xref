@@ -75,89 +75,79 @@ $numberOfNotices    = 0;
 $numberOfWarnings   = 0;
 $numberOfErrors     = 0;
 
-$jsonOutput = array();
 
 // main loop over all files
+$total_report = array();
 foreach ($file_provider->getFiles() as $filename) {
     try {
-        $pf = $xref->getParsedFile($filename);
-        $report = $xref->getLintReport($pf);
-
         $totalFiles++;
-        if (count($report)) {
-            $filesWithDefects++;
-            foreach ($report as $r) {
-                if ($r->severity==XRef::NOTICE) {
-                    $numberOfNotices++;
-                } elseif ($r->severity==XRef::WARNING) {
-                    $numberOfWarnings++;
-                } elseif ($r->severity==XRef::ERROR) {
-                    $numberOfErrors++;
-                }
-            }
-        }
+        $file_content = $file_provider->getFileContent($filename);
+        $pf = $xref->getParsedFile($filename, $file_content);
+        $total_report[$filename] = $xref->getLintReport($pf);
+    } catch (XRef_ParseException $e) {
+        $total_report[$filename] = array( XRef_CodeDefect::fromParseException($e) );
+    }
+}
 
-        if (count($report)) {
-            if ($outputFormat=='text') {
-                echo("File: $filename\n");
-                foreach ($report as $r) {
-                    $lineNumber     = $r->lineNumber;
-                    $tokenText      = $r->tokenText;
-                    $severityStr    = XRef::$severityNames[ $r->severity ];
-                    $line = sprintf("    line %4d: %-8s (%s): %s (%s)", $lineNumber, $severityStr, $r->errorCode, $r->message, $tokenText);
-                    if ($color) {
-                        $line = $colorMap{$severityStr} . $line . $colorMap{"_off"};
-                    }
-                    echo($line . "\n");
-                }
-            } else {
-                foreach ($report as $r) {
-                    $lineNumber     = $r->lineNumber;
-                    $tokenText      = $r->tokenText;
-                    $severityStr    = XRef::$severityNames[ $r->severity ];
-                    $jsonOutput[] = array(
-                        'fileName'      => $filename,
-                        'lineNumber'    => $r->lineNumber,
-                        'tokenText'     => $r->tokenText,
-                        'severityStr'   => $severityStr,
-                        'errorCode'     => $r->errorCode,
-                        'message'       => $r->message,
-                    );
-                }
-            }
-        }
+$total_report = $xref->sortAndFilterReport($total_report);
 
-        $pf->release();
-    } catch (Exception $e) {
-        if ($outputFormat=='text') {
-            error_log("Can't parse file '$filename': " . $e->getMessage() . "\n");
-            if (XRef::verbose()) {
-                error_log("At " . $e->getFile() . ":" . $e->getLine());
-                error_log($e->getTraceAsString());
-            }
-        } else {
-            $jsonOutput[] = array(
-                'fileName'      => $filename,
-                'lineNumber'    => 1,
-                'severityStr'   => XRef::FATAL,
-                'message'       => $e->getMessage(),
-            );
+// calculate some stats
+foreach ($total_report as $file_name => $report) {
+    $filesWithDefects++;
+    foreach ($report as $code_defect) {
+        if ($code_defect->severity == XRef::NOTICE) {
+            $numberOfNotices++;
+        } elseif ($code_defect->severity == XRef::WARNING) {
+            $numberOfWarnings++;
+        } elseif ($code_defect->severity == XRef::ERROR) {
+            $numberOfErrors++;
         }
     }
 }
 
-// print total report
-if (XRef::verbose()) {
-    echo("Total files:          $totalFiles\n");
-    echo("Files with defects:   $filesWithDefects\n");
-    echo("Errors:               $numberOfErrors\n");
-    echo("Warnings:             $numberOfWarnings\n");
-    echo("Notices:              $numberOfNotices\n");
-}
-
-if ($outputFormat=='json') {
+// output the report
+if ($outputFormat=='text') {
+    foreach ($total_report as $file_name => $report) {
+        echo "File: $file_name\n";
+        foreach ($report as $code_defect) {
+            $lineNumber     = $code_defect->lineNumber;
+            $tokenText      = $code_defect->tokenText;
+            $severityStr    = XRef::$severityNames[ $code_defect->severity ];
+            $line = sprintf("    line %4d: %-8s (%s): %s (%s)", $lineNumber, $severityStr, $code_defect->errorCode, $code_defect->message, $tokenText);
+            if ($color) {
+                $line = $colorMap{$severityStr} . $line . $colorMap{"_off"};
+            }
+            echo $line . "\n";
+        }
+    }
+    // print stats
+    if (XRef::verbose()) {
+        echo("Total files:          $totalFiles\n");
+        echo("Files with defects:   $filesWithDefects\n");
+        echo("Errors:               $numberOfErrors\n");
+        echo("Warnings:             $numberOfWarnings\n");
+        echo("Notices:              $numberOfNotices\n");
+    }
+} else {
+    $jsonOutput = array();
+    foreach ($total_report as $file_name => $report) {
+        foreach ($report as $code_defect) {
+            $lineNumber     = $code_defect->lineNumber;
+            $tokenText      = $code_defect->tokenText;
+            $severityStr    = XRef::$severityNames[ $code_defect->severity ];
+            $jsonOutput[] = array(
+                'fileName'      => $filename,
+                'lineNumber'    => $code_defect->lineNumber,
+                'tokenText'     => $code_defect->tokenText,
+                'severityStr'   => $severityStr,
+                'errorCode'     => $code_defect->errorCode,
+                'message'       => $code_defect->message,
+            );
+        }
+    }
     echo json_encode($jsonOutput); // JSON_PRETTY_PRINT is not available before php 5.4 :(
 }
+
 
 if ($numberOfErrors+$numberOfWarnings > 0) {
     exit(1);
