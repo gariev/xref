@@ -102,7 +102,14 @@ foreach ($branches as $branchName => $currentRev) {
 
     // $fileErrors: array(file name => scalar or array with errors)
     $fileErrors = array();
-    $modified_files = $scm->getListOfModifiedFiles($oldRev, $currentRev);
+
+    $modified_files = array();
+    foreach ($scm->getListOfModifiedFiles($oldRev, $currentRev) as $filename) {
+        if (preg_match("#\\.php\$#", $filename)) {
+            $modified_files[] = $filename; // TODO! hardcoded php extension
+        }
+    }
+
     $file_provider_old = $scm->getFileProvider($oldRev);
     $file_provider_new = $scm->getFileProvider($currentRev);
     foreach ($modified_files as $filename) {

@@ -795,6 +795,7 @@ class XRef {
 
         // index files for the first time
         // create an empty persistent storage
+        $this->loadPluginGroup('lint');
         $file_provider = new XRef_FileProvider_FileSystem( $cwd );
         $project_database = new XRef_ProjectDatabase_Persistent(null, $this, null);
         $project_database->update($file_provider, array());
@@ -811,6 +812,7 @@ class XRef {
             $project_database->updateFile($file, false);
         }
         echo "\n";
+        echo "Done.\n";
 
         // done
     }

@@ -17,6 +17,8 @@ require_once("$includeDir/XRef.class.php");
 // command-line arguments
 XRef::registerCmdOption('o:', "output=",        '-o, --output=TYPE',    "either 'text' (default) or 'json'");
 XRef::registerCmdOption('r:', "report-level=",  '-r, --report-level=',  "either 'error', 'warning' or 'notice'");
+XRef::registerCmdOption('',   "init",           '--init',               "create a config file, init cache");
+
 try {
     list ($options, $arguments) = XRef::getCmdOptions();
 } catch (Exception $e) {
@@ -31,6 +33,12 @@ if (XRef::needHelp()) {
         "$argv[0] [options] [path to check]"
     );
     exit(1);
+}
+
+if (isset($options['init'])) {
+    $xref = new XRef();
+    $xref->init();
+    exit(0);
 }
 
 //
