@@ -499,11 +499,18 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
                 public function __construct() {
                 }
             }
+            class F extends D {     // warning. class D doesn\'t have a constructor, but its base class C has
+                public function __construct() {
+                }
+            }
         ';
         $this->checkProject(
             array( 'fileA.php' => $code ),
             array(
-                array('fileA.php', 'E', XRef::WARNING, 0),  // TODO: change the line number from 0 to real 8
+                array('fileA.php', 'F', XRef::WARNING, 0),  // TODO: change the line number from 0 to real 8
+                array('fileA.php', 'E', XRef::WARNING, 0),  // WARNING: since the line numbers are equal (0),
+                                                            // the order of returned errors depends on if sort is stable
+                                                            // TODO: fix line numbers!
             )
         );
     }

@@ -603,6 +603,9 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
     /** @var array - map: (class name -> { "sublasses" => [], hasConstructor=>true|false, callsParent=>true|false } */
     private $classes = null;
 
+    private $errors = array();
+    private $seen_classes = array();
+
     public function __construct() {
         parent::__construct("project-check-missed-parent-constructor", "Project Lint: Missed Parent Constructor");
     }
@@ -663,29 +666,41 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
             }
         }
 
-        $errors = array();
+        $this->errors = array();
+        $this->seen_classes = array();
 
         foreach ($this->classes as $c) {
             if ($c->hasConstructor) {
-                $class_name = $c->name;
-                foreach ($c->subclasses as $subclass_name) {
-                    $subclass = $this->getOrCreate($subclass_name);
-                    if ($subclass->hasConstructor && !$subclass->callsParentConstructor) {
-                        $subclass_name = $subclass->name;
-                        $file_name = $subclass->fileName;
-                        $cd = new XRef_CodeDefect();
-                        $cd->tokenText = $subclass->name;
-                        $cd->errorCode = "exp05";
-                        $cd->severity = XRef::WARNING;
-                        $cd->message = "Class $subclass_name doesn't call constructor of it's base class $class_name";
-                        $cd->fileName = $file_name;
-                        $cd->lineNumber = 0;
-                        $errors[ $file_name ][] = $cd;
-                    }
-                }
+                $this->checkSubclasses($c);
             }
         }
-        return $errors;
+        return $this->errors;
+    }
+
+    private function checkSubclasses($c) {
+        $class_name = $c->name;
+        foreach ($c->subclasses as $subclass_name) {
+            $lc_name = strtolower($subclass_name);
+            if (isset($this->seen_classes[$lc_name])) {
+                continue;
+            }
+            $this->seen_classes[$lc_name] = true;
+
+            $subclass = $this->getOrCreate($subclass_name);
+            if ($subclass->hasConstructor && !$subclass->callsParentConstructor) {
+                $subclass_name = $subclass->name;
+                $file_name = $subclass->fileName;
+                $cd = new XRef_CodeDefect();
+                $cd->tokenText = $subclass->name;
+                $cd->errorCode = "exp05";
+                $cd->severity = XRef::WARNING;
+                $cd->message = "Class $subclass_name doesn't call constructor of it's base class $class_name";
+                $cd->fileName = $file_name;
+                $cd->lineNumber = 0;
+                $this->errors[ $file_name ][] = $cd;
+            }
+            $this->checkSubclasses($subclass);
+        }
     }
 }
 
