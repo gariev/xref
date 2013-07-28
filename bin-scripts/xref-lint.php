@@ -18,6 +18,8 @@ require_once("$includeDir/XRef.class.php");
 XRef::registerCmdOption('o:', "output=",        '-o, --output=TYPE',    "either 'text' (default) or 'json'");
 XRef::registerCmdOption('r:', "report-level=",  '-r, --report-level=',  "either 'error', 'warning' or 'notice'");
 XRef::registerCmdOption('',   "init",           '--init',               "create a config file, init cache");
+XRef::registerCmdOption('',   "git",            '--git',                "git pre-commit mode: find new errors in files modified from HEAD");
+XRef::registerCmdOption('',   "cached",         '--cached',             "for git pre-commit mode: compare HEAD and files cached for commit");
 
 try {
     list ($options, $arguments) = XRef::getCmdOptions();
@@ -73,10 +75,6 @@ $colorMap = array(
     "_off"      => "\033[0;0m",
 );
 
-$xref = new XRef();
-$xref->loadPluginGroup("lint");
-$file_provider = new XRef_FileProvider_FileSystem( ($arguments) ? $arguments : '.' );
-
 $totalFiles         = 0;
 $filesWithDefects   = 0;
 $numberOfNotices    = 0;
@@ -84,16 +82,23 @@ $numberOfWarnings   = 0;
 $numberOfErrors     = 0;
 
 
-// main loop over all files
+$xref = new XRef();
+$xref->loadPluginGroup("lint");
+
 $total_report = array();
-foreach ($file_provider->getFiles() as $filename) {
-    try {
+
+if (isset($options['git'])) {
+    // incremental mode: find errors in files modified since HEAD revision
+    // TODO
+    if (isset($options['cached'])) {
+    } else {
+    }
+} else {
+    // main loop over all files
+    $file_provider = new XRef_FileProvider_FileSystem( ($arguments) ? $arguments : '.' );
+    foreach ($file_provider->getFiles() as $filename) {
+        $total_report[$filename] = $xref->getCachedLintReport($file_provider, $filename);
         $totalFiles++;
-        $file_content = $file_provider->getFileContent($filename);
-        $pf = $xref->getParsedFile($filename, $file_content);
-        $total_report[$filename] = $xref->getLintReport($pf);
-    } catch (XRef_ParseException $e) {
-        $total_report[$filename] = array( XRef_CodeDefect::fromParseException($e) );
     }
 }
 

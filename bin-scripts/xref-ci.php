@@ -119,12 +119,12 @@ foreach ($branches as $branchName => $currentRev) {
 
         if ($incremental) {
             // incremental mode - find only the errors that are new from the old version of the same file
-            $old_errors = XRef_getErrorsList($xref, $file_provider_old, $filename);
-            $new_errors = XRef_getErrorsList($xref, $file_provider_new, $filename);
+            $old_errors = $xref->getCachedLintReport($file_provider_old, $filename);
+            $new_errors = $xref->getCachedLintReport($file_provider_new, $filename);
             $errors = XRef_getNewErrors($old_errors, $new_errors);
         } else {
             // normal mode - report about every error in file
-            $errors = XRef_getErrorsList($xref, $file_provider_new, $filename);
+            $errors = $xref->getCachedLintReport($file_provider_new, $filename);
         }
 
         if ($errors) {

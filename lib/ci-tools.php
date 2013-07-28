@@ -54,42 +54,6 @@ function XRef_createErrorsDigest($errorList) {
     return $result;
 }
 
-// returns list of errors found in file, either from
-// disk-cached file or from XRef parser/lint
-function XRef_getErrorsList(XRef $xref, XRef_IFileProvider $file_provider, $filename) {
-    $content = $file_provider->getFileContent($filename);
-
-    if (!$content) {
-        // file doesn't exist in this revision
-        return array();
-    }
-
-    $storage = $xref->getStorageManager();
-    $sha1sum = sha1($content);
-    $data = $storage->restoreData("lint", $sha1sum);
-    $xrefVersion = XRef::version();
-    if (isset($data) && isset($data["xrefVersion"]) && $data["xrefVersion"]==$xrefVersion) {
-        return $data["errors"];
-    } else {
-        try {
-            $parsedFile = $xref->getParsedFile($filename, $content);
-            $errors = $xref->getLintReport($parsedFile);
-            $parsedFile->release();
-        } catch (XRef_ParseException $e) {
-            $errors = array( XRef_CodeDefect::fromParseException($e) );
-        }
-
-        $data = array(
-            "errors"    => $errors,
-            "file"      => $filename,
-            "rev"       => $file_provider->getVersion(),
-            "xrefVersion" => $xrefVersion
-        );
-        $storage->saveData("lint", $sha1sum, $data);
-        return $errors;
-    }
-}
-
 //
 // function XRef_phpDiff (PHPDiff) is taken with modifications from http://www.holomind.de/phpnet/diff2.src.php,
 // published by GPL licence.

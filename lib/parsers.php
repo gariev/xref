@@ -319,7 +319,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
                     "bracket_count" => $bracket_count,
                     "lineNumber"    => $t->lineNumber,
                     "expect"        => $expect_bracket,
-                    "text"          => $t->text,
+                    "token"         => $t,
                 );
                 $bracket_count++;
                 continue;
@@ -335,14 +335,13 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
                     $this->pairedBrackets[$top->index] = $i;
                     $this->pairedBrackets[$i] = $top->index;
                 } else {
-                    throw new Exception("Unmatched closing bracket '$t->text' at $this->filename:" . $t->lineNumber);
+                    throw new XRef_ParseException($t, "Unmatched closing bracket");
                 }
             }
         }
 
         if (count($stack)) {
-            $t = $stack[0];
-            throw new Exception("Unmatched opening bracket '$t->text' at $this->filename: $t->lineNumber");
+            throw new XRef_ParseException($stack[0]->token, "Unmatched opening bracket");
         }
     }
 

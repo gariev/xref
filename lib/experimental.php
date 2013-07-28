@@ -296,7 +296,7 @@ class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
         $this->storageManager->saveData("project-check", $projectName, $this->projectFiles);
     }
 
-    public function updateFile($filename, $isLibraryFile) {
+    public function updateFile($filename, $isLibraryFile, &$parsed_file = null) {
         $content = $this->fileProvider->getFileContent($filename);
         if (!$content) {
             unset($this->projectFiles[$filename]);
@@ -307,9 +307,17 @@ class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
             $this->projectFiles[$filename] = $shasum;
             if (!$this->loadFile($filename, $shasum, $isLibraryFile)) {
                 try {
-                    $pf = $this->xref->getParsedFile($filename, $content);
-                    $this->addParsedFile($pf);
-                    $pf->release();
+                    if ($parsed_file) {
+                        $this->addParsedFile($parsed_file);
+                    } else {
+                        $pf = $this->xref->getParsedFile($filename, $content);
+                        $this->addParsedFile($pf);
+                        if (isset($parsed_file)) {
+                            $parsed_file = $pf;
+                        } else {
+                            $pf->release();
+                        }
+                    }
                 } catch (Exception $e) {
                     error_log($e->getMessage());
                 }

@@ -28,8 +28,8 @@ if ($rev1 && $rev2) {
     $file_provider1 = $scm->getFileProvider($rev1);
     $file_provider2 = $scm->getFileProvider($rev2);
     foreach ($modified_files as $filename) {
-        $old_errors = XRef_getErrorsList($xref, $file_provider1, $filename);
-        $new_errors = XRef_getErrorsList($xref, $file_provider2, $filename);
+        $old_errors = $xref->getCachedFileReport($file_provider1, $filename);
+        $new_errors = $xref->getCachedFileReport($file_provider2, $filename);
         $errors = XRef_getNewErrors($old_errors, $new_errors);
         if (count($errors)) {
             $fileErrors[$filename] = $errors;

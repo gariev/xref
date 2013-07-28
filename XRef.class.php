@@ -514,6 +514,68 @@ class XRef {
         return $report;
     }
 
+    private $hasStorageManager;
+
+    // returns list of errors found in file, either from
+    // disk-cached file or from XRef parser/lint
+    public function getCachedLintReport(XRef_IFileProvider $file_provider, $filename, &$parsed_file = null) {
+        $content = $file_provider->getFileContent($filename);
+
+        if (!$content) {
+            // file doesn't exist in this revision
+            return array();
+        }
+
+        if (!isset($this->hasStorageManager)) {
+            try {
+                $storage = $this->getStorageManager();
+                $this->hasStorageManager = true;
+            } catch (Exception $e) {
+                $this->hasStorageManager = false;
+            }
+        }
+
+        // try to get cached version
+        if ($this->hasStorageManager) {
+            $storage = $this->getStorageManager();
+            $sha1sum = sha1($content);
+            $data = $storage->restoreData("lint", $sha1sum);
+            $xrefVersion = XRef::version();
+        }
+        if (isset($data) && isset($data["xrefVersion"]) && $data["xrefVersion"]==$xrefVersion) {
+            return $data["errors"];
+        }
+
+        // if there is no cached data, create one
+        try {
+            if ($parsed_file) {
+                $errors = $this->getLintReport($parsed_file);
+            } else {
+                $pf = $this->getParsedFile($filename, $content);
+                $errors = $this->getLintReport($pf);
+                if (isset($parsed_file)) {
+                    $parsed_file = $pf;
+                } else {
+                    $pf->release();
+                }
+            }
+        } catch (XRef_ParseException $e) {
+            $errors = array( XRef_CodeDefect::fromParseException($e) );
+        }
+
+        if ($this->hasStorageManager) {
+            $data = array(
+                "errors"    => $errors,
+                "file"      => $filename,
+                "rev"       => $file_provider->getVersion(),
+                "xrefVersion" => $xrefVersion
+            );
+            $storage->saveData("lint", $sha1sum, $data);
+        }
+        return $errors;
+    }
+
+    // experimental
     public function getProjectReport(XRef_IProjectDatabase $db) {
         $plugins = $this->getPlugins("XRef_IProjectLintPlugin");
         $report = array();
@@ -772,7 +834,7 @@ class XRef {
         if (file_exists($config_filename)) {
             echo "Config file $config_filename exists; won't overwrite\n";
         } else {
-            echo "Creating config file $config_filename";
+            echo "Creating config file $config_filename\n";
             // create config file
             $fh = fopen($config_filename, "w");
             if (!$fh) {
@@ -808,11 +870,16 @@ class XRef {
             $display_file = ($strlen < 60)
                     ? str_pad($file, 60)
                     : "..." . substr($file, $strlen-57);
-            echo sprintf("\r%4d/%4d %s", $i+1, $files_count, $display_file);
-            $project_database->updateFile($file, false);
+            echo sprintf("\r%4d/%4d %s ", $i+1, $files_count, $display_file);
+
+            $parsed_file = false;
+            $this->getCachedLintReport($file_provider, $file, $parsed_file);
+            $project_database->updateFile($file, false, $parsed_file);
+            if ($parsed_file) {
+                $parsed_file->release();
+            }
         }
-        echo "\n";
-        echo "Done.\n";
+        echo "\nDone.\n";
 
         // done
     }
