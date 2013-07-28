@@ -160,7 +160,7 @@ foreach ($branches as $branchName => $currentRev) {
     $fileErrors = $xref->sortAndFilterReport($fileErrors);
     if (count($fileErrors)) {
         if (XRef::verbose()) {
-            error_log(count($fileErrors) . " files with errors found");
+            error_log(count($fileErrors) . " file(s) with errors found");
         }
         XRef_notifyAuthor($xref, $fileErrors, $branchName, $oldRev, $currentRev);
         $db["numberOfSentLetters"]++;

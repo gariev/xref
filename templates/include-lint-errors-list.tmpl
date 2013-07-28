@@ -1,5 +1,4 @@
 {assign var=configKey value='xref.script-url' }
-{assign var=scriptUrl value=$config.$configKey }
 
 {if count($fileList)}
     <ul>
@@ -13,16 +12,18 @@
             <li>
                 {xref_severity_str severity=$e->severity html=true}
                 (<a href="https://github.com/gariev/xref/blob/master/README.md#{$e->errorCode}">{$e->errorCode}</a>):
-                {$e->message} ({$e->tokenText}) at
-                {if isset($lintDocReport)}
-                    {* Link from xref report leads to cross-ref documentation page *}
-                    <a href='{xref_report_link reportId="files" itemName=$fileName root=$root lineNumber=$e->lineNumber}'>line {$e->lineNumber}</a>
-                {elseif $scriptUrl}
-                    {* Link from from CI report sent by mail leads to to web-script if any is defined *}
-                    <a href="{$scriptUrl}/view-source.php?revision={$revision}&filename={$fileName}#{$e->lineNumber}">line {$e->lineNumber}</a>
-                {else}
-                    {* plain text if no web-scripts are configured *}
-                    line {$e->lineNumber}
+                {$e->message} ({$e->tokenText})
+                {if $e->lineNumber} at
+                    {if isset($lintDocReport)}
+                        {* Link from xref report leads to cross-ref documentation page *}
+                        <a href='{xref_report_link reportId="files" itemName=$fileName root=$root lineNumber=$e->lineNumber}'>line {$e->lineNumber}</a>
+                    {elseif isset($config.$configKey)}
+                        {* Link from from CI report sent by mail leads to to web-script if any is defined *}
+                        <a href="{$config.$configKey}/view-source.php?revision={$revision}&filename={$fileName}#{$e->lineNumber}">line {$e->lineNumber}</a>
+                    {else}
+                        {* plain text if no web-scripts are configured *}
+                        line {$e->lineNumber}
+                    {/if}
                 {/if}
             </li>
             {/foreach}
