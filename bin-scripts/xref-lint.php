@@ -13,13 +13,14 @@
 
 $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/XRef";
 require_once("$includeDir/XRef.class.php");
+require_once "$includeDir/lib/ci-tools.php";
 
 // command-line arguments
 XRef::registerCmdOption('o:', "output=",        '-o, --output=TYPE',    "either 'text' (default) or 'json'");
 XRef::registerCmdOption('r:', "report-level=",  '-r, --report-level=',  "either 'error', 'warning' or 'notice'");
 XRef::registerCmdOption('',   "init",           '--init',               "create a config file, init cache");
-XRef::registerCmdOption('',   "git",            '--git',                "git pre-commit mode: find new errors in files modified from HEAD");
-XRef::registerCmdOption('',   "cached",         '--cached',             "for git pre-commit mode: compare HEAD and files cached for commit");
+XRef::registerCmdOption('',   "git",            '--git',                "git pre-commit mode: find new errors in modified tracked files");
+XRef::registerCmdOption('',   "cached",         '--cached',             "implies --git option; compare HEAD and files cached for commit");
 
 try {
     list ($options, $arguments) = XRef::getCmdOptions();
@@ -61,6 +62,17 @@ if ($outputFormat != 'text' && $outputFormat != 'json') {
     die("unknown output format: $outputFormat");
 }
 
+// git mode:
+if (isset($options['cached']) && $options['cached']) {
+    $options['git'] = true;
+}
+if (isset($options['git']) && $options['git']) {
+    if ($arguments) {
+        error_log("warning: filenames to be checked are ignored in git mode");
+    }
+}
+
+
 //
 // color: on/off/auto, for text output to console only
 //
@@ -87,11 +99,28 @@ $xref->loadPluginGroup("lint");
 
 $total_report = array();
 
-if (isset($options['git'])) {
+if (isset($options['git']) && $options['git']) {
     // incremental mode: find errors in files modified since HEAD revision
-    // TODO
-    if (isset($options['cached'])) {
-    } else {
+    $old_rev = XRef_SourceCodeManager_Git::HEAD;
+    $new_rev = (isset($options['cached']) && $options['cached']) ?
+        XRef_SourceCodeManager_Git::CACHED : XRef_SourceCodeManager_Git::DISK;
+
+    $scm = $xref->getSourceCodeManager(); // TODO: check this is the git scm
+    $file_provider_old = $scm->getFileProvider( $old_rev );
+    $file_provider_new = $scm->getFileProvider( $new_rev );
+    $modified_files = $scm->getListOfModifiedFiles($old_rev, $new_rev);
+    foreach ($modified_files as $filename) {
+        if (!preg_match("#\\.php\$#", $filename)) {   // HUGE TODO
+            continue;
+        }
+
+        $old_errors = $xref->getCachedLintReport($file_provider_old, $filename);
+        $new_errors = $xref->getCachedLintReport($file_provider_new, $filename);
+        $errors = XRef_getNewErrors($old_errors, $new_errors);
+        if ($errors) {
+            $total_report[$filename] = $errors;
+        }
+        $totalFiles++;
     }
 } else {
     // main loop over all files

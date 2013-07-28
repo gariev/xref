@@ -9,6 +9,12 @@
 
 class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
 
+    // constants for pseudo-revision IDs
+    // use with caution - not all constants are supported in every method
+    const HEAD      = "HEAD";
+    const CACHED    = "(CACHED)";
+    const DISK      = "(DISK)";
+
     /**
      * @return void
      */
@@ -69,7 +75,13 @@ class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
      * @return string[]            List of files that were modified from $oldRev to $currentRev
      */
     public function getListOfModifiedFiles($oldRev, $currentRev) {
-        return self::git(array("diff", "--name-only", "'$oldRev'", "'$currentRev'"), true);
+        if ($oldRev == self::HEAD && $currentRev == self::CACHED) {
+            return self::git(array("diff", "--name-only", "--cached", "HEAD:"), true);
+        } elseif ($oldRev == self::HEAD && $currentRev == self::DISK) {
+            return self::git(array("diff", "--name-only", "HEAD:"), true);
+        } else {
+            return self::git(array("diff", "--name-only", "'$oldRev'", "'$currentRev'"), true);
+        }
     }
 
     /**
@@ -82,7 +94,8 @@ class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
         //  object ID must be supplied to stdin :(. Use proc_open() here.
         // TODO: current 'git' function implementation strips spaces at end of content,
         //  so sha1 sum of file is different from git's sha1 sum
-        $content = self::git(array("cat-file", "blob", "'$revision:$filename'", "2>&1"), false, false);
+        $file_spec = ($revision == self::CACHED) ? "':$filename'" : "'$revision:$filename'";
+        $content = self::git(array("cat-file", "blob", $file_spec, "2>&1"), false, false);
         return $content;
     }
 
@@ -106,7 +119,11 @@ class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
     }
 
     public function getFileProvider($revision) {
-        return new XRef_FileProvider_Git($this, $revision);
+        if ($revision == self::DISK) {
+            return new XRef_FileProvider_FileSystem( XRef::getConfigValue("git.repository-dir") );
+        } else {
+            return new XRef_FileProvider_Git($this, $revision);
+        }
     }
 
     /**

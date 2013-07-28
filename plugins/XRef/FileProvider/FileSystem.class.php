@@ -5,17 +5,38 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
     protected $seenFiles    = array();
     protected $extensions   = null;
     protected $files        = null;     // array ($filename => $file_extension)
+    protected $rootDir      = null;
+    protected $roodDirStrlen= 0;
 
     public function __construct($paths) {
-        $this->paths = (is_array($paths)) ? $paths : array($paths);
+        $paths = (is_array($paths)) ? $paths : array($paths);
+        foreach ($paths as $path) {
+            $p = realpath($path);
+            if ($p) {
+                $this->paths[] = realpath($p);
+            } else {
+                error_log("Path '$path' doesn't exist");
+            }
+        }
+        if (count($this->paths) > 0 && is_dir($this->paths[0])) {
+            $this->rootDir = $this->paths[0];
+            $this->roodDirStrlen = strlen($this->rootDir);
+        }
     }
 
     public function excludePaths(array $paths) {
         foreach ($paths as $path) {
-            // remove starting "./" and trailing "/" if any
-            $path = preg_replace('#^\\.[/\\\\]+#', '', $path);
-            $path = preg_replace('#[/\\\\]+$#', '', $path);
-            $this->seenFiles[$path] = true;
+            if ($this->rootDir && file_exists("$this->rootDir/$path")) {
+                $p = realpath("$this->rootDir/$path");
+            } else {
+                $p = realpath($path);
+            }
+
+            if ($p) {
+                $this->seenFiles[$p] = true;
+            } else {
+                error_log("Path '$path' doesn't exist");
+            }
         }
     }
 
@@ -39,6 +60,9 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
     }
 
     public function getFileContent($filename) {
+        if (file_exists("$this->rootDir/$filename")) {
+            $filename = "$this->rootDir/$filename";
+        }
         return file_get_contents($filename);
     }
 
@@ -48,7 +72,12 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
      *
      * @param string $file - file or directory name
      */
-    protected function findInputFiles($file) {
+    protected function findInputFiles($f) {
+        $file = realpath($f);
+        if (!$file) {
+            error_log("File '$f' doesn't exist");
+        }
+
         // prevent visiting the same dir several times
         if (isset($this->seenFiles[$file])) {
             return;
@@ -71,17 +100,31 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
                         // skip "." and ".." dirs
                         continue;
                     }
-                    $this->findInputFiles( ($file == '.') ? $filename : "$file/$filename");
+                    $this->findInputFiles("$file/$filename");
                 }
             }
         } else if (is_file($file)) {
+            $add_file = false;
             if ($this->extensions) {
                 $ext = strtolower( pathinfo($file, PATHINFO_EXTENSION) );
                 if (isset($this->extensions[$ext])) {
-                    $this->files[] = $file;
+                    $add_file = true;
                 }
             } else {
-                $this->files[] = $file;
+                $add_file = true;
+            }
+
+            if ($add_file) {
+                if ($this->rootDir
+                    && strncmp($this->rootDir, $file, $this->roodDirStrlen) == 0
+                    && $file[$this->roodDirStrlen] == DIRECTORY_SEPARATOR)
+                {
+                    $file = substr($file, $this->roodDirStrlen+1);
+                }
+                // windows hack: replace "\" by "/" so that
+                // paths are the same in FileSystem and Git providers
+                // TODO: test this on Windows machine
+                $this->files[] = str_replace('\\', '/', $file);
             }
         }
     }
