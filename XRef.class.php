@@ -866,12 +866,7 @@ class XRef {
         $files_count = count($files);
         echo "Indexing files\n";
         foreach ($files as $i => $file) {
-            $strlen = strlen($file);
-            $display_file = ($strlen < 60)
-                    ? str_pad($file, 60)
-                    : "..." . substr($file, $strlen-57);
-            echo sprintf("\r%4d/%4d %s ", $i+1, $files_count, $display_file);
-
+            self::progressBar($i+1, $files_count, $file);
             $parsed_file = false;
             $this->getCachedLintReport($file_provider, $file, $parsed_file);
             $project_database->updateFile($file, false, $parsed_file);
@@ -882,6 +877,13 @@ class XRef {
         echo "\nDone.\n";
 
         // done
+    }
+
+    /** basic console progress bar: 10/100 files processed */
+    public static function progressBar($current, $total, $text) {
+        $len = strlen($text);
+        $text = ($len < 60) ? str_pad($text, 60) : "..." . substr($text, $len-57);
+        echo sprintf("\r%4d/%4d %s ", $current, $total, $text);
     }
 
     /**
@@ -924,7 +926,7 @@ class XRef {
     private static $needHelp;
     private static $verbose;
 
-    // optionsList: array of arrays (shortOpt, longOpt, usage, description)
+    // optionsList: array of arrays (shortOpt, longOpt, usage, description, isArray)
     private static $optionsList = array(
         array('c:', 'config=',  '-c, --config=FILE',    'Path to config file',          false),
         array('v',  'verbose',  '-v, --verbose',        'Be noisy',                     false),
@@ -939,7 +941,7 @@ class XRef {
     /**
      * Parses command line-arguments and returns found options/arguments.
      *
-     *  input (for tests only, by default it takes real comman-line option list):
+     *  input (for tests only, by default it takes real command-line option list):
      *      array("scriptname.php", "--help", "-d", "foo=bar", "--config=xref.ini", "filename.php")
      *
      *  output:

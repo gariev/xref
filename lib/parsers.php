@@ -448,6 +448,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
         $namespace = new XRef_Namespace();
         $namespace->index = $t->index;
+        $namespace->lineNumber = $t->lineNumber;
 
         $this->nextNS();
         $name = $this->parseTypeName();
@@ -538,6 +539,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         $class = new XRef_Class();
         $class->index = $t->index;
         $class->kind = $t->kind;
+        $class->lineNumber = $t->lineNumber;
 
         // ugly part: backtracking
         $p = $t->prevNS();
@@ -722,6 +724,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         $prop->name = substr($t->text, 1); // strip the leading '$' sign
         $prop->index = $t->index;
         $prop->attributes = $attributes;
+        $prop->lineNumber = $t->lineNumber;
         $class->properties[] = $prop;
 
         $t = $this->nextNS();
@@ -753,6 +756,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
             $const = new XRef_Constant;
             $const->index = $t->index;
+            $const->lineNumber = $t->lineNumber;
             $const->attributes = $attributes;
             $this->constants[] = $const;
             if ($class) {
@@ -789,7 +793,9 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
         $function = new XRef_Function();
         $function->index = $t->index;
+        $function->lineNumber = $t->lineNumber;
         $function->attributes = $attributes;
+
         $t = $this->nextNS();
         if ($t->text == '&') {
             $t = $this->nextNS();

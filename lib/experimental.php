@@ -359,6 +359,19 @@ class XRef_ProjectDatabase_Persistent extends XRef_ProjectDatabase {
 
 class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlugin {
 
+    const
+        E_SEVERAL_CLASS_DEFINITIONS     = "exp01",
+        E_ACCESS_TO_UNDEFINED_METHOD    = "exp02",
+        E_ACCESS_TO_UNDEFINED_CONSTANT  = "exp03",
+        E_ACCESS_TO_UNDEFINED_PROPERTY  = "exp04",
+        E_MISSING_BASE_CLASS            = "exp05",
+        E_ACCESS_STATIC_AS_INSTANCE     = "exp06",
+        E_ACCESS_INSTANCE_AS_STATIC     = "exp07",
+        E_PRIVATE_ACCESS                = "exp08",
+        E_PROTECTED_ACCESS              = "exp09",
+        E_MAGIC_GETTER                  = "exp10";
+
+
     /** @var array - map: (class name -> array of all definition of this class) */
     private $classes = null;
 
@@ -386,7 +399,7 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
             if (count($list_of_files) > 1) {
                 $cd = new XRef_CodeDefect();
                 $cd->tokenText = $class_name;
-                $cd->errorCode = "exp01";
+                $cd->errorCode = self::E_SEVERAL_CLASS_DEFINITIONS;
                 $cd->severity = XRef::WARNING;
                 $cd->message = "Class is defined more than once"; // . implode(", ", $list_of_files);
                 $cd->fileName = "(project)";
@@ -430,25 +443,41 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
 
         if (!$found_in_class) {
             // definition not found
-            $found = false;
             if ($key=='property') {
-                list($_get_found, $_get_def) = $this->getDefinition($class_name, 'method', '__get');
-                if ($_get_found) {
-                    $found = true;
+                list($found_in_class, $_get_def) = $this->getDefinition($class_name, 'method', '__get');
+                if ($found_in_class) {
+                    $error_code = self::E_MAGIC_GETTER;
+                    $severity = XRef::NOTICE;
+                    $message = "Can't validate access to properties of class $class_name because it has method __get";
+                    $uniq = "$error_code/$class_name";
+                    return array($error_code, $severity, $message, $uniq);
                 }
             }
-            if (!$found) {
-                $error_code = "exp02";
-                $severity = ($key=='method' || $key=='constant') ? XRef::ERROR : XRef::WARNING;
-                $message = "Access to undefined $key of class $class_name";
-                $uniq = "$error_code/$from_class/$class_name/$key/$name";
-                return array($error_code, $severity, $message, $uniq);
+
+            switch ($key) {
+                case 'method':
+                    $error_code = self::E_ACCESS_TO_UNDEFINED_METHOD;
+                    $severity = XRef::ERROR;
+                    break;
+                case 'constant':
+                    $error_code = self::E_ACCESS_TO_UNDEFINED_CONSTANT;
+                    $severity = XRef::ERROR;
+                    break;
+                case 'property':
+                    $error_code = self::E_ACCESS_TO_UNDEFINED_PROPERTY;
+                    $severity = XRef::WARNING;
+                    break;
+                default:
+                    throw new Exception($key);
             }
+            $message = "Access to undefined $key of class $class_name";
+            $uniq = "$error_code/$from_class/$class_name/$key/$name";
+            return array($error_code, $severity, $message, $uniq);
         } elseif (!$def) {
             // definition not found because definition of base class is missing
-                $error_code = "exp04";
+                $error_code = self::E_MISSING_BASE_CLASS;
                 $message = "Can't validate class $class_name because definition of base class '$found_in_class' is missing";
-                return array($error_code, XRef::WARNING, $message, "$error_code/$class_name/$found_in_class");
+                return array($error_code, XRef::NOTICE, $message, "$error_code/$class_name/$found_in_class");
 
         } else {
             // got definition, check access
@@ -456,17 +485,17 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
             if ($key != 'constant' && !($key=='method' && $name=='__construct')) {
                 if ($is_static) {
                     if (!XRef::isStatic($def->attributes)) {
-                        $error_code = "exp03";
+                        $error_code = self::E_ACCESS_INSTANCE_AS_STATIC;
                         $severity = XRef::ERROR;
                         $message = "Trying to access instance $key as static one";
                         $uniq = "$error_code/$from_class/$class_name/$key/$name";
                         return array($error_code, $severity, $message, $uniq);
                     }
                 } else {
-                    if (XRef::isStatic($def->attributes) && $key == 'property') {
-                        $error_code = "exp03";
+                    if ($key == 'property' && XRef::isStatic($def->attributes)) {
+                        $error_code = self::E_ACCESS_STATIC_AS_INSTANCE;
                         $severity = XRef::ERROR;
-                        $message = "Trying to access static $key as instance one";
+                        $message = "Trying to access static property as instance one";
                         $uniq = "$error_code/$from_class/$class_name/$key/$name";
                         return array($error_code, $severity, $message, $uniq);
                     }
@@ -478,7 +507,7 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
                 // ok
             } elseif (XRef::isPrivate($def->attributes)) {
                 if (!$from_class || $found_in_class != strtolower($from_class)) {
-                    $error_code = "exp04";
+                    $error_code = self::E_PRIVATE_ACCESS;
                     $severity = XRef::ERROR;
                     $message = "Attempt to access private $key of class $found_in_class";
                     $uniq = "$error_code/$from_class/$class_name/$key/$name";
@@ -486,7 +515,7 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
                 }
             } elseif (XRef::isProtected($def->attributes)) {
                 if (!$from_class || !$this->isSubclassOf($from_class, $found_in_class)) {
-                    $error_code = "exp04";
+                    $error_code = self::E_PROTECTED_ACCESS;;
                     $severity = XRef::ERROR;
                     $message = "Attempt to access protected $key of class $found_in_class";
                     $uniq = "$error_code/$from_class/$class_name/$key/$name";
@@ -608,6 +637,8 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
 
 class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements XRef_IProjectLintPlugin {
 
+    const E_MISSED_CALL_TO_PARENT_CONSTRUCTOR = "exp20";
+
     /** @var array - map: (class name -> { "sublasses" => [], hasConstructor=>true|false, callsParent=>true|false } */
     private $classes = null;
 
@@ -618,12 +649,13 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
         parent::__construct("project-check-missed-parent-constructor", "Project Lint: Missed Parent Constructor");
     }
 
-    private function getOrCreate($class_name, $file_name = null) {
+    private function getOrCreate($class_name, $file_name = null, $line_number = null) {
         $lc_name = strtolower($class_name);
         if (!isset($this->classes[$lc_name])) {
             $this->classes[$lc_name] = (object) array (
                 "name" => $class_name,
                 "fileName" => $file_name,
+                "lineNumber" => $line_number,
                 "subclasses" => array(),
                 "hasConstructor" => false,
                 "callsParentConstructor" => false,
@@ -631,6 +663,7 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
         }
         if ($file_name) {
             $this->classes[$lc_name]->fileName = $file_name;
+            $this->classes[$lc_name]->lineNumber = $line_number;
         }
         return $this->classes[$lc_name];
     }
@@ -648,7 +681,7 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
                     continue;
                 }
 
-                $c = $this->getOrCreate($class->name, $file_name);
+                $c = $this->getOrCreate($class->name, $file_name, $class->lineNumber);
                 foreach ($class->extends as $parent_name) {
                     $parent = $this->getOrCreate($parent_name);
                     $parent->subclasses[] = $class->name;
@@ -700,11 +733,11 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
                 $file_name = $subclass->fileName;
                 $cd = new XRef_CodeDefect();
                 $cd->tokenText = $subclass->name;
-                $cd->errorCode = "exp05";
+                $cd->errorCode = self::E_MISSED_CALL_TO_PARENT_CONSTRUCTOR;
                 $cd->severity = XRef::WARNING;
                 $cd->message = "Class $subclass_name doesn't call constructor of it's base class $class_name";
                 $cd->fileName = $file_name;
-                $cd->lineNumber = 0;
+                $cd->lineNumber = $subclass->lineNumber;
                 $this->errors[ $file_name ][] = $cd;
             }
             $this->checkSubclasses($subclass);

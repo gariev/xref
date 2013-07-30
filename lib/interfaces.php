@@ -402,6 +402,8 @@ interface XRef_ISourceCodeManager {
 class XRef_Namespace {
     /** @var int - index of T_NAMESPACE token*/
     public $index;
+    /** @var int - line number of T_NAMESPACE token */
+    public $lineNumber;
     /** @var string - e.g. 'foo\bar' or '' for global namespace */
     public $name;
     /** @var int - index of '{' or ';' token */
@@ -415,6 +417,8 @@ class XRef_Namespace {
 class XRef_Class {
     /** @var int - index of T_CLASS (T_INTERFACE or T_TRAIT) token */
     public $index;
+    /** @var int - line number of T_CLASS token */
+    public $lineNumber;
     /** @var int - one of T_CLASS, T_INTERFACE or T_TRAIT constants */
     public $kind;
     /** @var int - index of the token with the class name */
@@ -449,6 +453,8 @@ class XRef_Class {
 class XRef_Function {
     /** @var int - index of T_FUNCTION token */
     public $index;
+    /** @var int - line number of T_FUNCTION token */
+    public $lineNumber;
     /** @var string - FQ name for functions, e.g 'My\Namespace\foo', simple name for class methods, null for closures */
     public $name;
     /** @var int - index of the token with the function name */
@@ -489,6 +495,9 @@ class XRef_FunctionParameter {
 class XRef_Constant {
     /** @var int - index of T_STRING token in const declaration */
     public $index;
+    /** @var int - line number of name token
+     * (there may be several constants in one declaration, each may have different line number) */
+    public $lineNumber;
     /** @var string - e.g. 'FOO' or 'Foo\BAR' for file constants */
     public $name;
     /** @var string - class name or null for file constants */
@@ -500,6 +509,9 @@ class XRef_Constant {
 class XRef_Property {
     /** @var int - index of T_VARIABLE token */
     public $index;
+    /** @var int - line number of name token
+     * (there may be several properties in one (var) declaration) */
+    public $lineNumber;
     /** @var string - e.g. $foo */
     public $name;
     /** @var string - e.g. 'string' or 'ClassName' or null */

@@ -101,21 +101,25 @@ class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
 
     /**
      * @param string $revision
-     * @return array ('an' => 'author name', 'ae' => 'author e-mail', ...)
+     * @return array ('H' => revision, 'an' => 'author name', 'ae' => 'author e-mail', ...)
      */
     public function getRevisionInfo($revision) {
-        $knownFields = array('ae','aE', 'an', 'cn', 'ce', 'cE');
-        $formatFields = array();
-        foreach ($knownFields as $f) {
-            $formatFields[] = "%$f";
+        if ($revision == self::CACHED || $revision == self::DISK) {
+            return array();
+        } else {
+            $knownFields = array('H', 'ae','aE', 'an', 'cn', 'ce', 'cE');
+            $formatFields = array();
+            foreach ($knownFields as $f) {
+                $formatFields[] = "%$f";
+            }
+            $format = implode($formatFields, '%n');
+            $lines = self::git(array("show", "-s", "--format='$format'", "'$revision'"), true);
+            $commitInfo = array();
+            for ($i=0; $i<count($knownFields); ++$i) {
+                $commitInfo[ $knownFields[$i] ] = $lines[$i];
+            }
+            return $commitInfo;
         }
-        $format = implode($formatFields, '%n');
-        $lines = self::git(array("show", "-s", "--format='$format'", "'$revision'"), true);
-        $commitInfo = array();
-        for ($i=0; $i<count($knownFields); ++$i) {
-            $commitInfo[ $knownFields[$i] ] = $lines[$i];
-        }
-        return $commitInfo;
     }
 
     public function getFileProvider($revision) {

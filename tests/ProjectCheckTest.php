@@ -20,7 +20,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
     protected function checkFoundDefect($foundDefect, $file_name, $expected_file_name, $tokenText, $lineNumber, $severity) {
         $descr = print_r($foundDefect, true);   // TODO
         $this->assertTrue($file_name                == $expected_file_name, "Wrong filename: $file_name / $expected_file_name");
-        $this->assertTrue($foundDefect->tokenText   == $tokenText,          "Invalid token:\n$descr");
+        $this->assertTrue($foundDefect->tokenText   == $tokenText,          "Invalid token ($foundDefect->tokenText, $tokenText):\n$descr");
         $this->assertTrue($foundDefect->lineNumber  == $lineNumber,         "Invalid line number ($lineNumber/$foundDefect->lineNumber):\n$descr");
         $this->assertTrue($foundDefect->severity    == $severity,           "Invalid severity:\n$descr");
     }
@@ -34,6 +34,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         }
         // report: array (filename => array(list of errors))
         $report = $this->xref->getProjectReport( $this->projectDatabase );
+        $report = $this->xref->sortAndFilterReport($report);
 
         // 1. count errors
         $countFound = 0;
@@ -104,7 +105,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         <?php
             class B extends A {
                 function foo() {
-                    self::bar();        // warning, since there is no definition of class A
+                    self::bar();        // notice, since there is no definition of class A
                 }
             }
             class C {
@@ -116,7 +117,6 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA ),
             array(
-                array('fileA.php', 'bar', XRef::WARNING, 5),
                 array('fileA.php', 'bar', XRef::ERROR, 10),
             )
         );
@@ -139,15 +139,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             echo B::BAR;        // ok
             echo A::FOO;        // warning
             echo B::FOO;        // ok
-            echo C::FOO;        // warning, because class C extends unknown class
-            echo D::FOO;        // warning, because no class D is found
+            echo C::FOO;        // notice, because class C extends unknown class
+            echo D::FOO;        // notice, because no class D is found
         ';
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB, ),
             array(
                 array('fileB.php', 'FOO', XRef::ERROR, 5),
-                array('fileB.php', 'FOO', XRef::WARNING, 7),
-                array('fileB.php', 'FOO', XRef::WARNING, 8),
+                // array('fileB.php', 'FOO', XRef::NOTICE, 7),
+                // array('fileB.php', 'FOO', XRef::NOTICE, 8),
             )
         );
     }
@@ -169,15 +169,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             echo B::BAR;        // ok
             echo A::FOO;        // warning
             echo B::FOO;        // ok
-            echo C::FOO;        // warning, because class C extends unknown class
-            echo D::FOO;        // warning, because no class D is found
+            echo C::FOO;        // notice, because class C extends unknown class
+            echo D::FOO;        // notice, because no class D is found
         ';
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB, ),
             array(
                 array('fileB.php', 'FOO', XRef::ERROR, 5),
-                array('fileB.php', 'FOO', XRef::WARNING, 7),
-                array('fileB.php', 'FOO', XRef::WARNING, 8),
+                // array('fileB.php', 'FOO', XRef::NOTICE, 7),
+                // array('fileB.php', 'FOO', XRef::NOTICE, 8),
             )
         );
     }
@@ -507,10 +507,8 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $code ),
             array(
-                array('fileA.php', 'F', XRef::WARNING, 0),  // TODO: change the line number from 0 to real 8
-                array('fileA.php', 'E', XRef::WARNING, 0),  // WARNING: since the line numbers are equal (0),
-                                                            // the order of returned errors depends on if sort is stable
-                                                            // TODO: fix line numbers!
+                array('fileA.php', 'E', XRef::WARNING, 10),
+                array('fileA.php', 'F', XRef::WARNING, 14),
             )
         );
     }
