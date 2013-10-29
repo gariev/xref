@@ -103,6 +103,7 @@ class XRef_LintEngine_ProjectCheck extends XRef_LintEngine_Simple {
         $old_report = $this->collectReport();
 
         // update reports, slices and filesmap for modified files
+        $this->projectDatabase = new XRef_ProjectDatabase();
         $this->report = array();
         foreach ($files as $filename) {
             unset( $this->filesMap[$filename] );
@@ -113,7 +114,7 @@ class XRef_LintEngine_ProjectCheck extends XRef_LintEngine_Simple {
 
         $this->releaseParsedFile();
         $this->saveFilesMap($to);
-        return XRef_getNewProjectErrors($old_report, $new_report);
+        return XRef_LintEngine_Simple::getNewProjectErrors($old_report, $new_report);
     }
 
 

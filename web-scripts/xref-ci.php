@@ -13,7 +13,6 @@
 
 $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/XRef";
 require_once "$includeDir/XRef.class.php";
-require_once "$includeDir/lib/ci-tools.php";
 
 $xref = new XRef();
 $xref->loadPluginGroup("lint");

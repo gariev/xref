@@ -21,7 +21,7 @@ class XRef_FileProvider_InMemory implements XRef_IFileProvider {
      * @return string
      */
     public function getFileContent($filename) {
-        return $this->files[$filename];
+        return (isset($this->files[$filename])) ? $this->files[$filename] : null;
     }
 
     /**
