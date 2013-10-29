@@ -355,11 +355,18 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
                     echo self::$pbar;       // error
                     echo $this->pbar;       // ok
                     echo $this->fbar();     // ok
+                    echo self::fbar();      // not recommended, but ok actually
+                }
+
+                public static function test1() {
+                    echo self::ffoo();      // ok
                     echo self::fbar();      // error
                 }
             }
 
             class B extends A {
+                public static function fqux() {}
+
                 public function test() {
                     echo self::$pfoo;       // ok
                     echo $this->pfoo;       // error
@@ -369,8 +376,19 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
                     echo self::$pbar;       // error
                     echo $this->pbar;       // ok
                     echo $this->fbar();     // ok
-                    echo self::fbar();      // error
+                    echo self::fbar();      // not recommended, but ok actually
                 }
+
+                public static function test1() {
+                    echo self::ffoo();      // ok
+                    echo self::fbar();      // error
+                    echo parent::ffoo();    // ok
+                    echo parent::fbar();    // error
+
+                    echo self::fqux();      // ok
+                    echo parent::fqux();    // error
+                 }
+
             }
 
             public function test() {
@@ -387,14 +405,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
                 // class A
                 array('fileA.php', 'pfoo', XRef::ERROR, 12),
                 array('fileA.php', 'pbar', XRef::ERROR, 16),
-                array('fileA.php', 'fbar', XRef::ERROR, 19),
+                array('fileA.php', 'fbar', XRef::ERROR, 24),
                 // class B
-                array('fileA.php', 'pfoo', XRef::ERROR, 26),
-                array('fileA.php', 'pbar', XRef::ERROR, 30),
-                array('fileA.php', 'fbar', XRef::ERROR, 33),
+                array('fileA.php', 'pfoo', XRef::ERROR, 33),
+                array('fileA.php', 'pbar', XRef::ERROR, 37),
+                array('fileA.php', 'fbar', XRef::ERROR, 45),
+                array('fileA.php', 'fqux', XRef::ERROR, 50),
                 // global test()
-                array('fileA.php', 'pbar', XRef::ERROR, 40),
-                array('fileA.php', 'fbar', XRef::ERROR, 41),
+                array('fileA.php', 'pbar', XRef::ERROR, 58),
+                array('fileA.php', 'fbar', XRef::ERROR, 59),
             )
         );
     }

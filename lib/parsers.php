@@ -725,6 +725,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         $prop->index = $t->index;
         $prop->attributes = $attributes;
         $prop->lineNumber = $t->lineNumber;
+        $prop->className = $class->name;
         $class->properties[] = $prop;
 
         $t = $this->nextNS();

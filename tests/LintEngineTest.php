@@ -207,7 +207,7 @@ class LintEngineTest extends PHPUnit_Framework_TestCase {
            'fileA.php' => '<?php class A { public function __construct() {;;} } ',
            'fileB.php' => '<?php class B extends A { public function __construct() {;;} }',
         ));
-        $report = $lint_engine->getIncrementalReport($file_provider1, $file_provider2, array("fileA.php", 'fileB.php'));
+        $report = $lint_engine->getIncrementalReport($file_provider1, $file_provider2, array("fileA.php"));
         $this->assertTrue(count($report) == 1);
         $this->assertTrue(isset($report["fileB.php"]));
         $this->assertTrue(count($report["fileB.php"]) == 1);

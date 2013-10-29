@@ -516,6 +516,8 @@ class XRef_Property {
     public $name;
     /** @var string - e.g. 'string' or 'ClassName' or null */
     public $typeName;
+    /** @var string - FQ name of class */
+    public $className;
     /** @var int - bitmask of XRef::MASK_* constants */
     public $attributes;
 

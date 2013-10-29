@@ -83,7 +83,6 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
     private function lookupClassField($class_name, $field_kind, $field_name, $is_case_sensitive = true, $do_only_parent_lookup = false) {
         $lc_class_name = strtolower($class_name);
         $lc_field_name = strtolower($field_name);
-
         if (isset($this->classes[$lc_class_name])) {
             $this->classes[$lc_class_name];
             // 1. search the given class
@@ -295,7 +294,7 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
     private $errors = array();
 
     private function addUsedConstruct($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only) {
-        $uniq_key = "$class_name##$key##$name##$from_class##$is_static";
+        $uniq_key = "$class_name##$key##$name##$from_class##$is_static##$check_parent_only";
         if (!isset($this->already_seen[$uniq_key])) {
             $this->already_seen[$uniq_key] = true;
             $this->slice[] = array($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only);
@@ -335,24 +334,19 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
             if ($t->kind == T_STRING) {
                 $n = $t->nextNS();
                 if ($n->kind == T_DOUBLE_COLON) {
-
-                    // TODO: parent:: class, static::, etc
                     $class_name = $t->text;
-                    $from_class = $pf->getClassAt( $t->index );
-                    $from_method = $pf->getMethodAt( $t->index );
+                    $check_parent_only = ($class_name == 'parent');
 
+                    $from_class = $pf->getClassAt( $t->index );
                     $from_class_name = ($from_class) ? $from_class->name : '';
-                    $is_static_context = true;
-                    $check_parent_only = false;
-                    if ($class_name == 'self') {
+
+                    if ($class_name == 'self' || $class_name == 'static' || $class_name == 'parent') {
+                        $check_parent_only = ($class_name == 'parent');
                         $class_name = $from_class_name;
-                    } elseif ($class_name == 'static') {
-                        $class_name = $from_class_name;
+                        $from_method = $pf->getMethodAt( $t->index );
                         $is_static_context = !$from_class || !$from_method || XRef::isStatic($from_method->attributes);
-                    } elseif ($class_name == 'parent') {
-                        $class_name = $from_class_name;
-                        $is_static_context = !$from_class || !$from_method || XRef::isStatic($from_method->attributes);
-                        $check_parent_only = true;
+                    } else {
+                        $is_static_context = true;
                     }
 
                     $n = $n->nextNS();
@@ -360,16 +354,17 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
                         $nn = $n->nextNS();
                         if ($nn->text == '(') {
                             // Foo::bar()
+                            // self::bar() - this can be either static or instance access, depends on context
                             $this->addUsedConstruct($class_name, 'method', $n->text, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
                         } else {
-                            // Foo:BAR - constant?
+                            // Foo::BAR - constant
                             $const_name = $n->text;
-                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
+                            $this->addUsedConstruct($class_name, 'constant', $n->text, $t->lineNumber, $from_class_name, true, $check_parent_only);
                         }
                     } elseif ($n->kind == T_VARIABLE) {
                         // Foo::$bar
                         $property_name = substr($n->text, 1);   // skip '$' sign
-                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber, $from_class_name, $is_static_context, $check_parent_only);
+                        $this->addUsedConstruct($class_name, 'property', $property_name, $t->lineNumber, $from_class_name, true, $check_parent_only);
                     } else {
                         // e.g. self::$$keyName
                         //error_log($n);
@@ -449,24 +444,25 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
     // is $key( = 'property|method') named $name defined in class $class_name?
     // returns array(error_code, error_message)
     private function checkAccessError(XRef_IProjectDatabase $db, $class_name, $key, $name, $from_class, $is_static, $check_parent_only) {
+        /** @var $lr XRef_LookupResult */
         $lr = null;
         switch ($key) {
             case 'property':
                 $lr = $db->lookupProperty($class_name, $name, $check_parent_only);
                 break;
             case 'method':
+                $lr = $db->lookupMethod($class_name, $name, $check_parent_only);
                 break;
             case 'constant':
+                $lr = $db->lookupConstant($class_name, $name, $check_parent_only);
                 break;
         }
-        $d = $this->getDefinition($class_name, $key, $name, $check_parent_only);
-        list($found_in_class, $def) = $d;
 
-        if (!$found_in_class) {
+        if (!$lr || $lr->code == XRef_LookupResult::NOT_FOUND) {
             // definition not found
-            if ($key=='property') {
-                list($found_in_class, $_get_def) = $this->getDefinition($class_name, 'method', '__get');
-                if ($found_in_class) {
+            if ($key == 'property') {
+                $lr_magic = $db->lookupMethod($class_name, '__get', $check_parent_only);
+                if ($lr_magic->code == XRef_LookupResult::FOUND) {
                     $error_code = self::E_MAGIC_GETTER;
                     $severity = XRef::NOTICE;
                     $message = "Can't validate access to properties of class $class_name because it has method __get";
@@ -494,18 +490,21 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
             $message = "Access to undefined $key of class $class_name";
             $uniq = "$error_code/$from_class/$class_name/$key/$name";
             return array($error_code, $severity, $message, $uniq);
-        } elseif (!$def) {
+        } elseif ($lr->code == XRef_LookupResult::CLASS_MISSING) {
             // definition not found because definition of base class is missing
-                $error_code = self::E_MISSING_BASE_CLASS;
-                $message = "Can't validate class $class_name because definition of base class '$found_in_class' is missing";
-                return array($error_code, XRef::NOTICE, $message, "$error_code/$class_name/$found_in_class");
-
+            $base_class_name = $lr->missingClassName;
+            $error_code = self::E_MISSING_BASE_CLASS;
+            $message = "Can't validate class $class_name because definition of base class '$base_class_name' is missing";
+            return array($error_code, XRef::NOTICE, $message, "$error_code/$class_name/$base_class_name");
         } else {
             // got definition, check access
+            $attributes = $lr->elements[0]->attributes;
+            $found_in_class = strtolower($lr->elements[0]->className);
+
             // 1. static vs. instance
             if ($key != 'constant' && !($key=='method' && $name=='__construct')) {
                 if ($is_static) {
-                    if (!XRef::isStatic($def->attributes)) {
+                    if (!XRef::isStatic($attributes)) {
                         $error_code = self::E_ACCESS_INSTANCE_AS_STATIC;
                         $severity = XRef::ERROR;
                         $message = "Trying to access instance $key as static one";
@@ -513,7 +512,7 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
                         return array($error_code, $severity, $message, $uniq);
                     }
                 } else {
-                    if ($key == 'property' && XRef::isStatic($def->attributes)) {
+                    if ($key == 'property' && XRef::isStatic($attributes)) {
                         $error_code = self::E_ACCESS_STATIC_AS_INSTANCE;
                         $severity = XRef::ERROR;
                         $message = "Trying to access static property as instance one";
@@ -524,9 +523,9 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
             }
 
             // 2. public, private, protected
-            if (XRef::isPublic($def->attributes)) {
+            if (XRef::isPublic($attributes)) {
                 // ok
-            } elseif (XRef::isPrivate($def->attributes)) {
+            } elseif (XRef::isPrivate($attributes)) {
                 if (!$from_class || $found_in_class != strtolower($from_class)) {
                     $error_code = self::E_PRIVATE_ACCESS;
                     $severity = XRef::ERROR;
@@ -534,7 +533,7 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
                     $uniq = "$error_code/$from_class/$class_name/$key/$name";
                     return array($error_code, $severity, $message, $uniq);
                 }
-            } elseif (XRef::isProtected($def->attributes)) {
+            } elseif (XRef::isProtected($attributes)) {
                 if (!$from_class || !$this->isSubclassOf($from_class, $found_in_class)) {
                     $error_code = self::E_PROTECTED_ACCESS;;
                     $severity = XRef::ERROR;
@@ -544,7 +543,20 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
                 }
             } else {
                 // shouldn't be here
-                throw new Exception("Should be public? $def->attributes");
+                throw new Exception("Should be public? $attributes");
+            }
+
+            // 3. check that the called method is defined, not only declared.
+            // however, allow to call declared methods from abstract classes
+            if ($key == 'method' && is_null($lr->elements[0]->bodyStarts)) {
+                $lc = $db->lookupClass($from_class);
+                if (!$lc || $lc->code != XRef_LookupResult::FOUND || !$lc->elements[0]->isAbstract) {
+                    $error_code = self::E_ACCESS_TO_UNDEFINED_METHOD;
+                    $severity = XRef::ERROR;
+                    $message = "Access to undefined $key of class $class_name";
+                    $uniq = "$error_code/$from_class/$class_name/$key/$name";
+                    return array($error_code, $severity, $message, $uniq);
+                }
             }
         }
         return;
@@ -574,85 +586,6 @@ class ProjectLintPrototype extends XRef_APlugin implements XRef_IProjectLintPlug
 
         return false;
     }
-
-    // finds a definition of method/property of the given class in class hierarchy
-    // input:
-    //  e.g ('Foo', 'method', 'bar') for Foo::bar()
-    // output:
-    //  array(class_name, $definition) if found
-    //  true if missing some of base classes
-    //  null if definitely can't found
-    private function getDefinition($orig_class_name, $key, $name, $check_parent_only = false) {
-        $class_name = strtolower($orig_class_name);
-        if (!isset($this->classes[$class_name])) {
-            // class $class_name not found
-            return array($orig_class_name, null);
-        }
-        if ($key == 'method') {
-            $name = strtolower($name);
-        }
-
-        if (!$check_parent_only) {
-            foreach ($this->classes[$class_name] as /** @var $c XRef_Class */$c) {
-                if ($key == 'method') {
-                    $name = strtolower($name);
-                    foreach ($c->methods as $m) {
-                        if (strtolower($m->name) == $name) {
-                            return array($class_name, $m);
-                        }
-                    }
-                } elseif ($key == 'property') {
-                    foreach ($c->properties as $p) {
-                        if ($p->name == $name) {
-                            return array($class_name, $p);
-                        }
-                    }
-                } elseif ($key == 'constant') {
-                    foreach ($c->constants as $c) {
-                        if ($c->name == $name) {
-                            return array($class_name, $c);
-                        }
-                    }
-                 } else {
-                    throw new Exception($key);
-                }
-            }
-        }
-
-
-        foreach ($this->classes[$class_name] as $c) {
-            foreach ($c->extends as $parent_class_name) {
-                $d = $this->getDefinition($parent_class_name, $key, $name);
-                list($found_in_class, $def) = $d;
-                if ($found_in_class) {
-                    return $d;
-                }
-            }
-
-            // constants and methods can be inherited from used traits
-            if ($key == 'constant' || $key == 'method') {
-                foreach ($c->uses as $parent_class_name) {
-                    $d = $this->getDefinition($parent_class_name, $key, $name);
-                    if ($d) {
-                        return $d;
-                    }
-                }
-            }
-
-            // constants can be inherited from interfaces too
-            // and abstract classes can use methods inherited from interfaces
-            if ($key == 'constant' || ($key == 'method' && $c->isAbstract)) {
-                foreach ($c->implements as $parent_class_name) {
-                    $d = $this->getDefinition($parent_class_name, $key, $name);
-                    if ($d) {
-                        return $d;
-                    }
-                }
-            }
-        }
-        return array(null, null);
-    }
-
 }
 
 
