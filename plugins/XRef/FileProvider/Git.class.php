@@ -10,6 +10,16 @@ class XRef_FileProvider_Git implements XRef_IFileProvider {
 
     public function __construct(XRef_ISourceCodeManager $sourceCodeManager, $revision) {
         $this->sourceCodeManager = $sourceCodeManager;
+
+        // get the canonical form of revision - 40-char id
+        if (!preg_match('#^([a-f0-9]{40})$#', $revision)) {
+            $info = $sourceCodeManager->getRevisionInfo($revision);
+            if (! $info['H']) {
+                throw new Exception("Invalid revision: $revision");
+            }
+            $revision = $info['H'];
+        }
+
         $this->revision = $revision;
     }
 
@@ -22,13 +32,8 @@ class XRef_FileProvider_Git implements XRef_IFileProvider {
         }
     }
 
-    public function getFiles(array $filter_by_extensions = array('php')) {
+    public function getFiles() {
         $files = array();
-
-        $extensions = null;
-        if ($filter_by_extensions) {
-            $extensions = array_fill_keys($filter_by_extensions, true);
-        }
 
         foreach ($this->sourceCodeManager->getListOfFiles($this->revision) as $filename) {
 
@@ -48,14 +53,6 @@ class XRef_FileProvider_Git implements XRef_IFileProvider {
                 }
             }
 
-            // filter by extensions
-            if ($extensions) {
-                $ext = strtolower( pathinfo($filename, PATHINFO_EXTENSION) );
-                if (! isset($extensions[$ext])) {
-                    continue;
-                }
-            }
-
             $files[] = $filename;
         }
         return $files;
@@ -65,8 +62,8 @@ class XRef_FileProvider_Git implements XRef_IFileProvider {
         return $this->sourceCodeManager->getFileContent($this->revision, $filename);
     }
 
-    public function getVersion() {
-        return "git:" . $this->revision;
+    public function getPersistentId() {
+        return $this->revision;
     }
 }
 

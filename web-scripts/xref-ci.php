@@ -27,19 +27,15 @@ if ($rev1 && $rev2) {
     $modified_files = $scm->getListOfModifiedFiles($rev1, $rev2);
     $file_provider1 = $scm->getFileProvider($rev1);
     $file_provider2 = $scm->getFileProvider($rev2);
-    foreach ($modified_files as $filename) {
-        $old_errors = $xref->getCachedLintReport($file_provider1, $filename);
-        $new_errors = $xref->getCachedLintReport($file_provider2, $filename);
-        $errors = XRef_getNewErrors($old_errors, $new_errors);
-        if (count($errors)) {
-            $fileErrors[$filename] = $errors;
-        }
-    }
+    $lint_engine = (true)
+            ? new XRef_LintEngine_ProjectCheck($xref)
+            : new XRef_LintEngine_Simple($xref);
+    $errors = $lint_engine->getIncrementalReport($file_provider1, $file_provider2, $modified_files);
 }
 
 echo $xref->fillTemplate("ci-web.tmpl", array(
     'rev1'          => $rev1,
     'rev2'          => $rev2,
-    'fileErrors'    => $fileErrors,
+    'fileErrors'    => $errors,
 ));
 

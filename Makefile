@@ -6,7 +6,7 @@ all:
 
 test:
 	## self-test:
-	bin/xref-lint
+	bin/xref-lint --no-cache
 	## unittests
 	phpunit tests
 

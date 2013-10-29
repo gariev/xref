@@ -100,69 +100,28 @@ foreach ($branches as $branchName => $currentRev) {
         error_log("Processing branch $branchName");
     }
 
-    // $fileErrors: array(file name => scalar or array with errors)
-    $fileErrors = array();
-
-    $modified_files = array();
-    foreach ($scm->getListOfModifiedFiles($oldRev, $currentRev) as $filename) {
-        if (preg_match("#\\.php\$#", $filename)) {
-            $modified_files[] = $filename; // TODO! hardcoded php extension
-        }
-    }
+    // $errors: array(file name => XRef_CodeDefect[])
+    $errors = array();
 
     $file_provider_old = $scm->getFileProvider($oldRev);
     $file_provider_new = $scm->getFileProvider($currentRev);
-    foreach ($modified_files as $filename) {
-        if (XRef::verbose()) {
-            error_log(" ... file $filename");
-        }
-
-        if ($incremental) {
-            // incremental mode - find only the errors that are new from the old version of the same file
-            $old_errors = $xref->getCachedLintReport($file_provider_old, $filename);
-            $new_errors = $xref->getCachedLintReport($file_provider_new, $filename);
-            $errors = XRef_getNewErrors($old_errors, $new_errors);
-        } else {
-            // normal mode - report about every error in file
-            $errors = $xref->getCachedLintReport($file_provider_new, $filename);
-        }
-
-        if ($errors) {
-            $fileErrors[$filename] = $errors;
-        }
-    }
-
-    /* ------------------------------------------------------------
-     * EXPERIMENTAL PART
-     * ------------------------------------------------------------*/
-    $projectErrors = array();
-
+    $modified_files = $scm->getListOfModifiedFiles($oldRev, $currentRev);
+    $lint_engine = (true)
+            ? new XRef_LintEngine_ProjectCheck($xref)
+            : new XRef_LintEngine_Simple($xref);
     if ($incremental) {
-        $project_database = new XRef_ProjectDatabase_Persistent($oldRev, $xref, $file_provider_old);
-        $project_database->save($oldRev);
-        $old_errors = $xref->getProjectReport($project_database);
-
-        $project_database->update($file_provider_new, $modified_files);
-        $project_database->save($currentRev);
-        $current_errors = $xref->getProjectReport($project_database);
-
-        $projectErrors = XRef_getNewProjectErrors($old_errors, $current_errors);
+        // incremental mode - find only the errors that are new from the old version of the same file
+        $errors = $lint_engine->getIncrementalReport($file_provider_old, $file_provider_new, $modified_files);
     } else {
-        $project_database = new XRef_ProjectDatabase_Persistent($currentRev, $xref, $file_provider_new);
-        $project_database->save($currentRev);
-        $projectErrors = $xref->getProjectReport($project_database);
+        // normal mode - report about every error in file
+        $errors = $lint_engine->getReport($file_provider_new);
     }
-    $fileErrors = array_merge_recursive($fileErrors, $projectErrors);
-    /* ------------------------------------------------------------
-     * END OF EXPERIMENTAL PART
-     * ------------------------------------------------------------*/
 
-    $fileErrors = $xref->sortAndFilterReport($fileErrors);
-    if (count($fileErrors)) {
+    if (count($errors)) {
         if (XRef::verbose()) {
-            error_log(count($fileErrors) . " file(s) with errors found");
+            error_log(count($errors) . " file(s) with errors found");
         }
-        XRef_notifyAuthor($xref, $fileErrors, $branchName, $oldRev, $currentRev);
+        XRef_notifyAuthor($xref, $errors, $branchName, $oldRev, $currentRev);
         $db["numberOfSentLetters"]++;
     }
 

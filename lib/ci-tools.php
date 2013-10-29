@@ -27,7 +27,7 @@ function XRef_getNewErrors($oldErrors, $currentErrors) {
     return $newErrors;
 }
 
-// input: arrays (file name => array of XRef_CodeDefect objects)
+// input: array (file name => array of XRef_CodeDefect objects)
 // output: array (file name => array of XRef_CodeDefect objects)
 function XRef_getNewProjectErrors($oldErrors, $currentErrors) {
     $result = array();

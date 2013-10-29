@@ -3,10 +3,9 @@
 class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
     protected $paths        = array();
     protected $seenFiles    = array();
-    protected $extensions   = null;
     protected $files        = null;     // array ($filename => $file_extension)
     protected $rootDir      = null;
-    protected $roodDirStrlen= 0;
+    protected $rootDirStrlen= 0;
 
     public function __construct($paths) {
         $paths = (is_array($paths)) ? $paths : array($paths);
@@ -20,7 +19,7 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
         }
         if (count($this->paths) > 0 && is_dir($this->paths[0])) {
             $this->rootDir = $this->paths[0];
-            $this->roodDirStrlen = strlen($this->rootDir);
+            $this->rootDirStrlen = strlen($this->rootDir);
         }
     }
 
@@ -45,12 +44,8 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
      *
      * @return string[]
      */
-    public function getFiles(array $filter_by_extensions = array('php')) {
+    public function getFiles() {
         $this->files = array();
-
-        if ($filter_by_extensions) {
-            $this->extensions = array_fill_keys($filter_by_extensions, true);
-        }
 
         foreach ($this->paths as $p) {
             $this->findInputFiles($p);
@@ -104,33 +99,21 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
                 }
             }
         } else if (is_file($file)) {
-            $add_file = false;
-            if ($this->extensions) {
-                $ext = strtolower( pathinfo($file, PATHINFO_EXTENSION) );
-                if (isset($this->extensions[$ext])) {
-                    $add_file = true;
-                }
-            } else {
-                $add_file = true;
+            if ($this->rootDir
+                && strncmp($this->rootDir, $file, $this->rootDirStrlen) == 0
+                && $file[$this->rootDirStrlen] == DIRECTORY_SEPARATOR)
+            {
+                $file = substr($file, $this->rootDirStrlen+1);
             }
-
-            if ($add_file) {
-                if ($this->rootDir
-                    && strncmp($this->rootDir, $file, $this->roodDirStrlen) == 0
-                    && $file[$this->roodDirStrlen] == DIRECTORY_SEPARATOR)
-                {
-                    $file = substr($file, $this->roodDirStrlen+1);
-                }
-                // windows hack: replace "\" by "/" so that
-                // paths are the same in FileSystem and Git providers
-                // TODO: test this on Windows machine
-                $this->files[] = str_replace('\\', '/', $file);
-            }
+            // windows hack: replace "\" by "/" so that
+            // paths are the same in FileSystem and Git providers
+            // TODO: test this on Windows machine
+            $this->files[] = str_replace('\\', '/', $file);
         }
     }
 
-    public function getVersion() {
-        return "filesystem";
+    public function getPersistentId() {
+        return null;
     }
 }
 

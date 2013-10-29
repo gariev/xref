@@ -242,5 +242,18 @@ class LowerCaseLiteralsTest extends BaseLintTest {
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
         XRef::setConfigValue( 'lint.add-constant', array() );
      }
+
+    public function testIndexedArraysInInterpolatedStrings() {
+        $testPhpCode = '<?php
+            $foo = array();
+            echo "$foo[key1]";          // ok
+            echo "{$foo[key2]}";        // warning
+            echo "{$foo[\'key3\']}";    // ok
+        ';
+        $exceptedDefects = array(
+            array('key2',   4, XRef::WARNING),
+        );
+        $this->checkPhpCode($testPhpCode, $exceptedDefects);
+     }
 }
 

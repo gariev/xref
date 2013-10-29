@@ -528,28 +528,105 @@ interface XRef_IFileProvider {
     /** @param array $paths - list of paths (dir and files) that should be excluded from output */
     public function excludePaths(array $paths);
     /**
-     * @param array $filter_by_extensions
      * @return string[] - list of file names
      */
-    public function getFiles(array $filter_by_extensions = array('php'));
+    public function getFiles();
     /**
      * @param string $filename
      * @return string
      */
     public function getFileContent($filename);
     /**
-     * returns optional info describing this file provider
+     * returns persistent id (if any) for the given set of files, e.g. revision number
      * @return string
      */
-    public function getVersion();
+    public function getPersistentId();
+}
+/**
+ * Class for lookup results (find a class, method, function etc).
+ * Instances of this class are returned by XRef_IProjectDatabase methods.
+ */
+class XRef_LookupResult {
+    const NOT_FOUND = 0;
+    const FOUND = 1;
+    const CLASS_MISSING = 2;
+
+    public $code;
+    public $elements;
+    public $missingClassName;
+
+    public function __construct($code = self::NOT_FOUND, $elements = null) {
+        $this->code = $code;
+        $this->elements = $elements;
+    }
+}
+/**
+ * Project Database - main source of info about classes, methods, constants
+ * defined in project.
+ */
+interface XRef_IProjectDatabase {
+
+    // create database methods
+    public function createFileSlice(XRef_IParsedFile $pf);
+    public function addFileSlice($file_name, $slice);
+    public function finalize();
+
+    // query methods
+    /**
+     * @return XRef_Class[]
+     */
+    public function getAllClasses();
+
+    /**
+     * @param string $class_name - Fully-qualified class name
+     * @return XRef_LookupResult
+     */
+    public function lookupClass($class_name);
+
+    /** @return XRef_LookupResult */
+    public function lookupMethod($class_name, $method_name, $parent_class_only = false);
+
+    /** @return XRef_LookupResult */
+    public function lookupConstant($class_name, $const_name, $parent_class_only = false);
+
+    /** @return XRef_LookupResult */
+    public function lookupProperty($class_name, $prop_name, $parent_class_only = false);
 }
 
-// experimental, empty for now
-interface XRef_IProjectDatabase {}
-
 interface XRef_IProjectLintPlugin {
+    /**
+     * Parsing of files is expensive, so minimize them between runs of xref.
+     * Instead, parse file once and process it into summary (database & plugin slices),
+     * all of which will be serialized and stored.
+     *
+     * DB slices will make up project database and will be all in memory,
+     * so try to keep their size to minimum
+     *
+     * File summary will be (iteratively) available to lint plugin.
+     * TODO: right now all of them are still in memory
+     *
+     * @param XRef_ParsedFile $pf
+     * @param bool $is_library_file
+     * @return * any data
+     */
+    public function createFileSlice(XRef_IParsedFile $pf, $is_library_file = false);
+
+    public function startLintCheck(XRef_IProjectDatabase $db);
+    public function checkFileSlice(XRef_IProjectDatabase $db, $file_name, $file_slice);
     /** @return array - map (file name -> list of errors) */
     public function getProjectReport(XRef_IProjectDatabase $db);
+}
+
+interface XRef_ILintEngine {
+    /** methods to use when parsed files are already available */
+    public function addParsedFile(XRef_IParsedFile $pf);
+    public function collectReport();
+
+    /** optimized method - may use caching etc */
+    public function getReport(XRef_IFileProvider $file_provider);
+
+    /** optimized method for incremental mode */
+    public function getIncrementalReport(XRef_IFileProvider $from, XRef_IFileProvider $to, $list_of_modified_files);
 }
 
 // vim: tabstop=4 expandtab

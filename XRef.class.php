@@ -447,12 +447,21 @@ class XRef {
      *
      * ---------------------------------------------------------------*/
 
-     /**
-     * Affects what kind of defects the lint plugins will report.
-     *
-     * @param int $reportLevel - one of constants XRef::NOTICE, XRef::WARNING or XRef::ERROR
-     * @return void
-     */
+
+    public function filterFiles($files) {
+        // TODO(?): use extension list from parser plugins
+        $extensions = array('php' => true );
+        $filtered_files = array();
+
+        foreach ($files as $f) {
+            $ext = strtolower( pathinfo($f, PATHINFO_EXTENSION) );
+            if (! isset($extensions[$ext])) {
+                continue;
+            }
+            $filtered_files[] = $f;
+        }
+        return $filtered_files;
+    }
 
     /** $lintReportLevel: XRef::ERROR, XRef::WARNING etc */
     protected $lintReportLevel = null;
@@ -463,117 +472,16 @@ class XRef {
     /** map error_code -> true */
     protected $lintIgnoredErrors = null;
 
+    /**
+    * Affects what kind of defects the lint plugins will report.
+    *
+    * @param int $reportLevel - one of constants XRef::NOTICE, XRef::WARNING or XRef::ERROR
+    * @return void
+    */
     public function setLintReportLevel($reportLevel) {
         $this->lintReportLevel = $reportLevel;
     }
 
-    /**
-     * Runs all registered lint plugins for the given parsed file.
-     *
-     * @param XRef_IParsedFile $pf - parsed file object
-     * @return array of XRef_CodeDefect objects
-     */
-    public function getLintReport(XRef_IParsedFile $pf) {
-
-        $plugins = $this->getPlugins("XRef_ILintPlugin");
-
-        if (is_null($this->lintErrorMap)) {
-            $this->lintErrorMap = array();
-            foreach ($plugins as $pluginId => $plugin) {
-                foreach ($plugin->getErrorMap() as $error_code => $error_description) {
-                    if (isset($this->lintErrorMap[ $error_code ])) {
-                        throw new Exception("Plugin " . $plugin->getId() . " tries to redefine error code '$error_code'");
-                    }
-                    $this->lintErrorMap[$error_code] = $error_description;
-                }
-            }
-        }
-
-        $report = array();
-        foreach ($plugins as $pluginId => $plugin) {
-            $found_defects = $plugin->getReport($pf);
-            if ($found_defects) {
-                foreach ($found_defects as $d) {
-                    list($token, $error_code) = $d;
-                    if (! isset($this->lintErrorMap[$error_code])) {
-                        error_log("No descriptions for error code '$error_code'");
-                        continue;
-                    }
-
-                    $description = $this->lintErrorMap[ $error_code ];
-                    if (! isset($description["severity"]) || ! isset($description["message"])) {
-                        error_log("Invalid description for error code '$error_code'");
-                        continue;
-                    }
-
-                    $report[] = XRef_CodeDefect::fromToken($token, $error_code, $description["severity"], $description["message"]);
-                }
-            }
-        }
-        usort($report, array("XRef", "_sortLintReportByLineNumber"));
-        return $report;
-    }
-
-    private $hasStorageManager;
-
-    // returns list of errors found in file, either from
-    // disk-cached file or from XRef parser/lint
-    public function getCachedLintReport(XRef_IFileProvider $file_provider, $filename, &$parsed_file = null) {
-        $content = $file_provider->getFileContent($filename);
-
-        if (!$content) {
-            // file doesn't exist in this revision
-            return array();
-        }
-
-        if (!isset($this->hasStorageManager)) {
-            try {
-                $storage = $this->getStorageManager();
-                $this->hasStorageManager = true;
-            } catch (Exception $e) {
-                $this->hasStorageManager = false;
-            }
-        }
-
-        // try to get cached version
-        if ($this->hasStorageManager) {
-            $storage = $this->getStorageManager();
-            $sha1sum = sha1($content);
-            $data = $storage->restoreData("lint", $sha1sum);
-            $xrefVersion = XRef::version();
-        }
-        if (isset($data) && isset($data["xrefVersion"]) && $data["xrefVersion"]==$xrefVersion) {
-            return $data["errors"];
-        }
-
-        // if there is no cached data, create one
-        try {
-            if ($parsed_file) {
-                $errors = $this->getLintReport($parsed_file);
-            } else {
-                $pf = $this->getParsedFile($filename, $content);
-                $errors = $this->getLintReport($pf);
-                if (isset($parsed_file)) {
-                    $parsed_file = $pf;
-                } else {
-                    $pf->release();
-                }
-            }
-        } catch (XRef_ParseException $e) {
-            $errors = array( XRef_CodeDefect::fromParseException($e) );
-        }
-
-        if ($this->hasStorageManager) {
-            $data = array(
-                "errors"    => $errors,
-                "file"      => $filename,
-                "rev"       => $file_provider->getVersion(),
-                "xrefVersion" => $xrefVersion
-            );
-            $storage->saveData("lint", $sha1sum, $data);
-        }
-        return $errors;
-    }
 
     // experimental
     public function getProjectReport(XRef_IProjectDatabase $db) {
@@ -653,7 +561,6 @@ class XRef {
             return -1;
         }
     }
-
 
     /*----------------------------------------------------------------
      *
@@ -856,26 +763,13 @@ class XRef {
         }
 
         // index files for the first time
-        // create an empty persistent storage
         $this->loadPluginGroup('lint');
         $file_provider = new XRef_FileProvider_FileSystem( $cwd );
-        $project_database = new XRef_ProjectDatabase_Persistent(null, $this, null);
-        $project_database->update($file_provider, array());
-        // and update it manually with each file to display file progress
-        $files = $file_provider->getFiles();
-        $files_count = count($files);
+        $lint_engine = new XRef_LintEngine_ProjectCheck($this);
+        $lint_engine->setShowProgressBar(true);
         echo "Indexing files\n";
-        foreach ($files as $i => $file) {
-            self::progressBar($i+1, $files_count, $file);
-            $parsed_file = false;
-            $this->getCachedLintReport($file_provider, $file, $parsed_file);
-            $project_database->updateFile($file, false, $parsed_file);
-            if ($parsed_file) {
-                $parsed_file->release();
-            }
-        }
+        $lint_engine->getReport($file_provider);
         echo "\nDone.\n";
-
         // done
     }
 

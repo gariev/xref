@@ -29,10 +29,14 @@ $formattedText = null;
 if (isset($_REQUEST["source"])) {
     $source = (get_magic_quotes_gpc()) ? stripslashes($_REQUEST["source"]) : $_REQUEST["source"];
     try {
-        $parsedFile = $xref->getParsedFile("unknown.php", $source);
-        if (count($parsedFile->getTokens()) > 1) {
-            $report = $xref->getLintReport($parsedFile);
-            $formattedText = $sourcePlugin->getFormattedText($parsedFile, "");
+        $parsed_file = $xref->getParsedFile("unknown.php", $source);
+        if (count($parsed_file->getTokens()) > 1) {
+            $lint_engine = (true)
+                    ? new XRef_LintEngine_ProjectCheck($xref)
+                    : new XRef_LintEngine_Simple($xref);
+            $lint_engine->addParsedFile($parsed_file);
+            $report = $lint_engine->collectReport();
+            $formattedText = $sourcePlugin->getFormattedText($parsed_file, "");
         } else {
             $textareaContent = htmlspecialchars($source);
         }

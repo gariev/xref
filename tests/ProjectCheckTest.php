@@ -7,61 +7,52 @@ require_once "$includeDir/lib/experimental.php";
 class ProjectCheckTest extends PHPUnit_Framework_TestCase {
 
     private $xref;
-    private $projectDatabase;
 
     public function __construct() {
         $xref = new XRef();
         $xref->loadPluginGroup('lint');
         $this->xref = $xref;
-
-        $this->projectDatabase = new XRef_ProjectDatabase();
     }
 
-    protected function checkFoundDefect($foundDefect, $file_name, $expected_file_name, $tokenText, $lineNumber, $severity) {
-        $descr = print_r($foundDefect, true);   // TODO
+    protected function checkFoundDefect($found_defect, $file_name, $expected_file_name, $token_text, $line_number, $severity) {
+        $descr = print_r($found_defect, true);   // TODO
         $this->assertTrue($file_name                == $expected_file_name, "Wrong filename: $file_name / $expected_file_name");
-        $this->assertTrue($foundDefect->tokenText   == $tokenText,          "Invalid token ($foundDefect->tokenText, $tokenText):\n$descr");
-        $this->assertTrue($foundDefect->lineNumber  == $lineNumber,         "Invalid line number ($lineNumber/$foundDefect->lineNumber):\n$descr");
-        $this->assertTrue($foundDefect->severity    == $severity,           "Invalid severity:\n$descr");
+        $this->assertTrue($found_defect->tokenText  == $token_text,         "Invalid token ($found_defect->tokenText, $token_text):\n$descr");
+        $this->assertTrue($found_defect->lineNumber == $line_number,        "Invalid line number ($line_number/$found_defect->lineNumber):\n$descr");
+        $this->assertTrue($found_defect->severity   == $severity,           "Invalid severity:\n$descr");
     }
 
-    protected function checkProject($files, $expectedDefectsList) {
-        $this->projectDatabase->clear();
-        foreach ($files as $file_name => $file_content) {
-            $pf = $this->xref->getParsedFile($file_name, $file_content);
-            $this->projectDatabase->addParsedFile($pf);
-            $pf->release();
-        }
-        // report: array (filename => array(list of errors))
-        $report = $this->xref->getProjectReport( $this->projectDatabase );
-        $report = $this->xref->sortAndFilterReport($report);
+    protected function checkProject($files, $expected_defects) {
+        $lint_engine = new XRef_LintEngine_ProjectCheck($this->xref, false);
+        $file_provider = new XRef_FileProvider_InMemory($files);
+        $report = $lint_engine->getReport($file_provider);
 
         // 1. count errors
-        $countFound = 0;
+        $count_found = 0;
         foreach ($report as $file_name => $list) {
-            $countFound += count($list);
+            $count_found += count($list);
         }
-        $countExpected = count($expectedDefectsList);
-        if ($countFound != $countExpected) {
+        $count_expected = count($expected_defects);
+        if ($count_found != $count_expected) {
             print_r($report);
-            $this->fail( "Wrong number of errors: found=$countFound, expected=$countExpected" );
+            $this->fail( "Wrong number of errors: found=$count_found, expected=$count_expected" );
         } else {
-            $this->assertTrue($countFound == $countExpected, "Excpected number of defects");
+            $this->assertTrue($count_found == $count_expected, "Expected number of defects");
         }
 
         $i = 0;
         foreach ($report as $file_name => $list) {
             foreach ($list as $e) {
-                list($expected_file_name, $tokenText, $lineNumber, $severity) = $expectedDefectsList[$i];
-                $this->checkFoundDefect($e, $file_name, $expected_file_name, $tokenText, $severity, $lineNumber);
+                list($expected_file_name, $token_text, $line_number, $severity) = $expected_defects[$i];
+                $this->checkFoundDefect($e, $file_name, $expected_file_name, $token_text, $severity, $line_number);
                 ++$i;
             }
         }
     }
 
     public function testProject() {
-        $code = '
-        <?php
+        $code =
+        '<?php
             class A {
                 function foo () {
                     echo $this->bar;    // warning
@@ -71,20 +62,20 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $code ),
             array(
-                array('fileA.php', 'bar', XRef::WARNING, 5),
+                array('fileA.php', 'bar', XRef::WARNING, 4),
             )
         );
     }
 
     public function testMultifileProject() {
-        $codeA = '
-        <?php
+        $codeA =
+        '<?php
             class A {
                 public $foo;
             }
         ';
-        $codeB = '
-        <?php
+        $codeB =
+        '<?php
             class B extends A{
                 function foo () {
                     echo $this->foo;        // ok
@@ -95,14 +86,14 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB ),
             array(
-                array('fileB.php', 'bar', XRef::WARNING, 6),
+                array('fileB.php', 'bar', XRef::WARNING, 5),
             )
         );
     }
 
     public function testMissingBaseClass() {
-        $codeA = '
-        <?php
+        $codeA =
+        '<?php
             class B extends A {
                 function foo() {
                     self::bar();        // notice, since there is no definition of class A
@@ -117,14 +108,14 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA ),
             array(
-                array('fileA.php', 'bar', XRef::ERROR, 10),
+                array('fileA.php', 'bar', XRef::ERROR, 9),
             )
         );
     }
 
     public function testMisuseOfConstants() {
-        $codeA = '
-        <?php
+        $codeA =
+        '<?php
             class A {
                 const BAR = 10;
             }
@@ -133,8 +124,8 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             }
             class C extends UnknownClass {}
         ';
-        $codeB = '
-        <?php
+        $codeB =
+        '<?php
             echo A::BAR;        // ok
             echo B::BAR;        // ok
             echo A::FOO;        // warning
@@ -145,7 +136,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB, ),
             array(
-                array('fileB.php', 'FOO', XRef::ERROR, 5),
+                array('fileB.php', 'FOO', XRef::ERROR, 4),
                 // array('fileB.php', 'FOO', XRef::NOTICE, 7),
                 // array('fileB.php', 'FOO', XRef::NOTICE, 8),
             )
@@ -153,8 +144,8 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
     }
 
     public function testMisusedConstants() {
-        $codeA = '
-        <?php
+        $codeA =
+        '<?php
             class A {
                 const BAR = 10;
             }
@@ -163,8 +154,8 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             }
             class C extends UnknownClass {}
         ';
-        $codeB = '
-        <?php
+        $codeB =
+        '<?php
             echo A::BAR;        // ok
             echo B::BAR;        // ok
             echo A::FOO;        // warning
@@ -175,7 +166,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB, ),
             array(
-                array('fileB.php', 'FOO', XRef::ERROR, 5),
+                array('fileB.php', 'FOO', XRef::ERROR, 4),
                 // array('fileB.php', 'FOO', XRef::NOTICE, 7),
                 // array('fileB.php', 'FOO', XRef::NOTICE, 8),
             )
@@ -183,8 +174,8 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
     }
 
     public function testInstanceVisibilityModifiers() {
-        $codeA = '
-        <?php
+        $codeA =
+        '<?php
             class A {
                 public      $pfoo;
                 protected   $pbar;
@@ -218,15 +209,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA, ),
             array(
-                array('fileA.php', 'pbaz', XRef::ERROR, 23),
-                array('fileA.php', 'fbaz', XRef::ERROR, 26),
+                array('fileA.php', 'pbaz', XRef::ERROR, 22),
+                array('fileA.php', 'fbaz', XRef::ERROR, 25),
             )
         );
     }
 
     public function testStaticVisibilityModifiers() {
-        $codeA = '
-        <?php
+        $codeA =
+        '<?php
             class A {
                 public      static $pfoo;
                 protected   static $pbar;
@@ -293,29 +284,29 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             array( 'fileA.php' => $codeA, ),
             array(
                 // class B
-                array('fileA.php', 'pbaz', XRef::ERROR, 31),
-                array('fileA.php', 'fbaz', XRef::ERROR, 34),
-                array('fileA.php', 'pbaz', XRef::ERROR, 38),
-                array('fileA.php', 'fbaz', XRef::ERROR, 41),
+                array('fileA.php', 'pbaz', XRef::ERROR, 30),
+                array('fileA.php', 'fbaz', XRef::ERROR, 33),
+                array('fileA.php', 'pbaz', XRef::ERROR, 37),
+                array('fileA.php', 'fbaz', XRef::ERROR, 40),
 
                 // class C
-                array('fileA.php', 'pbar', XRef::ERROR, 48),
-                array('fileA.php', 'pbaz', XRef::ERROR, 49),
-                array('fileA.php', 'fbar', XRef::ERROR, 51),
-                array('fileA.php', 'fbaz', XRef::ERROR, 52),
+                array('fileA.php', 'pbar', XRef::ERROR, 47),
+                array('fileA.php', 'pbaz', XRef::ERROR, 48),
+                array('fileA.php', 'fbar', XRef::ERROR, 50),
+                array('fileA.php', 'fbaz', XRef::ERROR, 51),
 
                 // global test()
-                array('fileA.php', 'pbar', XRef::ERROR, 58),
-                array('fileA.php', 'pbaz', XRef::ERROR, 59),
-                array('fileA.php', 'fbar', XRef::ERROR, 61),
-                array('fileA.php', 'fbaz', XRef::ERROR, 62),
+                array('fileA.php', 'pbar', XRef::ERROR, 57),
+                array('fileA.php', 'pbaz', XRef::ERROR, 58),
+                array('fileA.php', 'fbar', XRef::ERROR, 60),
+                array('fileA.php', 'fbaz', XRef::ERROR, 61),
             )
         );
     }
 
     public function testMagicAccessors() {
-        $codeA = '
-        <?php
+        $codeA =
+        '<?php
             class A {
                 public function __get($key) {}
                 public function test() {
@@ -338,15 +329,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA, ),
             array(
-                array('fileA.php', 'foo', XRef::WARNING, 17),
-                array('fileA.php', 'bar', XRef::WARNING, 18),
+                array('fileA.php', 'foo', XRef::WARNING, 16),
+                array('fileA.php', 'bar', XRef::WARNING, 17),
             )
         );
     }
 
     public function testStaticVsInstanceAccess() {
-        $codeA = '
-        <?php
+        $codeA =
+        '<?php
             class A {
                 // static
                 public static $pfoo;
@@ -394,23 +385,23 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             array( 'fileA.php' => $codeA, ),
             array(
                 // class A
-                array('fileA.php', 'pfoo', XRef::ERROR, 13),
-                array('fileA.php', 'pbar', XRef::ERROR, 17),
-                array('fileA.php', 'fbar', XRef::ERROR, 20),
+                array('fileA.php', 'pfoo', XRef::ERROR, 12),
+                array('fileA.php', 'pbar', XRef::ERROR, 16),
+                array('fileA.php', 'fbar', XRef::ERROR, 19),
                 // class B
-                array('fileA.php', 'pfoo', XRef::ERROR, 27),
-                array('fileA.php', 'pbar', XRef::ERROR, 31),
-                array('fileA.php', 'fbar', XRef::ERROR, 34),
+                array('fileA.php', 'pfoo', XRef::ERROR, 26),
+                array('fileA.php', 'pbar', XRef::ERROR, 30),
+                array('fileA.php', 'fbar', XRef::ERROR, 33),
                 // global test()
-                array('fileA.php', 'pbar', XRef::ERROR, 41),
-                array('fileA.php', 'fbar', XRef::ERROR, 42),
+                array('fileA.php', 'pbar', XRef::ERROR, 40),
+                array('fileA.php', 'fbar', XRef::ERROR, 41),
             )
         );
     }
 
     public function testInheritedFromInterfaces() {
-        $codeA = '<?php
-
+        $codeA =
+        '<?php
             class A {
                 const A_CONST = 1;
             }
@@ -430,13 +421,13 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA, ),
             array(
-                array('fileA.php', 'D_CONST', XRef::ERROR, 15),
+                array('fileA.php', 'D_CONST', XRef::ERROR, 14),
             )
         );
 
         // allow abstract classes to call methods inherited from interfaces
-        $codeA = '<?php
-
+        $codeA =
+        '<?php
             interface A {
                 public function foo();
             }
@@ -455,14 +446,14 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA, ),
             array(
-                array('fileA.php', 'foo', XRef::ERROR, 13),
+                array('fileA.php', 'foo', XRef::ERROR, 12),
             )
         );
     }
 
     public function testInheritedFromTraits() {
-        $codeA = '<?php
-
+        $codeA =
+        '<?php
             trait A {
                 const A_CONST = 1;
                 public function foo() {}
@@ -480,14 +471,14 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA, ),
             array(
-                array('fileA.php', 'bar', XRef::ERROR, 12),
+                array('fileA.php', 'bar', XRef::ERROR, 11),
             )
         );
     }
 
     public function testMissedConstructor() {
-        $code = '
-        <?php
+        $code =
+        '<?php
             class A { }             // ok
             class B extends A {}    // ok
             class C extends A {     // ok
@@ -507,8 +498,8 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $code ),
             array(
-                array('fileA.php', 'E', XRef::WARNING, 10),
-                array('fileA.php', 'F', XRef::WARNING, 14),
+                array('fileA.php', 'E', XRef::WARNING, 9),
+                array('fileA.php', 'F', XRef::WARNING, 13),
             )
         );
     }

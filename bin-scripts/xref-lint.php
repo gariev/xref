@@ -18,9 +18,10 @@ require_once "$includeDir/lib/ci-tools.php";
 // command-line arguments
 XRef::registerCmdOption('o:', "output=",        '-o, --output=TYPE',    "either 'text' (default) or 'json'");
 XRef::registerCmdOption('r:', "report-level=",  '-r, --report-level=',  "either 'error', 'warning' or 'notice'");
+XRef::registerCmdOption('',   "no-cache",       '--no-cache',           "don't use lint cache, if any");
 XRef::registerCmdOption('',   "init",           '--init',               "create a config file, init cache");
 XRef::registerCmdOption('',   "git",            '--git',                "git pre-commit mode: find new errors in modified tracked files");
-XRef::registerCmdOption('',   "cached",         '--cached',             "implies --git option; compare HEAD and files cached for commit");
+XRef::registerCmdOption('',   "git-cached",     '--git-cached',         "implies --git option; compare HEAD and files cached for commit");
 
 try {
     list ($options, $arguments) = XRef::getCmdOptions();
@@ -63,7 +64,7 @@ if ($outputFormat != 'text' && $outputFormat != 'json') {
 }
 
 // git mode:
-if (isset($options['cached']) && $options['cached']) {
+if (isset($options['git-cached']) && $options['git-cached']) {
     $options['git'] = true;
 }
 if (isset($options['git']) && $options['git']) {
@@ -72,6 +73,11 @@ if (isset($options['git']) && $options['git']) {
     }
 }
 
+// no internal cache - mostly for unittests
+$use_cache = true;
+if (isset($options['no-cache']) && $options['no-cache']) {
+    $use_cache = false;
+}
 
 //
 // color: on/off/auto, for text output to console only
@@ -87,7 +93,6 @@ $colorMap = array(
     "_off"      => "\033[0;0m",
 );
 
-$totalFiles         = 0;
 $filesWithDefects   = 0;
 $numberOfNotices    = 0;
 $numberOfWarnings   = 0;
@@ -99,39 +104,23 @@ $xref->loadPluginGroup("lint");
 
 $total_report = array();
 
+$lint_engine = new XRef_LintEngine_ProjectCheck($xref, $use_cache);
 if (isset($options['git']) && $options['git']) {
     // incremental mode: find errors in files modified since HEAD revision
     $old_rev = XRef_SourceCodeManager_Git::HEAD;
-    $new_rev = (isset($options['cached']) && $options['cached']) ?
+    $new_rev = (isset($options['git-cached']) && $options['git-cached']) ?
         XRef_SourceCodeManager_Git::CACHED : XRef_SourceCodeManager_Git::DISK;
 
     $scm = $xref->getSourceCodeManager(); // TODO: check this is the git scm
     $file_provider_old = $scm->getFileProvider( $old_rev );
     $file_provider_new = $scm->getFileProvider( $new_rev );
     $modified_files = $scm->getListOfModifiedFiles($old_rev, $new_rev);
-    foreach ($modified_files as $filename) {
-        if (!preg_match("#\\.php\$#", $filename)) {   // HUGE TODO
-            continue;
-        }
-
-        $old_errors = $xref->getCachedLintReport($file_provider_old, $filename);
-        $new_errors = $xref->getCachedLintReport($file_provider_new, $filename);
-        $errors = XRef_getNewErrors($old_errors, $new_errors);
-        if ($errors) {
-            $total_report[$filename] = $errors;
-        }
-        $totalFiles++;
-    }
+    $total_report = $lint_engine->getIncrementalReport($file_provider_old, $file_provider_new, $modified_files);
 } else {
     // main loop over all files
     $file_provider = new XRef_FileProvider_FileSystem( ($arguments) ? $arguments : '.' );
-    foreach ($file_provider->getFiles() as $filename) {
-        $total_report[$filename] = $xref->getCachedLintReport($file_provider, $filename);
-        $totalFiles++;
-    }
+    $total_report = $lint_engine->getReport($file_provider);
 }
-
-$total_report = $xref->sortAndFilterReport($total_report);
 
 // calculate some stats
 foreach ($total_report as $file_name => $report) {
@@ -164,7 +153,10 @@ if ($outputFormat=='text') {
     }
     // print stats
     if (XRef::verbose()) {
-        echo("Total files:          $totalFiles\n");
+        $stats = $lint_engine->getStats();
+        echo("Total files:          {$stats['total_files']}\n");
+        echo("Files parsed:         {$stats['parsed_files']}\n");
+        echo("Cache hits:           {$stats['cache_hit']}\n");
         echo("Files with defects:   $filesWithDefects\n");
         echo("Errors:               $numberOfErrors\n");
         echo("Warnings:             $numberOfWarnings\n");
@@ -178,7 +170,7 @@ if ($outputFormat=='text') {
             $tokenText      = $code_defect->tokenText;
             $severityStr    = XRef::$severityNames[ $code_defect->severity ];
             $jsonOutput[] = array(
-                'fileName'      => $filename,
+                'fileName'      => $file_name,
                 'lineNumber'    => $code_defect->lineNumber,
                 'tokenText'     => $code_defect->tokenText,
                 'severityStr'   => $severityStr,

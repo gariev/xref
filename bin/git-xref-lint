@@ -5,7 +5,7 @@
 ##
 ## This is a plugin for git that runs xref-lint for all modified PHP files
 ## 
-## Usage: git xref-lint [--cached]
+## Usage: git xref-lint [--git-cached]
 ##
 ## @author Igor Gariev <gariev@hotmail.com>
 ## @copyright Copyright (c) 2013 Igor Gariev
