@@ -869,6 +869,23 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 continue;
             }
 
+            // eval: a common pattern:
+            //      eval('$foo = ...');
+            //      eval "\$foo = ...';
+            if ($t->kind == T_EVAL) {
+                $n = $t->nextNS();
+                if ($n->text == '(') {
+                    $n = $n->nextNS();
+                }
+                if ($n->kind == T_CONSTANT_ENCAPSED_STRING) {
+                    if (preg_match('#^\'\s*(\\$\\w+)\\s*=#', $n->text, $matches) || preg_match('#^"\s*\\\\(\\$\\w+)\\s*=#', $n->text, $matches)) {
+                        $this->currentScope->getOrCreateVarByName($matches[1]);
+                    }
+                }
+                continue;
+            }
+
+
             // Part 2.
             // Check if a variable is defined
             //
