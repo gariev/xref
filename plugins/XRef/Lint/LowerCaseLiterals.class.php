@@ -14,11 +14,11 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
         return array(
             self::E_LOWER_CASE_STRING_LITERAL => array(
                 "severity" => XRef::WARNING,
-                "message" => "Mixed/Lower-case unquoted string literal",
+                "message" => "Mixed/Lower-case unquoted string literal (%s)",
             ),
             self::E_UNPREFIXED_CLASS_CONSTANT => array(
                 "severity" => XRef::WARNING,
-                "message" => "Possible use of class constant without class prefix",
+                "message" => "Possible use of class constant without class prefix (%s)",
             ),
         );
     }

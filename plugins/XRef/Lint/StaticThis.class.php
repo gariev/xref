@@ -14,11 +14,11 @@ class XRef_Lint_StaticThis extends XRef_ALintPlugin {
         return array(
             self::E_THIS_OUTSIDE_OF_METHOD => array(
                 "severity"  => XRef::ERROR,
-                "message"   => "\$this, self:: or parent:: is used outside of instance/class scope"
+                "message"   => "(%s) is used outside of instance/class scope"
             ),
             self::E_THIS_IN_GLOBAL_SCOPE => array(
                 "severity"  => XRef::WARNING,
-                "message"   => "Possible use of \$this, self:: or parent:: is global scope"
+                "message"   => "Possible use of (%s) in global scope"
             ),
         );
     }

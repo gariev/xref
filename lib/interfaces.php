@@ -216,24 +216,30 @@ class XRef_CodeDefect {
     public $inClass;        // string, may be null
     public $inMethod;       // string, may be null
 
-    // helper constructor
-    public static function fromToken($token, $errorCode, $severity, $message) {
-        $filePos = new XRef_FilePosition($token->parsedFile, $token->index);
-        $codeDefect = new XRef_CodeDefect();
-        $codeDefect->tokenText    = preg_replace_callback('#[^\\x20-\\x7f]#', array('self', 'chr_replace'), $token->text);
-        $codeDefect->errorCode    = $errorCode;
-        $codeDefect->severity     = $severity;
-        $codeDefect->message      = $message;
-        $codeDefect->fileName     = $token->parsedFile->getFileName();
-        $codeDefect->lineNumber   = $filePos->lineNumber;
-        $codeDefect->inClass      = $filePos->inClass;
-        $codeDefect->inMethod     = $filePos->inMethod;
-        return $codeDefect;
+    // helper constructors
+    public static function fromTokenText($token_text, $error_code, $severity, $message_template) {
+        $code_defect = new XRef_CodeDefect();
+        $code_defect->tokenText    = preg_replace_callback('#[^\\x21-\\x7f]#', array('self', 'chr_replace'), $token_text);
+        $code_defect->errorCode    = $error_code;
+        $code_defect->severity     = $severity;
+        $code_defect->message      = sprintf($message_template, $code_defect->tokenText);
+        error_log($code_defect->message);
+        return $code_defect;
+    }
+
+    public static function fromToken(XRef_Token $token, $error_code, $severity, $message_template) {
+        $code_defect = self::fromTokenText($token->text, $error_code, $severity, $message_template);
+        $file_pos = new XRef_FilePosition($token->parsedFile, $token->index);
+        $code_defect->fileName     = $token->parsedFile->getFileName();
+        $code_defect->lineNumber   = $file_pos->lineNumber;
+        $code_defect->inClass      = $file_pos->inClass;
+        $code_defect->inMethod     = $file_pos->inMethod;
+        return $code_defect;
     }
 
     // helper constructor
     public static function fromParseException(XRef_ParseException $e) {
-        return self::fromToken($e->token, 'xr01', XRef::FATAL, "Can't parse file");
+        return self::fromToken($e->token, 'xr001', XRef::FATAL, "Can't parse file (%s)");
     }
 
     private static function chr_replace($matches) {

@@ -141,9 +141,8 @@ if ($outputFormat=='text') {
         echo "File: $file_name\n";
         foreach ($report as $code_defect) {
             $lineNumber     = $code_defect->lineNumber;
-            $tokenText      = $code_defect->tokenText;
             $severityStr    = XRef::$severityNames[ $code_defect->severity ];
-            $line = sprintf("    line %4d: %-8s (%s): %s (%s)", $lineNumber, $severityStr, $code_defect->errorCode, $code_defect->message, $tokenText);
+            $line = sprintf("    line %4d: %-8s (%s): %s", $lineNumber, $severityStr, $code_defect->errorCode, $code_defect->message);
             if ($color) {
                 $line = $colorMap{$severityStr} . $line . $colorMap{"_off"};
             }

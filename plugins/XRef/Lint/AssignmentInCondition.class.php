@@ -13,7 +13,7 @@ class XRef_Lint_AssignmentInCondition extends XRef_ALintPlugin {
         return array(
             self::E_ASSIGNMENT_IN_CONDITION => array(
                 "severity"  => XRef::WARNING,
-                "message"   => "Assignment in conditional expression",
+                "message"   => "Assignment in conditional expression (%s)",
             ),
         );
     }

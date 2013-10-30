@@ -66,12 +66,11 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
             $lr = $db->lookupMethod($class_name, '__construct', true);
             if ($lr->code == XRef_LookupResult::FOUND) {
                 // oops, there is a base-class constructor that won't be called
-                $base_class_name = $lr->elements[0]->name;
-                $cd = new XRef_CodeDefect();
-                $cd->tokenText = $class_name;
-                $cd->errorCode = self::E_MISSED_CALL_TO_PARENT_CONSTRUCTOR;
-                $cd->severity = XRef::WARNING;
-                $cd->message = "Class $class_name doesn't call constructor of it's base class $base_class_name";
+                $base_class_name = $lr->elements[0]->className;
+                $cd = XRef_CodeDefect::fromTokenText(
+                    $class_name, self::E_MISSED_CALL_TO_PARENT_CONSTRUCTOR, XRef::WARNING,
+                    "Class ($class_name) doesn't call constructor of it's base class ($base_class_name)"
+                );
                 $cd->fileName = $file_name;
                 $cd->lineNumber = $line_number;
                 $this->errors[ $file_name ][] = $cd;

@@ -64,35 +64,35 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
     public function getErrorMap() {
         return array(
             self::E_UNKNOWN_VAR  => array(
-                "message"   => "Use of unknown variable",
+                "message"   => "Use of unknown variable (%s)",
                 "severity"  => XRef::ERROR,
             ),
             self::E_UNKNOWN_VAR_RELAXED  => array(
-                "message"   => "Possible use of unknown variable",
+                "message"   => "Possible use of unknown variable (%s)",
                 "severity"  => XRef::WARNING,
             ),
             self::E_UNKNOWN_VAR_ARGUMENT  => array(
-                "message"   => "Possible use of unknown variable as function argument",
+                "message"   => "Possible use of unknown variable as function argument (%s)",
                 "severity"  => XRef::WARNING,
             ),
             self::E_ARRAY_AUTOVIVIFICATION  => array(
-                "message"   => "Array autovivification",
+                "message"   => "Array autovivification (%s)",
                 "severity"  => XRef::WARNING,
             ),
             self::E_SCALAR_AUTOVIVIFICATION  => array(
-                "message"   => "Scalar autovivification",
+                "message"   => "Scalar autovivification (%s)",
                 "severity"  => XRef::WARNING,
             ),
             self::E_NON_VAR_PASSED_BY_REF => array(
-                "message"   => "Possible attempt to pass non-variable by reference",
+                "message"   => "Possible attempt to pass non-variable by reference (%s)",
                 "severity"  => XRef::ERROR,
             ),
             self::E_EMPTY_STATEMENT  => array(
-                "message"   => "Empty declaration-like statement",
+                "message"   => "Empty declaration-like statement (%s)",
                 "severity"  => XRef::NOTICE,
             ),
             self::E_LOSS_OF_STRICT_MODE => array(
-                "message"   => "Can't reliable detect var usage from here",
+                "message"   => "Can't reliable detect var usage from here (%s)",
                 "severity"  => XRef::NOTICE,
             ),
         );

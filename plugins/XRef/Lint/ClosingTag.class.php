@@ -22,11 +22,11 @@ class XRef_Lint_ClosingTag extends XRef_ALintPlugin {
         return array(
             self::E_CLOSING_TAG => array(
                 "severity"  => XRef::WARNING,
-                "message"   => "Unneeded closing tag",
+                "message"   => "Unneeded closing tag (%s)",
             ),
             self::E_EXTRA_SPACES => array(
                 "severity"  => XRef::WARNING,
-                "message"   => "Spaces before opening tag",
+                "message"   => "Spaces before opening tag (%s)",
             ),
         );
     }
