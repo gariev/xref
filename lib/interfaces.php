@@ -546,7 +546,7 @@ interface XRef_IFileProvider {
 }
 /**
  * Class for lookup results (find a class, method, function etc).
- * Instances of this class are returned by XRef_IProjectDatabase methods.
+ * Instances of this class are returned by XRef_IProjectDatabase lookup methods.
  */
 class XRef_LookupResult {
     const NOT_FOUND = 0;
@@ -568,15 +568,13 @@ class XRef_LookupResult {
  */
 interface XRef_IProjectDatabase {
 
-    // create database methods
+    // methods to create database
     public function createFileSlice(XRef_IParsedFile $pf);
     public function addFileSlice($file_name, $slice);
     public function finalize();
 
     // query methods
-    /**
-     * @return XRef_Class[]
-     */
+    /** @return XRef_Class[] */
     public function getAllClasses();
 
     /**

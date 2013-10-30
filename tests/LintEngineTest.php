@@ -2,7 +2,6 @@
 
 $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/XRef";
 require_once "$includeDir/XRef.class.php";
-require_once "$includeDir/lib/experimental.php";
 
 class LintEngineTest extends PHPUnit_Framework_TestCase {
 

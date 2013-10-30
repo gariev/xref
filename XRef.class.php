@@ -9,7 +9,6 @@
 $includeDir =  ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) : "@php_dir@/XRef";
 require_once "$includeDir/lib/interfaces.php";
 require_once "$includeDir/lib/parsers.php";
-require_once "$includeDir/lib/experimental.php";
 
 /**
  *
@@ -675,9 +674,9 @@ class XRef {
                 'XRef_Lint_StaticThis',
                 'XRef_Lint_AssignmentInCondition',
                 'XRef_Lint_ClosingTag',
+                'XRef_ProjectLint_CheckClassAccess',
+                'XRef_ProjectLint_MissedParentConstructor',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
-                'ProjectLintPrototype',                     // experimental
-                'XRef_ProjectLint_MissedParentConstructor', // experimental
             ),
             'lint.add-constant'             => array(),
             'lint.add-function-signature'   => array(),
