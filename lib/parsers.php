@@ -979,20 +979,24 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
             // this is an absolute name, '\foo\bar' --> 'foo\bar'
             return substr($name, 1);
         } else {
-            // relative name
-            $namespace = $this->getNamespaceAt($index);
-            if (!$namespace) {
+            if ($name == 'self' || $name == 'parent' || $name == 'static') {
                 return $name;
             } else {
-                $parts = explode('\\', $name);
-                if ($parts[0] == 'namespace') {
-                    $parts[0] = $namespace->name;
-                } elseif (isset($namespace->importMap[ $parts[0] ])) {
-                    $parts[0] = $namespace->importMap[ $parts[0] ];
+                // relative name
+                $namespace = $this->getNamespaceAt($index);
+                if (!$namespace) {
+                    return $name;
                 } else {
-                    array_unshift($parts, $namespace->name);
+                    $parts = explode('\\', $name);
+                    if ($parts[0] == 'namespace') {
+                        $parts[0] = $namespace->name;
+                    } elseif (isset($namespace->importMap[ $parts[0] ])) {
+                        $parts[0] = $namespace->importMap[ $parts[0] ];
+                    } else {
+                        array_unshift($parts, $namespace->name);
+                    }
+                    return implode('\\', $parts);
                 }
-                return implode('\\', $parts);
             }
         }
     }
@@ -1005,7 +1009,11 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         if (!$namespace) {
             return $name;
         } else {
-            return $namespace->name . '\\' . $name;
+            if ($name == 'self' || $name == 'parent' || $name == 'static') {
+                return $name;
+            } else {
+                return $namespace->name . '\\' . $name;
+            }
         }
     }
 

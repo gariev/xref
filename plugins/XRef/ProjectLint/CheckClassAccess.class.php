@@ -45,7 +45,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
 
             // $this->foo();
             // $this->bar;
-            if ($t->text == '$this') {
+            if ($t->kind == T_VARIABLE && $t->text == '$this') {
                 $n = $t->nextNS();
                 if ($n->text == '->') {
                     $n = $n->nextNS();
@@ -65,10 +65,17 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             }
 
             // Foo::bar();
-            if ($t->kind == T_STRING) {
-                $n = $t->nextNS();
-                if ($n->kind == T_DOUBLE_COLON) {
-                    $class_name = $t->text;
+            // \Foo::bar();
+            // Foo\Bar::BAZ
+            if ($t->kind == T_DOUBLE_COLON) {
+                $class_name = '';
+                $p = $t->prevNS();
+                while ($p->kind == T_NS_SEPARATOR || $p->kind == T_STRING) {
+                    $class_name = $p->text . $class_name;
+                    $p = $p->prevNS();
+                }
+                if ($class_name) {
+                    $class_name = $pf->qualifyName($class_name, $t->index);
                     $check_parent_only = ($class_name == 'parent');
 
                     $from_class = $pf->getClassAt( $t->index );
@@ -83,7 +90,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
                         $is_static_context = true;
                     }
 
-                    $n = $n->nextNS();
+                    $n = $t->nextNS();
                     if ($n->kind == T_STRING) {
                         $nn = $n->nextNS();
                         if ($nn->text == '(') {
@@ -114,8 +121,15 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
     /** @var array - map: (class name -> array of all definition of this class) */
     private $classes = null;
 
+    /** @var array - map (class name => true) for classes that shouldn't create warning, if missing */
+    private $ignore_missing_classes = array();
+
     public function __construct() {
         parent::__construct("project-check", "Cross-reference integrity check");
+        $ignore_missing_classes = XRef::getConfigValue("lint.ignore-missing-class", array());
+        foreach ($ignore_missing_classes as $class_name) {
+            $this->ignore_missing_classes[ strtolower($class_name) ] = true;
+        }
     }
 
     public function startLintCheck(XRef_IProjectDatabase $db) {
@@ -222,11 +236,13 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
         } elseif ($lr->code == XRef_LookupResult::CLASS_MISSING) {
             // definition not found because definition of class or its base class is missing
             $missing_class_name = $lr->missingClassName;
-            $error_code = self::E_MISSING_BASE_CLASS;
-            $message = (strtolower($missing_class_name) == strtolower($class_name)) ?
-                    "Can't validate reference to class ($class_name) because its definition is missing" :
-                    "Can't validate reference to class ($class_name) because definition of its base class ($missing_class_name) is missing";
-            return array($error_code, XRef::NOTICE, $message, "$error_code/$class_name/$missing_class_name");
+            if (! isset($this->ignore_missing_classes[ strtolower($missing_class_name) ])) {
+                $error_code = self::E_MISSING_BASE_CLASS;
+                $message = (strtolower($missing_class_name) == strtolower($class_name)) ?
+                        "Can't validate reference to class ($class_name) because its definition is missing" :
+                        "Can't validate reference to class ($class_name) because definition of its base class ($missing_class_name) is missing";
+                return array($error_code, XRef::WARNING, $message, "$error_code/$class_name/$missing_class_name");
+            }
         } else {
             // got definition, check access
             $attributes = $lr->elements[0]->attributes;

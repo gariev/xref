@@ -28,7 +28,6 @@ if (XRef::needHelp() || count($arguments)) {
 }
 
 $xref = new XRef();
-$xref->removeStartingPath( XRef::getConfigValue("doc.remove-path", '') );
 $xref->setOutputDir( XRef::getConfigValue("doc.output-dir") );
 $xref->loadPluginGroup("doc");
 $plugins = $xref->getPlugins("XRef_IDocumentationPlugin");

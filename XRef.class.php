@@ -242,13 +242,6 @@ class XRef {
         return $this->storageManager;
     }
 
-    protected $removePathPrefix;
-
-    /** starting common part of the path that can be removed from file names */
-    public function removeStartingPath($pathPrefix) {
-        $this->removePathPrefix = $pathPrefix;
-    }
-
     /** directory where the cross-reference will be stored */
     public function setOutputDir($outputDir) {
         $this->outputDir = $outputDir;
@@ -272,12 +265,6 @@ class XRef {
         }
         if ($content==null) {
             $content = file_get_contents($filename);
-        }
-
-        // if the filename starts with the $this->removePathPrefix,
-        // then remove the prefix
-        if ($this->removePathPrefix && strpos($filename, $this->removePathPrefix)===0) {
-            $filename = substr($filename, strlen($this->removePathPrefix));
         }
 
         $pf = $parser->parse( $content, $filename );
@@ -586,18 +573,20 @@ class XRef {
         }
 
         // config file in .xref dir in current dir, or in any parent dirs
-        $dir = getcwd();
-        while ($dir) {
-            if (file_exists("$dir/.xref/xref.ini")) {
-                $filename = "$dir/.xref/xref.ini";
-                break;
+        if (!$filename) {
+            $dir = getcwd();
+            while ($dir) {
+                if (file_exists("$dir/.xref/xref.ini")) {
+                    $filename = "$dir/.xref/xref.ini";
+                    break;
+                }
+                $parent_dir = dirname($dir); // one step up
+                if ($parent_dir == $dir) {
+                    // top level, can't go up
+                    break;
+                }
+                $dir = $parent_dir;
             }
-            $parent_dir = dirname($dir); // one step up
-            if ($parent_dir == $dir) {
-                // top level, can't go up
-                break;
-            }
-            $dir = $parent_dir;
         }
 
         // config in installation dir?
@@ -606,6 +595,11 @@ class XRef {
             if (file_exists($f)) {
                 $filename = $f;
             }
+        }
+
+        // special value for filename - means don't read any config file
+        if ($filename && $filename == 'default') {
+            $filename = null;
         }
 
         return $filename;
@@ -681,6 +675,7 @@ class XRef {
             'lint.add-constant'             => array(),
             'lint.add-function-signature'   => array(),
             'lint.add-global-var'           => array(),
+            'lint.ignore-missing-class'     => array(),
             'lint.ignore-error'       => array(),
             'lint.check-global-scope' => true,
             'ci.source-code-manager'  => 'XRef_SourceCodeManager_Git',

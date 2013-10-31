@@ -95,7 +95,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         '<?php
             class B extends A {
                 function foo() {
-                    self::bar();        // notice, since there is no definition of class A
+                    self::bar();        // warning, missing class A
                 }
             }
             class C {
@@ -107,6 +107,7 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         $this->checkProject(
             array( 'fileA.php' => $codeA ),
             array(
+                array('fileA.php', 'bar', XRef::WARNING, 4),
                 array('fileA.php', 'bar', XRef::ERROR, 9),
             )
         );
@@ -129,15 +130,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             echo B::BAR;        // ok
             echo A::FOO;        // warning
             echo B::FOO;        // ok
-            echo C::FOO;        // notice, because class C extends unknown class
-            echo D::FOO;        // notice, because no class D is found
+            echo C::FOO;        // warning, because class C extends unknown class
+            echo D::FOO;        // warning, because no class D is found
         ';
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB, ),
             array(
                 array('fileB.php', 'FOO', XRef::ERROR, 4),
-                // array('fileB.php', 'FOO', XRef::NOTICE, 7),
-                // array('fileB.php', 'FOO', XRef::NOTICE, 8),
+                array('fileB.php', 'FOO', XRef::WARNING, 6),
+                array('fileB.php', 'FOO', XRef::WARNING, 7),
             )
         );
     }
@@ -159,15 +160,15 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             echo B::BAR;        // ok
             echo A::FOO;        // warning
             echo B::FOO;        // ok
-            echo C::FOO;        // notice, because class C extends unknown class
-            echo D::FOO;        // notice, because no class D is found
+            echo C::FOO;        // warning, because class C extends unknown class
+            echo D::FOO;        // warning, because no class D is found
         ';
         $this->checkProject(
             array( 'fileA.php' => $codeA, 'fileB.php' => $codeB, ),
             array(
                 array('fileB.php', 'FOO', XRef::ERROR, 4),
-                // array('fileB.php', 'FOO', XRef::NOTICE, 7),
-                // array('fileB.php', 'FOO', XRef::NOTICE, 8),
+                array('fileB.php', 'FOO', XRef::WARNING, 6),
+                array('fileB.php', 'FOO', XRef::WARNING, 7),
             )
         );
     }
@@ -520,6 +521,46 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
                 array('fileA.php', 'F', XRef::WARNING, 13),
             )
         );
+    }
+
+    public function testImportedNamespaces() {
+        $file_a =
+        '<?php
+
+        namespace foo;
+        require_once "3.php";
+        use baz\qux as q;
+        use baz\qux\A as MyA;
+
+
+        echo \bar\A::BAR_A_FOO;         // ok
+        echo bar\A::BAR_A_FOO;          // error
+        echo \baz\qux\A::BAZ_QUX_A_FOO; // ok
+        echo MyA::BAZ_QUX_A_FOO;        // ok
+        ';
+
+        $file_b =
+        '<?php
+        namespace bar {
+            class A {
+                const BAR_A_FOO = 1;
+            }
+        }
+
+        namespace baz\qux {
+            class A {
+                const BAZ_QUX_A_FOO = 2;
+            }
+        }
+        ';
+
+        $this->checkProject(
+            array( 'fileA.php' => $file_a, 'fileB.php' => $file_b ),
+            array(
+                array('fileA.php', 'BAR_A_FOO', XRef::WARNING, 10),
+            )
+        );
+
     }
 
 

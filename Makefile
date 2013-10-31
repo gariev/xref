@@ -6,7 +6,7 @@ all:
 
 test:
 	## self-test:
-	bin/xref-lint --no-cache
+	bin/xref-lint --config=default --define lint.ignore-missing-class=PEAR --define lint.ignore-missing-class=PHPUnit_Framework_TestCase --no-cache
 	## unittests
 	phpunit tests
 

@@ -21,6 +21,7 @@ XRef::registerCmdOption('',   "no-cache",       '--no-cache',           "don't u
 XRef::registerCmdOption('',   "init",           '--init',               "create a config file, init cache");
 XRef::registerCmdOption('',   "git",            '--git',                "git pre-commit mode: find new errors in modified tracked files");
 XRef::registerCmdOption('',   "git-cached",     '--git-cached',         "implies --git option; compare HEAD and files cached for commit");
+XRef::registerCmdOption('',   "git-rev=",       '--git-rev=from:to',    "implies --git option; compare revisions <from> and <to>");
 
 try {
     list ($options, $arguments) = XRef::getCmdOptions();
@@ -63,9 +64,13 @@ if ($outputFormat != 'text' && $outputFormat != 'json') {
 }
 
 // git mode:
-if (isset($options['git-cached']) && $options['git-cached']) {
+if ( (isset($options['git-cached']) && $options['git-cached'])
+    || (isset($options['git-rev']) && $options['git-rev'])
+)
+{
     $options['git'] = true;
 }
+
 if (isset($options['git']) && $options['git']) {
     if ($arguments) {
         error_log("warning: filenames to be checked are ignored in git mode");
@@ -109,10 +114,18 @@ $lint_engine = XRef::getConfigValue("xref.project-check", true)
 
 if (isset($options['git']) && $options['git']) {
     // incremental mode: find errors in files modified since HEAD revision
-    $old_rev = XRef_SourceCodeManager_Git::HEAD;
-    $new_rev = (isset($options['git-cached']) && $options['git-cached']) ?
-        XRef_SourceCodeManager_Git::CACHED : XRef_SourceCodeManager_Git::DISK;
-
+    if (isset($options['git-rev']) && $options['git-rev']) {
+        if (preg_match('#^(\\w+):(\\w+)$#', $options['git-rev'], $matches)) {
+            $old_rev = $matches[1];
+            $new_rev = $matches[2];
+        } else {
+            throw new Exception("Invalid revision specification: " . $options['git-rev']);
+        }
+    } else {
+        $old_rev = XRef_SourceCodeManager_Git::HEAD;
+        $new_rev = (isset($options['git-cached']) && $options['git-cached']) ?
+            XRef_SourceCodeManager_Git::CACHED : XRef_SourceCodeManager_Git::DISK;
+    }
     $scm = $xref->getSourceCodeManager(); // TODO: check this is the git scm
     $file_provider_old = $scm->getFileProvider( $old_rev );
     $file_provider_new = $scm->getFileProvider( $new_rev );

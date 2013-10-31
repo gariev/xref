@@ -378,10 +378,6 @@ List of config file parameters:
     The path where to look for plugins;
     the default XRef library dir will be searched even if not specified.
 
-* **doc.remove-path** (string; optional)
-
-    Which starting part of source filenames to remove from report; for aesthetics only
-
 * **doc.output-dir** (path; required)
 
     Where to put generated documentation
