@@ -31,7 +31,7 @@ if (isset($_REQUEST["source"])) {
     try {
         $parsed_file = $xref->getParsedFile("unknown.php", $source);
         if (count($parsed_file->getTokens()) > 1) {
-            $lint_engine = (true)
+            $lint_engine = XRef::getConfigValue("xref.project-check", true)
                     ? new XRef_LintEngine_ProjectCheck($xref)
                     : new XRef_LintEngine_Simple($xref);
             $lint_engine->addParsedFile($parsed_file);

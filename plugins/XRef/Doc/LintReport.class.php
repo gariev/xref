@@ -19,7 +19,7 @@ class XRef_Doc_LintReport extends XRef_APlugin implements XRef_IDocumentationPlu
 
     public function setXRef(XRef $xref) {
         parent::setXRef($xref);
-        $this->lintEngine = (true)
+        $this->lintEngine = XRef::getConfigValue("xref.project-check", true)
             ? new XRef_LintEngine_ProjectCheck($xref)
             : new XRef_LintEngine_Simple($xref);
     }

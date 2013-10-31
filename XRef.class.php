@@ -266,7 +266,7 @@ class XRef {
      */
     public function getParsedFile($filename, $content = null) {
         $file_type = strtolower( pathinfo($filename, PATHINFO_EXTENSION) );
-        $parser = $this->parsers[$file_type];
+        $parser = isset($this->parsers[$file_type]) ? $this->parsers[$file_type] : null;
         if (!$parser) {
             throw new Exception("No parser is registered for filetype $file_type ($filename)");
         }
@@ -746,14 +746,60 @@ class XRef {
             if (!$fh) {
                 throw new Exception("Can't create file $config_filename");
             }
-            $config = array(
-                "[xref]",
-                "data-dir=\"$cwd/.xref\"",
-                "[git]",
-                "repository-dir=\"$cwd\"",
-            );
+            $config = array();
+
+            $config[] = "[project]";
+            $config[] = array("name", basename($cwd));
+            $config[] = array("source-code-dir[]", realpath($cwd));
+            $config[] = null;
+
+            $config[] = "[xref]";
+            $config[] = array("data-dir", realpath("$cwd/.xref"));
+            $config[] = array("project-check", "true");
+            $config[] = array(";smarty-class", "/path/to/Smarty.class.php");
+            $config[] = null;
+
+            $config[] = "[doc]";
+            $config[] = array(";output-dir", "/path/for/generated/doc");
+            $config[] = null;
+
+            if (file_exists(".git")) {
+                // TODO: need a better way to check that this is a git project
+                // http://stackoverflow.com/questions/957928
+                // git rev-parse --show-toplevel
+                $config[] = "[git]";
+                $config[] = array("repository-dir", realpath($cwd));
+                $config[] = null;
+
+                $config[] = "[ci]";
+                $config[] = array("incremental", "true");
+                $config[] = array("update-repository", "true");
+                $config[] = null;
+
+                $config[] = "[mail]";
+                $config[] = array("from", "XRef Continuous Integration");
+                $config[] = array(";reply-to", "you@your.domain.com");
+                $config[] = array(";to[]", "{%ae}");
+                $config[] = array(";to[]", "you@your.domain.com");
+                $config[] = null;
+            }
+
             foreach ($config as $line) {
-                fwrite($fh, $line . "\n");
+                $l = null;
+                if (!$line) {
+                    $l = "\n";
+                } elseif (!is_array($line)) {
+                    $l = "$line\n";
+                } else {
+                    list($k, $v) = $line;
+                    if (preg_match('#^\\w+$#', $v)) {
+                        $l = sprintf("%-20s= %s\n", $k, $v);
+                    } else {
+                        $v = preg_replace('#\\\\#', '\\\\', $v);
+                        $l = sprintf("%-20s= \"%s\"\n", $k, $v);
+                    }
+                }
+                fwrite($fh, $l);
             }
             fclose($fh);
 
@@ -766,6 +812,7 @@ class XRef {
         $file_provider = new XRef_FileProvider_FileSystem( $cwd );
         $lint_engine = new XRef_LintEngine_ProjectCheck($this);
         $lint_engine->setShowProgressBar(true);
+        $lint_engine->setRewriteCache(true);    // re-index files and refill cache
         echo "Indexing files\n";
         $lint_engine->getReport($file_provider);
         echo "\nDone.\n";

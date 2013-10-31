@@ -33,9 +33,9 @@ $xref->setOutputDir( XRef::getConfigValue("doc.output-dir") );
 $xref->loadPluginGroup("doc");
 $plugins = $xref->getPlugins("XRef_IDocumentationPlugin");
 
-$path = XRef::getConfigValue("doc.source-code-dir");
+$path = XRef::getConfigValue("project.source-code-dir");
 $file_provider = new XRef_FileProvider_FileSystem( $path );
-$exclude_paths = XRef::getConfigValue("doc.exclude-path", array());
+$exclude_paths = XRef::getConfigValue("project.exclude-path", array());
 if ($exclude_paths) {
     $file_provider->excludePaths($exclude_paths);
 }
@@ -43,7 +43,8 @@ $numberOfFiles = 0;
 $numberOfCodeLines = 0;
 
 // 1. Call each plugin once for each input file
-foreach ($file_provider->getFiles() as $filename) {
+$files = $xref->filterFiles( $file_provider->getFiles() );
+foreach ($files as $filename) {
     try {
         $pf = $xref->getParsedFile($filename);
         foreach ($plugins as $pluginId => $plugin) {

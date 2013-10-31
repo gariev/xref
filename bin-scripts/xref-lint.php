@@ -103,7 +103,10 @@ $xref->loadPluginGroup("lint");
 
 $total_report = array();
 
-$lint_engine = new XRef_LintEngine_ProjectCheck($xref, $use_cache);
+$lint_engine = XRef::getConfigValue("xref.project-check", true)
+        ? new XRef_LintEngine_ProjectCheck($xref)
+        : new XRef_LintEngine_Simple($xref);
+
 if (isset($options['git']) && $options['git']) {
     // incremental mode: find errors in files modified since HEAD revision
     $old_rev = XRef_SourceCodeManager_Git::HEAD;

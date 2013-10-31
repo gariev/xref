@@ -12,6 +12,9 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
     /** @var array - map: (filename => unique id based on file content) */
     protected $filesMap = array();
 
+    /** @var bool - when true, cache won't be read, only written */
+    protected $rewriteCache = false;
+
     /** @var array - stats: mostly for internal use/debug/verbose mode */
     protected $stats;
 
@@ -128,7 +131,7 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
     // if we have the map, then we can get file id without reading the file content
     protected function loadFilesMap(XRef_IFileProvider $file_provider) {
         $this->filesMap = array();
-        if ($this->storageManager) {
+        if ($this->storageManager && !$this->rewriteCache) {
             $id = $file_provider->getPersistentId();
             if ($id) {
                 $map = $this->storageManager->restoreData("files-map", $id);
@@ -178,6 +181,10 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
         return !is_null($data);
     }
 
+    public function setRewriteCache($value) {
+        $this->rewriteCache = $value;
+    }
+
     protected function getVersionedCachedData(
         $cache_domain_key, XRef_IFileProvider $file_provider, $filename,
         $callback_get_data, $callback_validate_data)
@@ -198,7 +205,7 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
 
         // 2. load the data for this file_id & check version
         $data = null;
-        if ($this->storageManager) {
+        if ($this->storageManager && !$this->rewriteCache) {
             $d = $this->storageManager->restoreData($cache_domain_key, $file_id);
             if (isset($d) && isset($d["xrefVersion"]) && $d["xrefVersion"] == XRef::version()) {
                 $data = $d["data"];

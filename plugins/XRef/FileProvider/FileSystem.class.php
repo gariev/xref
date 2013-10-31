@@ -88,7 +88,7 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
                 foreach ($dir_files as $filename) {
                     // skip svn/git directories
                     // TODO: create ignore config list
-                    if ($filename == '.svn' || $filename == '.git' || $filename == '.build.sand.mk') {
+                    if ($filename == '.svn' || $filename == '.git' || $filename == '.xref' || $filename == '.build.sand.mk') {
                         continue;
                     }
                     if ($filename == '.' || $filename == '..') {

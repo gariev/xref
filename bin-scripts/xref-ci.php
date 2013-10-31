@@ -72,39 +72,39 @@ if (XRef::getConfigValue("ci.update-repository", false)) {
 }
 
 $branches = $scm->getListOfBranches();
-foreach ($branches as $branchName => $currentRev) {
+foreach ($branches as $branch_name => $current_rev) {
 
     // new branch: don't check files, just add to list of known branches
-    if (!isset($db["branches"][$branchName])) {
-        $db["branches"][$branchName] = $currentRev;
+    if (!isset($db["branches"][$branch_name])) {
+        $db["branches"][$branch_name] = $current_rev;
         if (XRef::verbose()) {
-            error_log("new branch $branchName");
+            error_log("new branch $branch_name");
         }
         $storage->saveData("ci", "database", $db);
         continue;
     }
 
-    $oldRev = $db["branches"][$branchName];
+    $old_rev = $db["branches"][$branch_name];
 
     // nothing changed for this branch
-    if ($oldRev==$currentRev) {
+    if ($old_rev == $current_rev) {
         if (XRef::verbose()) {
-            error_log("Branch $branchName was not modified");
+            error_log("Branch $branch_name was not modified");
         }
         continue;
     }
 
     if (XRef::verbose()) {
-        error_log("Processing branch $branchName");
+        error_log("Processing branch $branch_name");
     }
 
     // $errors: array(file name => XRef_CodeDefect[])
     $errors = array();
 
-    $file_provider_old = $scm->getFileProvider($oldRev);
-    $file_provider_new = $scm->getFileProvider($currentRev);
-    $modified_files = $scm->getListOfModifiedFiles($oldRev, $currentRev);
-    $lint_engine = (true)
+    $file_provider_old = $scm->getFileProvider($old_rev);
+    $file_provider_new = $scm->getFileProvider($current_rev);
+    $modified_files = $scm->getListOfModifiedFiles($old_rev, $current_rev);
+    $lint_engine = XRef::getConfigValue("xref.project-check", true)
             ? new XRef_LintEngine_ProjectCheck($xref)
             : new XRef_LintEngine_Simple($xref);
     if ($incremental) {
@@ -119,42 +119,42 @@ foreach ($branches as $branchName => $currentRev) {
         if (XRef::verbose()) {
             error_log(count($errors) . " file(s) with errors found");
         }
-        XRef_notifyAuthor($xref, $errors, $branchName, $oldRev, $currentRev);
+        XRef_notifyAuthor($xref, $errors, $branch_name, $old_rev, $current_rev);
         $db["numberOfSentLetters"]++;
     }
 
     // save the database on each iteration/branch:
     // if we die for whatever reason (memory?), don't spam about already processed branches
-    $db["branches"][$branchName] = $currentRev;
+    $db["branches"][$branch_name] = $current_rev;
     $storage->saveData("ci", "database", $db);
 }
 $storage->releaseLock("ci");
 
-function XRef_notifyAuthor(XRef $xref, $fileErrors, $branchName, $oldRev, $currentRev) {
-    $replyTo    = XRef::getConfigValue('mail.reply-to');
-    $from       = XRef::getConfigValue('mail.from');
-    $recepients = XRef::getConfigValue('mail.to');
-    $projectName= XRef::getConfigValue('xref.project-name', '');
+function XRef_notifyAuthor(XRef $xref, $fileErrors, $branch_name, $old_rev, $current_rev) {
+    $reply_to       = XRef::getConfigValue('mail.reply-to');
+    $from           = XRef::getConfigValue('mail.from');
+    $recepients     = XRef::getConfigValue('mail.to');
+    $project_name   = XRef::getConfigValue('project.name', '');
 
     // this works for git, will it work for other scms?
-    $oldRevShort    = (strlen($oldRev)>7)     ? substr($oldRev, 0, 7)     : $oldRev;
-    $currentRevShort= (strlen($currentRev)>7) ? substr($currentRev, 0, 7) : $currentRev;
+    $old_rev_short      = (strlen($old_rev)>7)     ? substr($old_rev, 0, 7)     : $old_rev;
+    $current_rev_short  = (strlen($current_rev)>7) ? substr($current_rev, 0, 7) : $current_rev;
 
     // $commitInfo: array('an'=>'igariev', 'ae'=>'igariev@9e1ac877-.', ...)
-    $commitInfo = $xref->getSourceCodeManager()->getRevisionInfo($currentRev);
+    $commitInfo = $xref->getSourceCodeManager()->getRevisionInfo($current_rev);
 
-    $subject    = "XRef CI $projectName: $branchName/$currentRevShort";
+    $subject    = "XRef CI $project_name: $branch_name/$current_rev_short";
     $headers    =   "MIME-Version: 1.0\n".
             "Content-type: text/html\n".
-            "Reply-to: $replyTo\n".
+            "Reply-to: $reply_to\n".
             "From: $from\n";
 
     $body = $xref->fillTemplate("ci-email.tmpl", array(
-        'branchName'        => $branchName,
-        'oldRev'            => $oldRev,
-        'oldRevShort'       => $oldRevShort,
-        'currentRev'        => $currentRev,
-        'currentRevShort'   => $currentRevShort,
+        'branchName'        => $branch_name,
+        'oldRev'            => $old_rev,
+        'oldRevShort'       => $old_rev_short,
+        'currentRev'        => $current_rev,
+        'currentRevShort'   => $current_rev_short,
         'fileErrors'        => $fileErrors,
         'commitInfo'        => $commitInfo,
     ));

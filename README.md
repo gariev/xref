@@ -342,9 +342,13 @@ xref-lint -d lint.check-global-scope=false -d lint.ignore-error=XA01 ...
 
 List of config file parameters:
 
-* **xref.project-name** (string, optional)
+* **project.name** (string, optional)
 
     The name of your project, will be mentioned in generated documentation
+
+* **project.source-code-dir[]** (array of path; required)
+
+    The set of paths where to look for source code of your project to create documentation
 
 * **xref.data-dir** (path, required)
 
@@ -373,10 +377,6 @@ List of config file parameters:
 
     The path where to look for plugins;
     the default XRef library dir will be searched even if not specified.
-
-* **doc.source-code-dir[]** (array of path; required)
-
-    The set of paths where to look for source code of your project to create documentation
 
 * **doc.remove-path** (string; optional)
 

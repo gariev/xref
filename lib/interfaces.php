@@ -223,7 +223,6 @@ class XRef_CodeDefect {
         $code_defect->errorCode    = $error_code;
         $code_defect->severity     = $severity;
         $code_defect->message      = sprintf($message_template, $code_defect->tokenText);
-        error_log($code_defect->message);
         return $code_defect;
     }
 

@@ -26,7 +26,7 @@ if ($rev1 && $rev2) {
     $modified_files = $scm->getListOfModifiedFiles($rev1, $rev2);
     $file_provider1 = $scm->getFileProvider($rev1);
     $file_provider2 = $scm->getFileProvider($rev2);
-    $lint_engine = (true)
+    $lint_engine = XRef::getConfigValue("xref.project-check", true)
             ? new XRef_LintEngine_ProjectCheck($xref)
             : new XRef_LintEngine_Simple($xref);
     $errors = $lint_engine->getIncrementalReport($file_provider1, $file_provider2, $modified_files);

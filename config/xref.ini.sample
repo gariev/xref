@@ -3,6 +3,10 @@
 ;   cross-reference documentation generator, lint and continuous integration service
 ;
 
+[project]
+name                    = "My Project"
+source-code-dir[]       = /path/to/your/code
+
 [xref]
 data-dir                = /home/you/xref/data
 smarty-class            = /home/you/Smarty-3.1.13/libs/Smarty.class.php
@@ -10,7 +14,6 @@ script-url              = http://xref.your.domain.com/bin
 
 ; Documentation (cross-reference doc) settings
 [doc]
-source-code-dir[]       = /home/you/your-project-dir
 remove-path             = /home/you/your-project-dir/
 output-dir              = /home/you/xref/report
 
@@ -35,7 +38,7 @@ repository-dir          = /home/you/your-project-dir/
 update-method           = pull
 
 [mail]
-from                    = XRef Continuous Intergration
+from                    = XRef Continuous Integration
 reply-to                = xref@your.domain.com
 to[]                    = you@your.domain.com
 to[]                    = "{%ae}"
