@@ -523,6 +523,9 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
         );
     }
 
+    /**
+     * @requires PHP 5.3
+     */
     public function testImportedNamespaces() {
         $file_a =
         '<?php
