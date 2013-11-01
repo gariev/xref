@@ -885,11 +885,11 @@ class XRef {
      *          array( "filename.php" )
      *      );
      *
-     * @return tuple(array $commandLineOptions, array $commandLineArguments)
+     * @return array(array $commandLineOptions, array $commandLineArguments)
      */
-    public static function getCmdOptions( $testArgs = null ) {
+    public static function getCmdOptions( $test_args = null ) {
 
-        if (is_null($testArgs)) {
+        if (is_null($test_args)) {
             if (self::$options) {
                 return array(self::$options, self::$arguments);
             }
@@ -899,45 +899,52 @@ class XRef {
             }
         }
 
-        $shortOptionsList = array();    // array( 'h', 'v', 'c:' )
-        $longOptionsList = array();     // array( 'help', 'verbose', 'config=' )
-        $renameMap = array();           // array( 'h' => 'help', 'c' => 'config' )
-        $isArrayMap = array();          // array( 'help' => false, 'define' => true, )
+        $short_options_list = array();  // array( 'h', 'v', 'c:' )
+        $long_options_list = array();   // array( 'help', 'verbose', 'config=' )
+        $rename_map = array();          // array( 'h' => 'help', 'c' => 'config' )
+        $is_array_map = array();        // array( 'help' => false, 'define' => true, )
         foreach (self::$optionsList as $o) {
             $short = $o[0];
             $long = $o[1];
             if ($short) {
-                $shortOptionsList[] = $short;
+                $short_options_list[] = $short;
             }
             if ($long) {
-                $longOptionsList[] = $long;
+                $long_options_list[] = $long;
             }
-            $short = preg_replace('/\W$/', '', $short); // remove ':' and '=' at the end of specificatios
-            $long = preg_replace('/\W$/', '', $long);
+            $short = preg_replace('/\W+$/', '', $short); // remove ':' and '=' at the end of specificatios
+            $long = preg_replace('/\W+$/', '', $long);
             if ($short && $long) {
-                $renameMap[ $short ] = $long;
+                $rename_map[ $short ] = $long;
             }
-            $isArrayMap[ ($long) ? $long : $short ] = $o[4];
+            $is_array_map[ ($long) ? $long : $short ] = $o[4];
         }
 
-        // TODO: write a better command-line parser
-        // too bad: the code below (from official Console/Getopt documentation) doesn't work in E_STRICT mode
-        // and Console_GetoptPlus is not installed by default on most systems :(
-        $error_reporting = error_reporting();
-        error_reporting($error_reporting & ~E_STRICT);
-        require_once 'Console/Getopt.php';
-        $getopt = new Console_Getopt();
-        $args = ($testArgs) ? $testArgs : $getopt->readPHPArgv();
-        $getoptResult = $getopt->getopt( $args, implode('', $shortOptionsList), $longOptionsList);
-        if (PEAR::isError($getoptResult)) {
-            throw new Exception( $getoptResult->getMessage() );
+        // * DONE: write a better command-line parser
+        // * too bad: the code below (from official Console/Getopt documentation) doesn't work in E_STRICT mode
+        // * and Console_GetoptPlus is not installed by default on most systems :(
+        // $error_reporting = error_reporting();
+        // error_reporting($error_reporting & ~E_STRICT);
+        // require_once 'Console/Getopt.php';
+        // $getopt = new Console_Getopt();
+        // $args = ($test_args) ? $test_args : $getopt->readPHPArgv();
+        // $getoptResult = $getopt->getopt( $args, implode('', $short_options_list), $long_options_list);
+        // if (PEAR::isError($getoptResult)) {
+        //     throw new Exception( $getoptResult->getMessage() );
+        // }
+        // error_reporting($error_reporting);
+        // * end of Console_Getopt dependent code
+
+        global $argv;
+        $args = ($test_args) ? $test_args : $argv;
+        $getopt_result = self::myGetopt($args, implode('', $short_options_list), $long_options_list);
+        if (!is_array($getopt_result)) {
+            throw new Exception($getopt_result);
         }
-        error_reporting($error_reporting);
-        // end of Console_Getopt dependent code
 
         $options = array();
-        list($optList, $arguments) = $getoptResult;
-        foreach ($optList as $o) {
+        list($opt_list, $arguments) = $getopt_result;
+        foreach ($opt_list as $o) {
             list($k, $v) = $o;
             // change default value for command-line options that doesn't require a value
             if (is_null($v)) {
@@ -947,11 +954,11 @@ class XRef {
             $k = preg_replace('#^-+#', '', $k);
 
             // force long option names
-            if (isset($renameMap[$k])) {
-                $k = $renameMap[$k];
+            if (isset($rename_map[$k])) {
+                $k = $rename_map[$k];
             }
 
-            if ($isArrayMap[$k]) {
+            if ($is_array_map[$k]) {
                 if (!isset($options[$k])) {
                     $options[$k] = array();
                 }
@@ -963,6 +970,206 @@ class XRef {
 
         self::$options = $options;
         self::$arguments = $arguments;
+        return array($options, $arguments);
+    }
+
+    const
+        OPT_REQ_VALUE = 1,
+        OPT_MAY_VALUE = 2,
+        OPT_NO_VALUE = 3;
+
+    /**
+     * This is a replacement for Console_Getopt()
+     *
+     * The wheel is reinvented here because other options were:
+     * 1) getopt()
+     *      "=" as argument/value separator is added only in php 5.3+
+     * 2) Console_GetOpt
+     *      recommended code from examples "if (PEAR::isError($result))"
+     *      dies in strict mode in php 5.5
+     * 3) Console_GetoptPlus
+     *      has only PEAR distribution, which requires extra steps on MacOS
+     *      (PEAR php_dir is not in "include_path" by default
+     * 4) Composer's ulrichsg/getopt-php
+     *      requires PHP 5.3+
+     *
+     * So, if you need code to parse command-line arguments that works in
+     * range of php 5.2 - php 5.5, feel free to take it from here.
+     * Or invent your own wheel.
+     *
+     * @param string $short_options - e.g. 'a:b::c'
+     *      ('-a' requires value, for '-b' value is optional, '-c' takes no values)
+     * @param array $long_options, e.g. array('foo=', 'bar==', 'baz')
+     *      ":" and "=" are fully interchangeable
+     * @param array $args
+     * @return array|string - returns either
+     *  string with error message or
+     *  array($options, $arguments)
+     */
+    public static function myGetopt($args, $short_options, $long_options) {
+        $options = array();
+        $arguments = array();
+
+        $s_options = array();   // map ('short option letter' => OPT_REQ_VALUE)
+        $l_options = array();   // map ('long option name'  => OPT_NO_VALUE)
+
+        // 1. parse specification for short options
+        $s_chars = preg_split('##', $short_options, -1, PREG_SPLIT_NO_EMPTY);
+        while ($s_chars) {
+            $char = array_shift($s_chars);
+            if (!preg_match('#[A-Za-z]#', $char)) {
+                return "Invalid short option specification ($short_options, $char)";
+            }
+
+            $spec = self::OPT_NO_VALUE;
+            if ($s_chars && ($s_chars[0] == ':' || $s_chars[0] == '=')) {
+                $spec = self::OPT_REQ_VALUE;
+                array_shift($s_chars);
+                if ($s_chars && ($s_chars[0] == ':' || $s_chars[0] == '=')) {
+                    $spec = self::OPT_MAY_VALUE;
+                    array_shift($s_chars);
+                }
+            }
+            if (isset($s_options[$char])) {
+                return "Duplicate short option specification ($short_options, $char)";
+            }
+            $s_options[$char] = $spec;
+        }
+
+        // 2. parse long option specifications
+        foreach ($long_options as $long_name) {
+            if (!preg_match('#^([A-Za-z0-9_-]+)([:=]{0,2})$#', $long_name, $matches)) {
+                return "Invalid long option specification: $long_name";
+            }
+            $name = $matches[1];
+            switch (strlen($matches[2])) {
+                case 0: $spec = self::OPT_NO_VALUE; break;
+                case 1: $spec = self::OPT_REQ_VALUE; break;
+                case 2: $spec = self::OPT_MAY_VALUE; break;
+                default: return "Invalid long option specification: $long_name";
+            }
+            if (isset($l_options[$name])) {
+                return "Duplicate long option specification ($long_name)";
+            }
+            $l_options[$name] = $spec;
+        }
+
+        // 3. parse command-line arguments
+        array_shift($args); // remove the first argument - the script name
+        while (count($args)) {
+            $arg = array_shift($args);
+            if ($arg == '--') {
+                // -- arg
+                $arguments = array_merge($arguments, $args);
+                break;
+            } elseif (strlen($arg) > 2 && substr($arg, 0, 2) == '--') {
+                // long option:
+                //  --foo
+                //  --foo=bar
+                //  --foo bar
+                $name = substr($arg, 2);
+                $value = null;
+                if (preg_match('#^(.*?)=(.*)$#', $name, $matches)) {
+                    // --foo=bar
+                    // --foo=
+                    $name = $matches[1];
+                    $value = $matches[2];
+                }
+
+                if (!isset($l_options[$name])) {
+                    return "Unknown option '--$name'";
+                }
+
+                if ($l_options[$name] == self::OPT_REQ_VALUE) {
+                    // long option requires a value
+                    // --long=value     // ok
+                    // --long value     // ok
+                    // --long <EOF>     // error
+                    if (is_null($value)) {
+                        if (!$args) {
+                            return "Option '--$name' requires a value";
+                        } else {
+                            $value = array_shift($args);
+                        }
+                    }
+                } elseif ($l_options[$name] == self::OPT_MAY_VALUE) {
+                    // long option may have an optional value
+                    // --long=value     // ok
+                    // --long value     // ok
+                    // --long <EOF>     // ok, default value
+                    // --long --another // ok, default value
+                    if (is_null($value)) {
+                        if ($args && substr($args[0], 0, 1) != '-') {
+                            $value = array_shift($args);
+                        } else {
+                            $value = true;
+                        }
+                    }
+                } else {
+                    // long option doesn't have a valuea
+                    // --long
+                    // --long=value // error
+                    if (is_null($value)) {
+                        $value = true;
+                    } else {
+                        return "Option '--$name' doesn't support values";
+                    }
+                }
+                $options[] = array($name, $value);
+            } elseif (strlen($arg) > 1 && substr($arg, 0, 1) == '-') {
+                // short options
+                // -a
+                // -a foo
+                // -abc
+
+                $chars = preg_split('##', substr($arg, 1), -1, PREG_SPLIT_NO_EMPTY);
+                while ($chars) {
+                    $char = array_shift($chars);
+                    $value = null;
+                    if (!isset($s_options[$char])) {
+                       return "Unknown option '$char'";
+                    }
+                    if ($s_options[$char] == self::OPT_REQ_VALUE) {
+                        // short option requires a value:
+                        // -s foo       // ok
+                        // -sfoo        // ok
+                        // -s <EOF>     // error
+                        if ($chars) {
+                            // -sfoo
+                            $value = implode($chars);
+                            $chars = null;
+                        } else {
+                            // -s foo
+                            if ($args) {
+                                $value = array_shift($args);
+                            } else {
+                                return "Option '$char' requires a value";
+                            }
+                        }
+                    } elseif ($s_options[$char] == self::OPT_MAY_VALUE) {
+                        if ($chars) {
+                            // -sfoo
+                            $value = implode($chars);
+                        } else {
+                            if (substr($args[0], 0, 1) != '-') {
+                                // -s --other-option
+                                $value = array_shift($args);
+                            } else {
+                                // -s foo
+                                $value = true;
+                            }
+                        }
+                    } else {
+                        $value = true;
+                    }
+                    $options[] = array($char, $value);
+                }
+            } else {
+                // just an argument
+                $arguments[] = $arg;
+            }
+        }
+
         return array($options, $arguments);
     }
 
