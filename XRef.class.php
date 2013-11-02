@@ -865,7 +865,14 @@ class XRef {
     private static $optionsList = array(
         array('c:', 'config=',  '-c, --config=FILE',    'Path to config file',          false),
         array('v',  'verbose',  '-v, --verbose',        'Be noisy',                     false),
-        array('h',  'help',     '-h, --help',           'Print this help and exit',     false),
+        array('h::','help==',   '-h, --help',
+            array(
+                "Print this help and exit",
+                "type '--help=defines' to show list of config values",
+                "type '--help=errors' to show list of errors and their codes",
+            ),
+            false
+        ),
         array('d:', 'define=',  '-d, --define key=val', 'Override config file values',  true),
     );
 
@@ -1181,33 +1188,115 @@ class XRef {
     public static function needHelp() {
         if (! isset(self::$needHelp)) {
             list($options) = self::getCmdOptions();
-            self::$needHelp = isset($options['help']) && $options['help'];
+            self::$needHelp = isset($options['help']) ? $options['help'] : false;
         }
         return self::$needHelp;
     }
 
-    public static function showHelpScreen($toolName, $usageString=null) {
+    public static function showHelpScreen($tool_name, $usage_string = null) {
         global $argv;
-        if (!$usageString) {
-            $usageString = "$argv[0] [options]";
+        if (!$usage_string) {
+            $usage_string = "$argv[0] [options]";
         }
 
-        $pathToReadMe = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md" : '@doc_dir@/XRef/README.md';
-        $configFile = self::getConfigFilename();
-        if (!$configFile) {
-            $configFile = "not found; using default values";
-        }
-        echo "$toolName, v. " . self::version() . "\n";
+        echo "$tool_name, v. " . self::version() . "\n";
         echo "Usage:\n";
-        echo "  $usageString\n";
-        echo "Options:\n";
-        foreach (self::$optionsList as $o) {
-            list($shortName, $longName, $usage, $desc) = $o;
-            echo sprintf("  %-20s %s\n", $usage, $desc);
+        echo "    $usage_string\n";
+        if (self::needHelp() == "defines" || self::needHelp() == "define") {
+            // show settings that can be changes with "--define"
+            echo "List of config file settings:\n";
+            self::showConfigValues();
+        } elseif (self::needHelp() == "errors" || self::needHelp() == "error") {
+            echo "List of errors:\n";
+            self::showErrors();
+        } else {
+            echo "Options:\n";
+            foreach (self::$optionsList as $o) {
+                list($shortName, $longName, $usage, $desc) = $o;
+                if (!is_array($desc)) {
+                    printf("    %-20s %s\n", $usage, $desc);
+                } else {
+                    printf("    %-20s %s\n", $usage, array_shift($desc));
+                    foreach ($desc as $d) {
+                        printf("        %s\n", $d);
+                    }
+                }
+            }
         }
-        echo "Config file:\n";
-        echo "  $configFile\n";
-        echo "See also: $pathToReadMe\n";
+        $path_to_readme = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md" : '@doc_dir@/XRef/README.md';
+        $config_file = self::getConfigFilename();
+        if (!$config_file) {
+            $config_file = "not found; using default values";
+        }
+        echo "Config file: $config_file\n";
+        echo "See also: $path_to_readme\n";
+
+    }
+
+    protected static function showErrors() {
+        $errors = array();  // map: error code => array("description" => description, "severity" => severity)
+
+        $xref = new XRef();
+        $xref->loadPluginGroup('lint');
+        foreach ($xref->getPlugins('XRef_ILintPlugin') as /** @var XRef_ILintPlugin $plugin */ $plugin) {
+            $map = $plugin->getErrorMap();
+            $errors = array_merge($errors, $map);
+        }
+        ksort($errors);
+
+        $format = "%-6s %-10s %s\n";
+        $spacer = sprintf($format, str_repeat('-', 6), str_repeat('-', 10), str_repeat('-', 50));
+        printf($format, "Code", "Severity", "Message");
+        echo $spacer;
+        foreach ($errors as $code => $details) {
+            printf($format, $code, XRef::$severityNames[ $details["severity"] ], $details["message"]);
+        }
+        echo $spacer;
+    }
+
+    protected static function showConfigValues() {
+        $config_values = array();   // map: name => array("type descr", "required/optional/etc");
+        $path_to_readme = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md" : '@doc_dir@/XRef/README.md';
+        if ($fh = fopen($path_to_readme, "r")) {
+            while (true) {
+                $line = fgets($fh);
+                if ($line === false) {
+                    break;
+                }
+                if (preg_match('#\\* \\*\\*(\\S+)\\*\\*\\s+\\((.+);\s+(.+)\\)#', $line, $matches)) {
+                    $config_values[ $matches[1] ] = array($matches[2], $matches[3]);
+                }
+            }
+            fclose($fh);
+        } else {
+            throw new Exception("Can't read file '$path_to_readme'");
+        }
+        ksort($config_values);
+        $format = "%-27s %-10s %-26s %s\n";
+        $spacer = sprintf($format, str_repeat('-', 27), str_repeat('-', 10), str_repeat('-', 26), str_repeat('-', 20));
+        printf($format, "Name", "Req?", "Type", "Value");
+        echo $spacer;
+        foreach ($config_values as $name => $l) {
+            list($type, $req) = $l;
+            $n = preg_replace('#\\[\\]$#', '', $name);
+            $value = self::getConfigValue($n, '');
+            if (is_array($value)) {
+                $value = "[" . implode(", ", $value) . "]";
+            } elseif ($value === true || $value === "1") {
+                $value = 'true';
+            } elseif ($value === false) {
+                $value = 'false';
+            } elseif ($value) {
+                $value = "'$value'";
+            } else {
+                $value = '';
+            }
+            if (strlen($value) > 30) {
+                $value = substr($value, 0, 27) . "...";
+            }
+            printf($format, $name, $req, $type, $value);
+        }
+        echo $spacer;
     }
 
     /**

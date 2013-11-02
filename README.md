@@ -342,7 +342,7 @@ xref-lint -d lint.check-global-scope=false -d lint.ignore-error=XA01 ...
 
 List of config file parameters:
 
-* **project.name** (string, optional)
+* **project.name** (string; optional)
 
     The name of your project, will be mentioned in generated documentation
 
@@ -423,6 +423,12 @@ List of config file parameters:
 
     List of error codes not to report for this project.
 
+* **lint.ignore-missing-class[]** (array of class names; optional)
+
+    Don't report about missing definition of the given classes.
+    Warning: this option make skip mosts tests on derived (child) classes too,
+    since the child class can inherit any method/property from the (missing) base class.
+
 * **lint.parsers[]** (array of class names; optional)
 
     Which parsers should lint use; by default it's XRef_Parser_PHP
@@ -466,7 +472,7 @@ List of config file parameters:
 
     Reply-to field of e-mails sent by CI
 
-* **mail.to[]** (array or e-mail addresses; required)
+* **mail.to[]** (array of e-mail addresses; required)
 
     Who are the recipient of CI e-mails. You can specify several addresses here and/or
     use e-mail templates with the fields filled by commit info.

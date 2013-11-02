@@ -5,7 +5,7 @@ require_once "$includeDir/XRef.class.php";
 
 class ConfigTest extends PHPUnit_Framework_TestCase {
 
-    public function testCommanLineParser() {
+    public function testCommandLineParser() {
 
         // basic test
         $args = array("script.php", "--help");
@@ -43,10 +43,9 @@ class ConfigTest extends PHPUnit_Framework_TestCase {
         $args = array("script.php", "-h", "foo");
         list($options, $arguments) = XRef::getCmdOptions($args);
         $this->assertTrue(count($options) == 1);
-        $this->assertTrue(count($arguments) == 1);
+        $this->assertTrue(count($arguments) == 0);
         $this->assertTrue(isset($options["help"]));
-        $this->assertTrue($options["help"] === true);
-        $this->assertTrue($arguments[0] == "foo");
+        $this->assertTrue($options["help"] === 'foo');
 
         // check custom options with arguments
         XRef::registerCmdOption('a:', "foo-bar=",  '...',  "some help");
