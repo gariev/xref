@@ -64,7 +64,11 @@ class XRef_SourceCodeManager_Git implements XRef_ISourceCodeManager {
      * @return string[]            List of files that were modified from $oldRev to $currentRev
      */
     public function getListOfFiles($revision) {
-        return self::git(array("ls-tree", "--name-only", "-r", "'$revision'"), true);
+        if ($revision == self::CACHED) {
+            return self::git(array("ls-files", "--cached"), true);
+        } else {
+            return self::git(array("ls-tree", "--name-only", "-r", "'$revision'"), true);
+        }
     }
 
 

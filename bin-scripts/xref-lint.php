@@ -20,8 +20,10 @@ XRef::registerCmdOption('r:', "report-level=",  '-r, --report-level=',  "either 
 XRef::registerCmdOption('',   "no-cache",       '--no-cache',           "don't use lint cache, if any");
 XRef::registerCmdOption('',   "init",           '--init',               "create a config file, init cache");
 XRef::registerCmdOption('',   "git",            '--git',                "git pre-commit mode: find new errors in modified tracked files");
-XRef::registerCmdOption('',   "git-cached",     '--git-cached',         "implies --git option; compare HEAD and files cached for commit");
-XRef::registerCmdOption('',   "git-rev=",       '--git-rev=from:to',    "implies --git option; compare revisions <from> and <to>");
+XRef::registerCmdOption('',   "git-cached",     '--git-cached',         array("implies --git option", "compare HEAD and files cached for commit"));
+XRef::registerCmdOption('',   "git-rev=",       '--git-rev=<rev> or --git-rev=<from>:<to> ',
+    array("", "find errors in revision <rev>, or find errors added since rev <from> to rev <to>")
+);
 
 try {
     list ($options, $arguments) = XRef::getCmdOptions();
@@ -34,7 +36,7 @@ try {
 if (XRef::needHelp()) {
     XRef::showHelpScreen(
         "xref-lint - tool to find problems in PHP source code",
-        "$argv[0] [options] [path to check]"
+        "$argv[0] [options] [files to check]"
     );
     exit(1);
 }
@@ -109,31 +111,56 @@ $xref->loadPluginGroup("lint");
 $total_report = array();
 
 $lint_engine = XRef::getConfigValue("xref.project-check", true)
-        ? new XRef_LintEngine_ProjectCheck($xref)
-        : new XRef_LintEngine_Simple($xref);
+        ? new XRef_LintEngine_ProjectCheck($xref, $use_cache)
+        : new XRef_LintEngine_Simple($xref, $use_cache);
 
 if (isset($options['git']) && $options['git']) {
-    // incremental mode: find errors in files modified since HEAD revision
+    $old_rev = null;
+    $new_rev = null;
     if (isset($options['git-rev']) && $options['git-rev']) {
-        if (preg_match('#^(\\w+):(\\w+)$#', $options['git-rev'], $matches)) {
-            $old_rev = $matches[1];
-            $new_rev = $matches[2];
+        // find errors in specific revision or compare two revisions
+        $r = preg_split('#:#', $options['git-rev']);
+        if (count($r) == 2) {
+            // --git-rev=<from>:<to>
+            list($old_rev, $new_rev) = $r;
+        } elseif (count($r) == 1) {
+            // --git-rev=<revision>
+            $old_rev = $r[0];
         } else {
             throw new Exception("Invalid revision specification: " . $options['git-rev']);
         }
     } else {
+        // incremental (diff) mode: find errors in files modified since HEAD revision
+        // compare either HEAD:<current state of disk> or HEAD:<current state of cache>
         $old_rev = XRef_SourceCodeManager_Git::HEAD;
         $new_rev = (isset($options['git-cached']) && $options['git-cached']) ?
             XRef_SourceCodeManager_Git::CACHED : XRef_SourceCodeManager_Git::DISK;
     }
     $scm = $xref->getSourceCodeManager(); // TODO: check this is the git scm
-    $file_provider_old = $scm->getFileProvider( $old_rev );
-    $file_provider_new = $scm->getFileProvider( $new_rev );
-    $modified_files = $scm->getListOfModifiedFiles($old_rev, $new_rev);
-    $total_report = $lint_engine->getIncrementalReport($file_provider_old, $file_provider_new, $modified_files);
+
+    if ($old_rev && $new_rev) {
+        // incremental mode: find errors, that are new in <$new_rev> since <$old_rev>
+        $file_provider_old = $scm->getFileProvider( $old_rev );
+        $file_provider_new = $scm->getFileProvider( $new_rev );
+        $modified_files = $scm->getListOfModifiedFiles($old_rev, $new_rev);
+        $total_report = $lint_engine->getIncrementalReport($file_provider_old, $file_provider_new, $modified_files);
+    } else {
+        // regular mode - find all errors in revision <$old_rev>
+        $file_provider = $scm->getFileProvider( $old_rev );
+        $total_report = $lint_engine->getReport($file_provider);
+    }
 } else {
     // main loop over all files
-    $file_provider = new XRef_FileProvider_FileSystem( ($arguments) ? $arguments : '.' );
+    // list of files to check (in order):
+    //  1) command-line arguments, 2) config-defined project.source-code-dir 3) current dir
+    $paths = $arguments;
+    if (!$paths) {
+        $paths =  XRef::getConfigValue("project.source-code-dir", array());
+    }
+    if (!$paths) {
+        $paths = array(".");
+    }
+    $file_provider = new XRef_FileProvider_FileSystem( $paths );
     $total_report = $lint_engine->getReport($file_provider);
 }
 

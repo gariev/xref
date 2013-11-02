@@ -3,7 +3,7 @@
 class XRef_FileProvider_Git implements XRef_IFileProvider {
     /** @var XRef_ISourceCodeManager */
     private $sourceCodeManager = null;
-    /** @var string */
+    /** @var string - either git canonical 40-char revision id, or one of XRef_SourceCodeManager_Git::* constants */
     private $revision = null;
     /** @var array - list of directories and files to exclude from output */
     private $excludePaths = array();
@@ -11,13 +11,20 @@ class XRef_FileProvider_Git implements XRef_IFileProvider {
     public function __construct(XRef_ISourceCodeManager $sourceCodeManager, $revision) {
         $this->sourceCodeManager = $sourceCodeManager;
 
-        // get the canonical form of revision - 40-char id
-        if (!preg_match('#^([a-f0-9]{40})$#', $revision)) {
-            $info = $sourceCodeManager->getRevisionInfo($revision);
-            if (! $info['H']) {
-                throw new Exception("Invalid revision: $revision");
+        // revisions:
+        // XRef_SourceCodeManager_Git::HEAD     -> will be resolved into current head's hash
+        // XRef_SourceCodeManager_Git::CAHED    -> special case (!)
+        // XRef_SourceCodeManager_Git::DISK     -> invalid here
+        // (anything else, incl. branch name)   -> either will be resolved into hash or will result in exception
+        if ($revision != XRef_SourceCodeManager_Git::CACHED) {
+            // get the canonical form of revision - 40-char id
+            if (!preg_match('#^([a-f0-9]{40})$#', $revision)) {
+                $info = $sourceCodeManager->getRevisionInfo($revision);
+                if (! isset($info['H'])) {
+                    throw new Exception("Invalid revision: $revision");
+                }
+                $revision = $info['H'];
             }
-            $revision = $info['H'];
         }
 
         $this->revision = $revision;
@@ -63,7 +70,7 @@ class XRef_FileProvider_Git implements XRef_IFileProvider {
     }
 
     public function getPersistentId() {
-        return $this->revision;
+        return (strlen($this->revision) == 40) ? $this->revision : null;
     }
 }
 

@@ -12,14 +12,30 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
         foreach ($paths as $path) {
             $p = realpath($path);
             if ($p) {
-                $this->paths[] = realpath($p);
+                $this->paths[] = $p;
             } else {
                 error_log("Path '$path' doesn't exist");
             }
         }
         if (count($this->paths) > 0 && is_dir($this->paths[0])) {
             $this->rootDir = $this->paths[0];
-            $this->rootDirStrlen = strlen($this->rootDir);
+            $p = preg_replace('#[\\\\/]$#', '', $paths[0]); // remove trailing slash, if any
+            // how much of starting path is to trim?
+            // $cwd = "/home/igariev"
+            //
+            // $p = ".",                $rootDir = "/home/igariev",     $realpath="/home/igariev/lib/1.php", $file="lib/1.php"
+            // $p = "/home/igariev",    $rootDir = "/home/igariev",     $realpath="/home/igariev/lib/1.php", $file="lib/1.php"
+            // $p = "lib",              $rootDir = "/home/igariev/lib", $realpath="/home/igariev/lib/1.php", $file="lib/1.php"
+            // $p = "../another",       $rootDir = "/home/another",     $realpath="/home/another/2.php",     $file="/home/another/2.php"
+            //
+            if ($this->rootDir == $p || $p == '.') {
+                $this->rootDirStrlen = strlen($this->rootDir);
+            } elseif (!preg_match('#^\\.#', $p)) {
+                $pos = strrpos($this->rootDir, $p);
+                if ($pos !== false) {
+                    $this->rootDirStrlen = $pos - 1;
+                }
+            }
         }
     }
 
@@ -100,6 +116,7 @@ class XRef_FileProvider_FileSystem implements XRef_IFileProvider {
             }
         } else if (is_file($file)) {
             if ($this->rootDir
+                && $this->rootDirStrlen
                 && strncmp($this->rootDir, $file, $this->rootDirStrlen) == 0
                 && $file[$this->rootDirStrlen] == DIRECTORY_SEPARATOR)
             {

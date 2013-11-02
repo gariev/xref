@@ -1202,11 +1202,12 @@ class XRef {
         echo "$tool_name, v. " . self::version() . "\n";
         echo "Usage:\n";
         echo "    $usage_string\n";
-        if (self::needHelp() == "defines" || self::needHelp() == "define") {
+
+        if (self::needHelp() === "defines" || self::needHelp() === "define") {
             // show settings that can be changes with "--define"
             echo "List of config file settings:\n";
             self::showConfigValues();
-        } elseif (self::needHelp() == "errors" || self::needHelp() == "error") {
+        } elseif (self::needHelp() === "errors" || self::needHelp() === "error") {
             echo "List of errors:\n";
             self::showErrors();
         } else {
@@ -1223,6 +1224,7 @@ class XRef {
                 }
             }
         }
+
         $path_to_readme = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md" : '@doc_dir@/XRef/README.md';
         $config_file = self::getConfigFilename();
         if (!$config_file) {
