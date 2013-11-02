@@ -43,6 +43,31 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
         for ($i=0; $i<count($tokens); ++$i) {
             $t = $tokens[$i];
 
+            // new Foo();
+            // new \Bar\Baz();
+            // new $class
+            // new self()
+            if ($t->kind == T_NEW) {
+                $n = $t->nextNS();
+                $class_name = '';
+                while ($n->kind == T_NS_SEPARATOR || $n->kind == T_STRING) {
+                    $class_name = $class_name . $n->text;
+                    $n = $n->nextNS();
+                }
+                if ($class_name) {
+                    $class_name = $pf->qualifyName($class_name, $t->index);
+                    if ($class_name == 'self' || $class_name == 'parent' || $class_name == 'static') {
+                        $class = $pf->getClassAt( $t->index );
+                        if (!$class) {
+                            continue;
+                        }
+                        $class_name = $class->name;
+                    }
+                    $this->addUsedConstruct($class_name, 'method', '__construct', $t->lineNumber, $class_name, false, false);
+                }
+                continue;
+            }
+
             // $this->foo();
             // $this->bar;
             if ($t->kind == T_VARIABLE && $t->text == '$this') {
@@ -213,26 +238,29 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
                     return array($error_code, $severity, $message, $uniq);
                 }
             }
-
-            switch ($key) {
-                case 'method':
-                    $error_code = self::E_ACCESS_TO_UNDEFINED_METHOD;
-                    $severity = XRef::ERROR;
-                    break;
-                case 'constant':
-                    $error_code = self::E_ACCESS_TO_UNDEFINED_CONSTANT;
-                    $severity = XRef::ERROR;
-                    break;
-                case 'property':
-                    $error_code = self::E_ACCESS_TO_UNDEFINED_PROPERTY;
-                    $severity = XRef::WARNING;
-                    break;
-                default:
-                    throw new Exception($key);
+            if ($key == 'method' && $name == '__construct') {
+                // ok, php creates a default constructor
+            } else {
+                switch ($key) {
+                    case 'method':
+                        $error_code = self::E_ACCESS_TO_UNDEFINED_METHOD;
+                        $severity = XRef::ERROR;
+                        break;
+                    case 'constant':
+                        $error_code = self::E_ACCESS_TO_UNDEFINED_CONSTANT;
+                        $severity = XRef::ERROR;
+                        break;
+                    case 'property':
+                        $error_code = self::E_ACCESS_TO_UNDEFINED_PROPERTY;
+                        $severity = XRef::WARNING;
+                        break;
+                    default:
+                        throw new Exception($key);
+                }
+                $message = "Reference to undefined $key (%s) of class $class_name";
+                $uniq = "$error_code/$from_class/$class_name/$key/$name";
+                return array($error_code, $severity, $message, $uniq);
             }
-            $message = "Reference to undefined $key (%s) of class $class_name";
-            $uniq = "$error_code/$from_class/$class_name/$key/$name";
-            return array($error_code, $severity, $message, $uniq);
         } elseif ($lr->code == XRef_LookupResult::CLASS_MISSING) {
             // definition not found because definition of class or its base class is missing
             $missing_class_name = $lr->missingClassName;

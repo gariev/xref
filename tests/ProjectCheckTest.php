@@ -566,5 +566,33 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
 
     }
 
+    public function testMissedClasses() {
+        $file_a =
+        '<?php
+
+        class A {}
+        class B extends C {};   // there is no class C, warning will be later
+
+        $a = new A();           // ok
+        echo B::FOO;            // warning
+        $d = new D();           // warning
+
+        class E {
+            public static function foo() {
+                return new self();  // ok, means return new E()
+            }
+        }
+        ';
+
+        $this->checkProject(
+            array( 'fileA.php' => $file_a ),
+            array(
+                array('fileA.php', 'FOO', XRef::WARNING, 7),
+                array('fileA.php', '__construct', XRef::WARNING, 8),    // TODO: fix this. there is no token '__construct' in source file
+            )
+        );
+
+    }
+
 
 }

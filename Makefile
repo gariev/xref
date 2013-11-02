@@ -6,7 +6,14 @@ all:
 
 test:
 	## self-test:
-	bin/xref-lint --config=default --define lint.ignore-missing-class=PEAR --define lint.ignore-missing-class=PHPUnit_Framework_TestCase --no-cache
+	bin/xref-lint --config=default --no-cache \
+		--define lint.ignore-missing-class=PEAR \
+		--define lint.ignore-missing-class=PHPUnit_Framework_TestCase \
+		--define lint.ignore-missing-class=Smarty \
+		--define lint.ignore-missing-class=PEAR_PackageFileManager2 \
+		--define lint.ignore-missing-class=PHPParser_Lexer \
+		--define lint.ignore-missing-class=PHPParser_Parser \
+		--define lint.ignore-missing-class=XHProfRuns_Default
 	## unittests
 	phpunit tests
 

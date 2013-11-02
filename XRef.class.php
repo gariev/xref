@@ -675,7 +675,7 @@ class XRef {
             'lint.add-constant'             => array(),
             'lint.add-function-signature'   => array(),
             'lint.add-global-var'           => array(),
-            'lint.ignore-missing-class'     => array(),
+            'lint.ignore-missing-class'     => array('PEAR', 'PHPUnit_Framework_TestCase'), // most commonly used library classes
             'lint.ignore-error'       => array(),
             'lint.check-global-scope' => true,
             'ci.source-code-manager'  => 'XRef_SourceCodeManager_Git',
