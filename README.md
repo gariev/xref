@@ -390,18 +390,18 @@ List of config file parameters:
 
     Messages with which severity level should be reported by lint; it's warnings by default
 
-* **lint.add-constant[]** (array of strings, optional)
+* **lint.add-constant[]** (array of strings; optional)
 
     If you get warnings about lower-case string literals that are actually global constants
     defined in somewere else, you can list these constants here.
 
-* **lint.add-global-var[]** (array of strings, optional)
+* **lint.add-global-var[]** (array of strings; optional)
 
     If you check usage of variables in global scope (option lint.check-global-scope is set to true),
     and your code depends on global variables defined in other files, you can notify lint about
     these variables by listing them in this list.
 
-* **lint.add-function-signature[]** (array of strings, optional)
+* **lint.add-function-signature[]** (array of strings; optional)
 
     So far lint doesn't know about user functions defined in other files, and doesn't know
     if there are functions that can assign a value to a variable passed by reference.

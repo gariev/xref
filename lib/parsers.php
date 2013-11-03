@@ -487,6 +487,13 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         while (true) {
             $this->nextNS();
             $name = $this->parseTypeName();
+            if (substr($name, 0, 1) == '\\') {
+                // not recommended, but commonly used:
+                // use \Foo\Bar as Alias;
+                // all namespaces are global anyway and not related to current namespace
+                $name = substr($name, 1);
+            }
+
             $t = $this->current();
 
             if ($t->kind == T_AS) {
@@ -975,28 +982,32 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
             return $name;
         }
 
+        if ($name == 'self' || $name == 'parent' || $name == 'static') {
+            return $name;
+        }
+
         if (substr($name, 0, 1)== '\\') {
             // this is an absolute name, '\foo\bar' --> 'foo\bar'
             return substr($name, 1);
         } else {
-            if ($name == 'self' || $name == 'parent' || $name == 'static') {
+            // relative name
+            $namespace = $this->getNamespaceAt($index);
+            if (!$namespace) {
+                // no namespace and no import map
                 return $name;
             } else {
-                // relative name
-                $namespace = $this->getNamespaceAt($index);
-                if (!$namespace) {
-                    return $name;
+                $parts = explode('\\', $name);
+                if ($parts[0] == 'namespace') {
+                    $parts[0] = $namespace->name;
+                } elseif (isset($namespace->importMap[ $parts[0] ])) {
+                    $parts[0] = $namespace->importMap[ $parts[0] ];
                 } else {
-                    $parts = explode('\\', $name);
-                    if ($parts[0] == 'namespace') {
-                        $parts[0] = $namespace->name;
-                    } elseif (isset($namespace->importMap[ $parts[0] ])) {
-                        $parts[0] = $namespace->importMap[ $parts[0] ];
-                    } else {
+                    if ($namespace->name) {
+                        // not default namespace
                         array_unshift($parts, $namespace->name);
                     }
-                    return implode('\\', $parts);
                 }
+                return implode('\\', $parts);
             }
         }
     }
@@ -1005,15 +1016,17 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
     // input: simple type name, e.g. 'Foo'
     // output: fully-qualified name, e.g. 'My\NameSpace\Foo'
     private function qualifySimpleName($name, $index) {
+        // special keywords/names
+        if ($name == 'self' || $name == 'parent' || $name == 'static') {
+            return $name;
+        }
+
         $namespace = $this->getNamespaceAt($index);
-        if (!$namespace) {
+        if (!$namespace || !$namespace->name) {
+            // name is in global namespace
             return $name;
         } else {
-            if ($name == 'self' || $name == 'parent' || $name == 'static') {
-                return $name;
-            } else {
-                return $namespace->name . '\\' . $name;
-            }
+            return $namespace->name . '\\' . $name;
         }
     }
 
