@@ -91,6 +91,17 @@ class XRef {
         T_FINAL     => XRef::MASK_FINAL,
     );
 
+
+    /** error code & message for fatal "can't parse file" error */
+    const ERROR_CODE_CANT_PARSE_FILE = "xr001";
+    const ERROR_MESSAGE_CANT_PARSE_FILE = "Can't parse file (%s)";
+
+    /**
+     * special filename for project errors that are not specific to any file,
+     * e.g. a class is defined twice in the project
+     */
+    const DUMMY_PROJECT_FILENAME = "(project)";
+
     /** constructor */
     public function __construct() {
         spl_autoload_register(array($this, "autoload"), true);
@@ -112,7 +123,7 @@ class XRef {
     }
 
     public static function version() {
-        return "0.1.8p";
+        return "0.1.8q";
     }
 
     /*----------------------------------------------------------------
@@ -1236,7 +1247,14 @@ class XRef {
     }
 
     protected static function showErrors() {
-        $errors = array();  // map: error code => array("description" => description, "severity" => severity)
+
+        // map: error code => array("message" => message, "severity" => severity)
+        $errors = array(
+            XRef::ERROR_CODE_CANT_PARSE_FILE => array(
+                "message"   => XRef::ERROR_MESSAGE_CANT_PARSE_FILE,
+                "severity"  => XRef::FATAL,
+            ),
+        );
 
         $xref = new XRef();
         $xref->loadPluginGroup('lint');
@@ -1244,6 +1262,11 @@ class XRef {
             $map = $plugin->getErrorMap();
             $errors = array_merge($errors, $map);
         }
+        foreach ($xref->getPlugins('XRef_IProjectLintPlugin') as /** @var XRef_IProjectLintPlugin $plugin */ $plugin) {
+            $map = $plugin->getErrorMap();
+            $errors = array_merge($errors, $map);
+        }
+
         ksort($errors);
 
         $format = "%-6s %-10s %s\n";

@@ -217,12 +217,14 @@ class XRef_CodeDefect {
     public $inMethod;       // string, may be null
 
     // helper constructors
-    public static function fromTokenText($token_text, $error_code, $severity, $message_template) {
+    public static function fromTokenText($token_text, $error_code, $severity, $message_template, $message_params = null) {
         $code_defect = new XRef_CodeDefect();
         $code_defect->tokenText    = preg_replace_callback('#[^\\x21-\\x7f]#', array('self', 'chr_replace'), $token_text);
         $code_defect->errorCode    = $error_code;
         $code_defect->severity     = $severity;
-        $code_defect->message      = sprintf($message_template, $code_defect->tokenText);
+        $code_defect->message      = (is_null($message_params))
+                ? sprintf($message_template, $code_defect->tokenText)
+                : vsprintf($message_template, $message_params);
         return $code_defect;
     }
 
@@ -238,7 +240,7 @@ class XRef_CodeDefect {
 
     // helper constructor
     public static function fromParseException(XRef_ParseException $e) {
-        return self::fromToken($e->token, 'xr001', XRef::FATAL, "Can't parse file (%s)");
+        return self::fromToken($e->token, XRef::ERROR_CODE_CANT_PARSE_FILE, XRef::FATAL, XRef::ERROR_MESSAGE_CANT_PARSE_FILE);
     }
 
     private static function chr_replace($matches) {
@@ -256,7 +258,7 @@ interface XRef_IPlugin {
 }
 
 /**
- * Interface for plugins that generates documentation
+ * Interface for plugins that generate cross-reference documentation
  */
 interface XRef_IDocumentationPlugin extends XRef_IPlugin {
     public function generateFileReport(XRef_IParsedFile $pf);   // this is called for each file
@@ -599,6 +601,12 @@ interface XRef_IProjectDatabase {
 }
 
 interface XRef_IProjectLintPlugin {
+    /**
+     * @abstract
+     * @return array - map (errorCode => errorDescription)
+     */
+    public function getErrorMap();
+
     /**
      * Parsing of files is expensive, so minimize them between runs of xref.
      * Instead, parse file once and process it into summary (database & plugin slices),

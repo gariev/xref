@@ -3,7 +3,7 @@
 class XRef_LintEngine_ProjectCheck extends XRef_LintEngine_Simple {
 
     /** @var XRef_IPlugin[] */
-    protected $plugins = array();
+    protected $projectCheckPlugins = array();
 
     /** @var array - map (filename => file slice) */
     protected $slices = array();
@@ -13,14 +13,15 @@ class XRef_LintEngine_ProjectCheck extends XRef_LintEngine_Simple {
 
     public function __construct(XRef $xref, $use_cache = true) {
         parent::__construct($xref, $use_cache);
-        $this->plugins = $xref->getPlugins("XRef_IProjectLintPlugin");
+        $this->projectCheckPlugins = $xref->getPlugins("XRef_IProjectLintPlugin");
+        $this->fillErrorMap( $this->projectCheckPlugins );
         $this->projectDatabase = new XRef_ProjectDatabase();
     }
 
     protected function getFileSlices(XRef_IParsedFile $pf) {
         $slices = array();
         $slices["_db"] =  $this->projectDatabase->createFileSlice($pf);
-        foreach ($this->plugins as $plugin_id => /** @var XRef_IProjectLintPlugin $plugin */ $plugin) {
+        foreach ($this->projectCheckPlugins as $plugin_id => /** @var XRef_IProjectLintPlugin $plugin */ $plugin) {
             $slices[$plugin_id] = $plugin->createFileSlice($pf);
         }
         return $slices;
@@ -37,7 +38,7 @@ class XRef_LintEngine_ProjectCheck extends XRef_LintEngine_Simple {
     public function collectReport() {
         $report = parent::collectReport();
 
-        // create the database
+        // fill the database
         foreach ($this->slices as $filename => $slices) {
             if ($slices) {
                 $this->projectDatabase->addFileSlice($filename, $slices["_db"]);
@@ -46,14 +47,39 @@ class XRef_LintEngine_ProjectCheck extends XRef_LintEngine_Simple {
         $this->projectDatabase->finalize();
 
         // run each plugin for each slice
-        foreach ($this->plugins as $plugin_id => /** @var $plugin XRef_IProjectLintPlugin */ $plugin) {
+        foreach ($this->projectCheckPlugins as $plugin_id => /** @var $plugin XRef_IProjectLintPlugin */ $plugin) {
             $plugin->startLintCheck( $this->projectDatabase );
             foreach ($this->slices as $filename => $slice) {
                 if ($slice) {
                     $plugin->checkFileSlice($this->projectDatabase, $filename, $slice[$plugin_id]);
                 }
             }
-            $report = array_merge_recursive( $report, $plugin->getProjectReport( $this->projectDatabase ) );
+            $plugin_report = $plugin->getProjectReport( $this->projectDatabase );
+
+            foreach ($plugin_report as $filename => $errors_list) {
+                foreach ($errors_list as $e) {
+                    $code = $e['code'];
+                    if (! isset($this->errorMap[$code])) {
+                        error_log("No descriptions for error code '$code'");
+                        continue;
+                    }
+
+                    $description = $this->errorMap[$code];
+                    if (! isset($description["severity"]) || ! isset($description["message"])) {
+                        error_log("Invalid description for error code '$code'");
+                        continue;
+                    }
+
+                    $code_defect = XRef_CodeDefect::fromTokenText(
+                        $e['text'], $code, $description['severity'],
+                        $description["message"], $e['params']
+                    );
+                    $code_defect->fileName = $e['location'][0];
+                    $code_defect->lineNumber = $e['location'][1];
+
+                    $report[$filename][] = $code_defect;
+                }
+            }
         }
 
         return $this->xref->sortAndFilterReport($report);

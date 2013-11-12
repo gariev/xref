@@ -6,12 +6,13 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
     /** @var XRef_IPersistentStorage */
     protected $storageManager = null;
     /** @var array - map: (error code => error description) */
-    protected $lintErrorMap = array();
+    protected $errorMap = array();
     /** @var array - map: (filename => array with XRef_CodeDefect objects) */
     protected $report = array();
     /** @var array - map: (filename => unique id based on file content) */
     protected $filesMap = array();
-
+    /** @var array - map (plugin id => XRef_ILintPlugin object) */
+    protected $plugins = array();
     /** @var bool - when true, cache won't be read, only written */
     protected $rewriteCache = false;
 
@@ -37,16 +38,8 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
 
         // error map (error code => error description)
         // TODO: make it static
-        $plugins = $xref->getPlugins("XRef_ILintPlugin");
-        foreach ($plugins as $pluginId => /** @var XRef_ILintPlugin $plugin */ $plugin) {
-            foreach ($plugin->getErrorMap() as $error_code => $error_description) {
-                if (isset($this->lintErrorMap[ $error_code ])) {
-                    throw new Exception("Plugin " . $plugin->getId() . " tries to redefine error code '$error_code'");
-                }
-                $this->lintErrorMap[$error_code] = $error_description;
-            }
-        }
-
+        $this->plugins = $xref->getPlugins("XRef_ILintPlugin");
+        $this->fillErrorMap($this->plugins);
         $this->stats = array('total_files' => 0, 'parsed_files' => 0, 'cache_hit' => 0);
     }
 
@@ -279,20 +272,18 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
      */
     protected function getFileReport(XRef_IParsedFile $pf) {
 
-        $plugins = $this->xref->getPlugins("XRef_ILintPlugin");
-
         $report = array();
-        foreach ($plugins as $pluginId => $plugin) {
+        foreach ($this->plugins as $pluginId => $plugin) {
             $found_defects = $plugin->getReport($pf);
             if ($found_defects) {
                 foreach ($found_defects as $d) {
                     list($token, $error_code) = $d;
-                    if (! isset($this->lintErrorMap[$error_code])) {
+                    if (! isset($this->errorMap[$error_code])) {
                         error_log("No descriptions for error code '$error_code'");
                         continue;
                     }
 
-                    $description = $this->lintErrorMap[ $error_code ];
+                    $description = $this->errorMap[ $error_code ];
                     if (! isset($description["severity"]) || ! isset($description["message"])) {
                         error_log("Invalid description for error code '$error_code'");
                         continue;
@@ -352,6 +343,16 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
         return $result;
     }
 
+    protected function fillErrorMap($plugins) {
+        foreach ($plugins as $pluginId => /** @var XRef_ILintPlugin $plugin */ $plugin) {
+            foreach ($plugin->getErrorMap() as $error_code => $error_description) {
+                if (isset($this->errorMap[ $error_code ])) {
+                    throw new Exception("Plugin " . $plugin->getId() . " tries to redefine error code '$error_code'");
+                }
+                $this->errorMap[$error_code] = $error_description;
+            }
+        }
+    }
 
 }
 

@@ -9,7 +9,17 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
 
     const E_MISSED_CALL_TO_PARENT_CONSTRUCTOR = "exp20";
 
+    /** @var array - map (file name => XRef_CodeDefect[]) */
     private $errors = array();
+
+    public function getErrorMap() {
+        return array(
+            self::E_MISSED_CALL_TO_PARENT_CONSTRUCTOR => array(
+                "severity" => XRef::WARNING,
+                "message" => "Class (%s) doesn't call constructor of it's base class (%s)",
+            )
+        );
+    }
 
     public function __construct() {
         parent::__construct("project-check-missed-parent-constructor", "Project Lint: Missed Parent Constructor");
@@ -67,13 +77,13 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
             if ($lr->code == XRef_LookupResult::FOUND) {
                 // oops, there is a base-class constructor that won't be called
                 $base_class_name = $lr->elements[0]->className;
-                $cd = XRef_CodeDefect::fromTokenText(
-                    $class_name, self::E_MISSED_CALL_TO_PARENT_CONSTRUCTOR, XRef::WARNING,
-                    "Class ($class_name) doesn't call constructor of it's base class ($base_class_name)"
+                $error_descr = array(
+                    'code'      => self::E_MISSED_CALL_TO_PARENT_CONSTRUCTOR,
+                    'text'      => $class_name,
+                    'params'    => array($class_name, $base_class_name),
+                    'location'  => array($file_name, $line_number),
                 );
-                $cd->fileName = $file_name;
-                $cd->lineNumber = $line_number;
-                $this->errors[ $file_name ][] = $cd;
+                $this->errors[ $file_name ][] = $error_descr;
             }
         }
     }

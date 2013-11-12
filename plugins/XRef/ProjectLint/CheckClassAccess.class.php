@@ -13,12 +13,64 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
         E_ACCESS_TO_UNDEFINED_METHOD    = "exp02",
         E_ACCESS_TO_UNDEFINED_CONSTANT  = "exp03",
         E_ACCESS_TO_UNDEFINED_PROPERTY  = "exp04",
-        E_MISSING_BASE_CLASS            = "exp05",
-        E_ACCESS_STATIC_AS_INSTANCE     = "exp06",
-        E_ACCESS_INSTANCE_AS_STATIC     = "exp07",
-        E_PRIVATE_ACCESS                = "exp08",
-        E_PROTECTED_ACCESS              = "exp09",
-        E_MAGIC_GETTER                  = "exp10";
+        E_MISSING_CLASS                 = "exp05",
+        E_MISSING_BASE_CLASS            = "exp06",
+        E_ACCESS_STATIC_AS_INSTANCE     = "exp07",
+        E_ACCESS_INSTANCE_AS_STATIC     = "exp08",
+        E_PRIVATE_MEMBER                = "exp09",
+        E_PROTECTED_MEMBER              = "exp10",
+        E_PROTECTED_ACCESS              = "exp11",
+        E_MAGIC_GETTER                  = "exp12";
+
+    public function getErrorMap() {
+        return array(
+            self::E_SEVERAL_CLASS_DEFINITIONS => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Class (%s) is defined more than once",
+            ),
+            self::E_ACCESS_TO_UNDEFINED_METHOD => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "Method (%s) is not defined in class (%s)",
+            ),
+            self::E_ACCESS_TO_UNDEFINED_CONSTANT => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "Constant (%s) is not defined class (%s)",
+            ),
+            self::E_ACCESS_TO_UNDEFINED_PROPERTY => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Property (%s) is not declared in class (%s)",
+            ),
+            self::E_MISSING_CLASS => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Can't check members of class (%s) because its definition is missing",
+            ),
+            self::E_MISSING_BASE_CLASS => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Can't check members of class (%s) because definition of its base class (%s) is missing",
+            ),
+            self::E_ACCESS_STATIC_AS_INSTANCE => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "Property (%s) is static, not instance",
+            ),
+            self::E_ACCESS_INSTANCE_AS_STATIC => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "Member (%s) is instance, not static",
+            ),
+            self::E_PRIVATE_MEMBER => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "Member (%s) of class (%s) is private",
+            ),
+            self::E_PROTECTED_MEMBER => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "Member (%s) of class (%s) is protected",
+            ),
+            self::E_MAGIC_GETTER => array(
+                "severity"  => XRef::NOTICE,
+                "message"   => "Can't check properties of class (%s) because it has method __get",
+            ),
+        );
+    }
+
 
     // report each used construct only once
     private $already_seen = array();
@@ -172,13 +224,12 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
         // are there classes defined twice?
         foreach ($this->classes as $class_name => $list_of_classes) {
             if (count($list_of_classes) > 1) {
-                $cd = XRef_CodeDefect::fromTokenText(
-                    $class_name, self::E_SEVERAL_CLASS_DEFINITIONS, XRef::WARNING,
-                    "Class (%s) is defined more than once"
+                $this->errors[ XRef::DUMMY_PROJECT_FILENAME ][] = array(
+                    'code'      => self::E_SEVERAL_CLASS_DEFINITIONS,
+                    'text'      => $class_name,
+                    'params'    => array($class_name),
+                    'location'  => array(XRef::DUMMY_PROJECT_FILENAME, 0),
                 );
-                $cd->fileName = "(project)";
-                $cd->lineNumber = 0;
-                $this->errors[ $cd->fileName ][] = $cd;
             }
         }
 
@@ -192,13 +243,16 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             list($class_name, $key, $name, $line_number, $from_class, $is_static, $check_parent_only) = $u;
             $e = $this->checkAccessError($db, $class_name, $key, $name, $from_class, $is_static, $check_parent_only);
             if ($e) {
-                list($error_code, $severity, $message, $uniq) = $e;
+                list($error_code, $uniq, $params) = $e;
+                $uniq = "$error_code//$uniq";
                 if (! isset($seen_errors[$uniq])) {
                     $seen_errors[$uniq] = true;
-                    $cd = XRef_CodeDefect::fromTokenText($name, $error_code, $severity, $message);
-                    $cd->fileName = $file_name;
-                    $cd->lineNumber = $line_number;
-                    $this->errors[ $cd->fileName ][] = $cd;
+                    $this->errors[$file_name][] = array(
+                        'code'      => $error_code,
+                        'text'      => $name,
+                        'params'    => $params,
+                        'location'  => array($file_name, $line_number),
+                    );
                 }
             }
         }
@@ -231,45 +285,42 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             if ($key == 'property') {
                 $lr_magic = $db->lookupMethod($class_name, '__get', $check_parent_only);
                 if ($lr_magic->code == XRef_LookupResult::FOUND) {
-                    $error_code = self::E_MAGIC_GETTER;
-                    $severity = XRef::NOTICE;
-                    $message = "Can't validate access to properties of class ($class_name) because it has method __get";
-                    $uniq = "$error_code/$class_name";
-                    return array($error_code, $severity, $message, $uniq);
+                    // can't validate reference to (missing) property,
+                    // because it or it's base class has method '__get'
+                    return array(self::E_MAGIC_GETTER, $class_name, array($class_name));
                 }
             }
+
             if ($key == 'method' && $name == '__construct') {
                 // ok, php creates a default constructor
             } else {
                 switch ($key) {
                     case 'method':
                         $error_code = self::E_ACCESS_TO_UNDEFINED_METHOD;
-                        $severity = XRef::ERROR;
                         break;
                     case 'constant':
                         $error_code = self::E_ACCESS_TO_UNDEFINED_CONSTANT;
-                        $severity = XRef::ERROR;
                         break;
                     case 'property':
                         $error_code = self::E_ACCESS_TO_UNDEFINED_PROPERTY;
-                        $severity = XRef::WARNING;
                         break;
                     default:
                         throw new Exception($key);
                 }
-                $message = "Reference to undefined $key (%s) of class $class_name";
-                $uniq = "$error_code/$from_class/$class_name/$key/$name";
-                return array($error_code, $severity, $message, $uniq);
+                $uniq = "$from_class/$class_name/$key/$name";
+                return array($error_code, $uniq, array($name, $class_name));
             }
         } elseif ($lr->code == XRef_LookupResult::CLASS_MISSING) {
-            // definition not found because definition of class or its base class is missing
+            // definition not found because definition of either class or its base class is missing
             $missing_class_name = $lr->missingClassName;
             if (! isset($this->ignore_missing_classes[ strtolower($missing_class_name) ])) {
-                $error_code = self::E_MISSING_BASE_CLASS;
-                $message = (strtolower($missing_class_name) == strtolower($class_name)) ?
-                        "Can't validate reference to class ($class_name) because its definition is missing" :
-                        "Can't validate reference to class ($class_name) because definition of its base class ($missing_class_name) is missing";
-                return array($error_code, XRef::WARNING, $message, "$error_code/$class_name/$missing_class_name");
+                if (strtolower($missing_class_name) == strtolower($class_name)) {
+                    // class definition is missing
+                    return array(self::E_MISSING_CLASS, $class_name, array($class_name));
+                } else {
+                    // base class definition is missing
+                    return array(self::E_MISSING_BASE_CLASS, $class_name, array($class_name, $missing_class_name));
+                }
             }
         } else {
             // got definition, check access
@@ -280,19 +331,17 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             if ($key != 'constant' && !($key=='method' && $name=='__construct')) {
                 if ($is_static) {
                     if (!XRef::isStatic($attributes)) {
-                        $error_code = self::E_ACCESS_INSTANCE_AS_STATIC;
-                        $severity = XRef::ERROR;
-                        $message = "Reference to instance $key as static one (%s)";
-                        $uniq = "$error_code/$from_class/$class_name/$key/$name";
-                        return array($error_code, $severity, $message, $uniq);
+                        // reference to instance method or property as if they were static
+                        if ($key == 'method' || $key == 'property') {
+                            return array(self::E_ACCESS_INSTANCE_AS_STATIC, "$from_class/$class_name/$key/$name", array($name));
+                        } else {
+                            throw new Exception($key);
+                        }
                     }
                 } else {
                     if ($key == 'property' && XRef::isStatic($attributes)) {
-                        $error_code = self::E_ACCESS_STATIC_AS_INSTANCE;
-                        $severity = XRef::ERROR;
-                        $message = "Reference to static property as instance one (%s)";
-                        $uniq = "$error_code/$from_class/$class_name/$key/$name";
-                        return array($error_code, $severity, $message, $uniq);
+                        // reference to static property as if it were instance
+                        return array(self::E_ACCESS_STATIC_AS_INSTANCE, "$from_class/$class_name/$name", array($name));
                     }
                 }
             }
@@ -302,19 +351,13 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
                 // ok
             } elseif (XRef::isPrivate($attributes)) {
                 if (!$from_class || $found_in_class != strtolower($from_class)) {
-                    $error_code = self::E_PRIVATE_ACCESS;
-                    $severity = XRef::ERROR;
-                    $message = "Reference to private $key of class $found_in_class (%s)";
-                    $uniq = "$error_code/$from_class/$class_name/$key/$name";
-                    return array($error_code, $severity, $message, $uniq);
+                    // attempt to access a private member (method or property) of class $found_in_class
+                    // from $class_name
+                    return array(self::E_PRIVATE_MEMBER, "$from_class/$class_name/$name", array($name, $found_in_class));
                 }
             } elseif (XRef::isProtected($attributes)) {
                 if (!$from_class || !$this->isSubclassOf($from_class, $found_in_class)) {
-                    $error_code = self::E_PROTECTED_ACCESS;;
-                    $severity = XRef::ERROR;
-                    $message = "Reference to protected $key of class $found_in_class (%s)";
-                    $uniq = "$error_code/$from_class/$class_name/$key/$name";
-                    return array($error_code, $severity, $message, $uniq);
+                    return array(self::E_PROTECTED_MEMBER, "$from_class/$class_name/$name", array($name, $found_in_class));
                 }
             } else {
                 // shouldn't be here
@@ -326,11 +369,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             if ($key == 'method' && is_null($lr->elements[0]->bodyStarts)) {
                 $lc = $db->lookupClass($from_class);
                 if (!$lc || $lc->code != XRef_LookupResult::FOUND || !$lc->elements[0]->isAbstract) {
-                    $error_code = self::E_ACCESS_TO_UNDEFINED_METHOD;
-                    $severity = XRef::ERROR;
-                    $message = "Reference to undefined $key of class $class_name (%s)";
-                    $uniq = "$error_code/$from_class/$class_name/$key/$name";
-                    return array($error_code, $severity, $message, $uniq);
+                    return array(self::E_ACCESS_TO_UNDEFINED_METHOD, "$from_class/$class_name/$name", array($name, $class_name));
                 }
             }
         }
