@@ -7,8 +7,8 @@
 
 class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
-    const E_LOWER_CASE_STRING_LITERAL = "XL01";
-    const E_UNPREFIXED_CLASS_CONSTANT = "XL02";
+    const E_LOWER_CASE_STRING_LITERAL = "xr021";
+    const E_UNPREFIXED_CLASS_CONSTANT = "xr022";
 
     public function getErrorMap() {
         return array(

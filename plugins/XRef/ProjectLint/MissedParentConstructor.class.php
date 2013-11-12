@@ -7,7 +7,7 @@
  */
 class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements XRef_IProjectLintPlugin {
 
-    const E_MISSED_CALL_TO_PARENT_CONSTRUCTOR = "exp20";
+    const E_MISSED_CALL_TO_PARENT_CONSTRUCTOR = "xr081";
 
     /** @var array - map (file name => XRef_CodeDefect[]) */
     private $errors = array();

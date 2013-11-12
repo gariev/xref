@@ -52,14 +52,14 @@
 
 class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
 
-    const E_UNKNOWN_VAR             = "XV01";
-    const E_UNKNOWN_VAR_RELAXED     = "XV02";
-    const E_UNKNOWN_VAR_ARGUMENT    = "XV03";
-    const E_ARRAY_AUTOVIVIFICATION  = "XV04";
-    const E_SCALAR_AUTOVIVIFICATION = "XV05";
-    const E_NON_VAR_PASSED_BY_REF   = "XV06";
-    const E_EMPTY_STATEMENT         = "XV07";
-    const E_LOSS_OF_STRICT_MODE     = "XV08";
+    const E_UNKNOWN_VAR             = "xr010";
+    const E_UNKNOWN_VAR_RELAXED     = "xr011";
+    const E_UNKNOWN_VAR_ARGUMENT    = "xr012";
+    const E_ARRAY_AUTOVIVIFICATION  = "xr013";
+    const E_SCALAR_AUTOVIVIFICATION = "xr014";
+    const E_NON_VAR_PASSED_BY_REF   = "xr015";
+    const E_EMPTY_STATEMENT         = "xr016";
+    const E_LOSS_OF_STRICT_MODE     = "xr017";
 
     public function getErrorMap() {
         return array(

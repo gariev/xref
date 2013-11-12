@@ -11,11 +11,6 @@ XRef is a set of tools to work with PHP source files. Currently it includes:
     so it's a good idea to have a tool that will do.
     See section "ERROR MESSAGES REPORTED BY LINT" below.
 
-* xref-doc
-
-    A tool to create cross-reference documentation about your project
-    (which classes/methods/properties are defined and where they are used)
-
 * xref-ci
 
     Continuous Integration tool to monitor your project repository and send e-mail
@@ -26,9 +21,10 @@ XRef is a set of tools to work with PHP source files. Currently it includes:
     Just type 'git xref-lint' in your git repository root before doing a commit
     and you'll get lint report of modified files
 
-* parser libraries to build your own tools
+* xref-doc
 
-    XRef is easily extensible - read the section "HOW TO EXTEND THE XREF" below
+    A tool to create cross-reference documentation about your project
+    (which classes/methods/properties are defined and where they are used)
 
 * Try it online!
 
@@ -40,10 +36,17 @@ INSTALLATION
 ```sh
 ## get it
 curl -o XRef-stable.tgz http://xref-lint.net/releases/XRef-stable.tgz
+
 ## install
 pear install ./XRef-stable.tgz
+
+## init for your project
+cd <your-project-dir>
+xref-lint --init
+
 ## run
-xref-lint <your-project-dir>
+xref-lint
+
 ```
 
 Alternatively, you can get the source code and add its 'bin' directory to your executable path:
@@ -59,27 +62,29 @@ Full installation
 
 To get most of the xref package, configure it after the basic installation.
 
-1.  Create a config file and place it where XRef can found it
+1.  After you run "xref-lint --init" in your project dir, a default config file
+    is created in .xref/xref.ini. You can edit it as suitable for your project
     (see section CONFIG FILE below; also see sample config in config/xref.ini.sample)
 
 2.  Download and install Smarty template engine. <http://www.smarty.net/>;
     any of versions 2.x or 3.x should work, version 2 takes less memory.
-    Set the pass to Smarty.class.php file in *xref.smarty-class* config param.
+    Set the pass to Smarty.class.php file in *xref.smarty-class* param of config file.
 
-3.  Create a data directory where XRef will keep its data about your project.
-    Specify this dir in *xref.data-dir*.
-
-4.  Configure web server to run scripts from web-scripts dir XRef/web-scripts/,
+3.  Configure web server to run scripts from web-scripts dir XRef/web-scripts/,
     see also sample Apache config file in XRef/examples/httpd.conf
 
-5. Set up crontab to run xref-ci to monitor your project,
+4. Set up crontab to run xref-ci to monitor your project,
     see sample cronab script in
 
 
 REPORTED ERRORS
 ===============
 
-* <a name="XV01"></a> **Use of unknown variable** (severity: error, code: XV01)
+* <a name="xr001"></a> **Can't parse file (%s)** (severity: fatal, code: xr001)
+
+    There is a syntax error in source PHP file.
+
+* <a name="xr010"></a> **Use of unknown variable (%s)** (severity: error, code: xr010)
 
     This error is caused by using a variable that was never
     introduced in this scope. Most often it's because of misspelled
@@ -95,24 +100,28 @@ REPORTED ERRORS
     }
 ```
 
-* <a name="XV02"></a> **Possible use of unknown variable** (severity: warning, code: XV02)
+* <a name="xr011"></a> **Possible use of unknown variable (%s)** (severity: warning, code: xr011)
 
-    Similar to the above, but issued when xref can't reliable detect
-    which variables can be legitimately present in this scope
-    (the relaxed mode).
+    Similar to **xr010**, but raised when xref can't reliable detect
+    if variable can be legitimately present in this scope (the relaxed mode).
 
 ```php
+
+    <?php
+    //
     // COUNTEREXAMPLE
     //
     // global scope is always in relaxed mode -
     // variables defined in other files can be used here
     //
+    echo $this_variable_may_be_declared_in_other_file;
+
     function foo($params, $var_name) {
         // functions starts in strict mode, but
         include "other_file.php";       // all of these
-        extract($a);                    // makes xref
-        $$var_name = 1;                 // switch to
-        eval("\$res = $expression_str");// relaxed mode
+        extract($a);                    // makes xref switch to
+        $$var_name = 1;                 // relaxed error-reporting
+        eval("\$res = $expression_str");// mode
 
         echo $foo;                      // <-- can $foo be here? maybe.
     }
@@ -147,9 +156,9 @@ REPORTED ERRORS
     $res = eval("return $expression_str");
 ```
 
-* <a name="XV03"></a> **Possible use of unknown variable as function argument** (severity: warning, code: XV03)
+* <a name="xr012"></a> **Possible use of unknown variable as function argument (%s)** (severity: warning, code: xr012)
 
-    Similar to the above, caused by using a variable as a parameter to function with unknown signature.
+    Similar to **xr010**, raised when an unknown variable is used as a parameter to a function with unknown signature.
 
 ```php
     // COUNTEREXAMPLE
@@ -158,14 +167,15 @@ REPORTED ERRORS
                                 // maybe, if unknown_function takes param
                                 // by reference and assigns value to it
 
-    known_function($bar);       // no warning here - since
-                                // known_function() is defined in the same
-                                // file, xref will extract its signature
-
     function known_function(&$param) {
         $param = 1;
     }
-```
+
+    known_function($bar);       // no warning here - since
+                                // known_function() is defined in the same
+                                // file, xref knows its signature
+
+ ```
 
     How to get rid out of this warning:
 
@@ -174,57 +184,97 @@ REPORTED ERRORS
         - add function signature with *lint.add-function-signature*
           config file/command-line parameter (see below)
 
-* <a name="XV04"></a> **Array autovivification** (severity: warning, code: XV04)
+* <a name="xr013"></a> **Array autovivification (%s)** (severity: warning, code: xr013)
 
     Similar to the above - when a value assigned to a variable that was never
     defined in array context, a new array is instantiated. This may be intended
-    behavior or error; that's why this is warning. It's always a good idea
+    behavior or error; that's why it's a warning. It's always a good idea
     to initialize array variable with an empty array.
 
     Sample code:
 
 ```php
     // COUNTEREXAMPLE
-    $text = explode('', $str);
-    $test[] = '!';  // <-- a new array $test is instantiated here.
-                    // is it intended or array $text should be here?
-                    // to remove the warning, initialize var before usage:
-                    // $test = array();
+    $letters = explode('', $str);
+    $letter[] = '!';    // <-- a new array $letter is instantiated here.
+                        // is it intended or array $letters should be here?
+                        // to remove the warning, initialize var before usage:
+                        // $letter = array();
 ```
 
-* <a name="XV05"></a> **Scalar autovivification** (severity: warning, code: XV05)
+* <a name="xr014"></a> **Scalar autovivification (%s)** (severity: warning, code: xr014)
 
     Similar to the above, caused by operations like ++, .= or +=
     on variables that were never initialized.
     This may be inteded behaviour or it can mask a real error.
-    Initialize the variable before usage
+    Initialize the variable in question before usage.
 
 ```php
     // COUNTEREXAMPLE
     $sum = 0;
     foreach ($prices as $price) {
-        $total += $price;       // <-- warning, variable $total is instantiated here
+        $total += $price;       // <-- warning, new variable $total is instantiated here
     }
     return $sum;
 ```
 
-* <a name="XV06"></a> **Possible attempt to pass non-variable by reference** (severity: error, code: XV06)
+* <a name="xr015"></a> **Possible attempt to pass non-variable by reference (%s)** (severity: error, code: xr015)
 
     This message is issued if a function takes a parameter by reference,
-    but something else but variable is given.
+    but something else but a variable is given.
 
 ```php
     // COUNTEREXAMPLE
     $last_word = array_pop(explode(" ", $text));        // <--
-        // error - array_pop() takes an array by reference and modifies it
-        // this code may work but will break in E_ALL | E_STRICT mode
-        // use temp variable to fix it:
+        // Error - array_pop() takes an array by reference and modifies it
+        // this code may work but will break in E_ALL | E_STRICT mode.
+        // Use temp variable to fix it:
 
     $tmp = explode(" ", $text);
     $last_word = array_pop($tmp);   // ok
 ```
 
-* <a name="XT01"></a> **$this, self:: or parent:: is used outside of instance/class scope** (severity: error, code: XT01)
+* <a name="xr021"></a> **Mixed/Lower-case unquoted string literal (%s)** (severity: warning, code: xr021)
+
+    Unquoted ("bare") strings are either constant names or, if no constant with
+    this name is defined, are interpreted as strings.
+    Best practice for constants is to use upper-case names for them.
+
+    Sample code:
+
+```php
+    // COUNTEREXAMPLE
+    echo time;              // <-- should it be "time" or time(), $time, or even some constant TIME here?
+
+    // xref knows about constants defined in current file:
+    define("foo", 1);
+    const bar = 2;
+    echo foo + bar;         // ok, no warning here
+
+    // all upper-case literals are assumed to be constants
+    echo UPPER_CASE;        // ok, no warning here
+
+```
+
+    If you get warnings about a lower-case constant defined somewhere else, you can disable the warning
+    listing the constant in lint.add-constant setting (see below).
+
+
+* <a name="xr022"> **Possible use of class constant without class prefix (%s)** (severity: warning, code: xr022)
+
+    Sample code:
+
+```php
+    // COUNTEREXAMPLE
+    class Foo {
+        const BAR = 1;
+        public method bar() {
+            echo BAR;           // <-- did you mean self::BAR / Foo::BAR?
+        }
+    }
+```
+
+* <a name="xr031"></a> **($this) is used outside of instance/class scope** (severity: error, code: xr031)
 
     Sample code:
 
@@ -236,18 +286,13 @@ REPORTED ERRORS
         }
     }
 
-    function foo {
-        return parent::foo();   // <-- error: there is no parent:: or self::
-                                // pseudo-classes outside of class context
-    }
-
 ```
 
-* <a name="XT02"></a> **Possible use of \$this, self:: or parent:: is global scope** (severity: warning, code: XT02)
+* <a name="xr032"></a> **Possible use of ($this) in global scope** (severity: warning, code: xr032)
 
-    Similar to the above, caused by using $this/self/parent in global scope in file that doesn't contain
+    Similar to the above, caused by using $this in global scope in file that doesn't contain
     other classes and/or methods and, therefore, can be included into body of class method.
-    For this codestyle, see Joomla project:
+    For example of this codestyle, see Joomla project:
 
 ```php
 // COUNTEREXAMPLE
@@ -266,60 +311,186 @@ class Foo {
 
     If your project depends on code like this, disable this error.
 
-* <a name="XL01"></a> **Mixed/Lower-case unquoted string literal** (severity: warning, code: XL01)
+* <a name="xr033"></a> **Class keyword (%s) is used outside of instance/class scope** (severity: error, code: xr033)
 
-    Unquoted ("bare") strings are either constant names or, if no constant with
-    this name is defined, are interpreted as strings.
-    Best practice for constants is to use upper-case names for them.
-
-    Sample code:
+    Similar to **xr031**, caused by use any of class-context keywords (self::, parent:: or static::) used outside of
+    the class constructs. Sample code:
 
 ```php
     // COUNTEREXAMPLE
-    echo time;              // <-- should it be really "time" or time(), $time, or even some constant TIME?
-
-    // xref knows about constants defined in current file:
-    define("foo", 1);
-    const bar = 2;
-    echo foo + bar;         // ok, no warning here
-
-    // all upper-case literals are assumed to be constants
-    echo UPPER_CASE;        // ok, no warning here
-
-```
-
-    If you get warnings about a lower-case constant defined somewhere else, you can disable the warning
-    listing the constant in lint.add-constant setting (see below).
-
-
-* <a name="XL02"> **Possible use of class constant without class prefix** (severity: warning, code: XL02)
-
-    Sample code:
-
-```php
-    // COUNTEREXAMPLE
-    class Foo {
-        const BAR = 1;
-        public method bar() {
-            echo BAR;           // <-- did you mean self::BAR / Foo::BAR?
-        }
+    function bar() {
+        return new self()      // <-- error: no self class in regular function
     }
+
 ```
 
-* <a name="XA01"> **Assignment in conditional expression** (severity: warning, code: XA01)
+* <a name="xr034"></a> **Possible use of class keyword (%s) in global scope** (severity: error, code: xr034)
+
+    Similar to **xr032** and **xr033**, caused by use any of class-context keywords (self::, parent:: or static::)
+    in global scope
+
+
+* <a name="xr041"></a> **Assignment in conditional expression (%s)** (severity: warning, code: xr041)
 
     Sample code:
 
 ```php
     // COUNTEREXAMPLE
-    if ($foo = 0) { ... }       // <-- did you mean ($foo == 0)?
+    if ($foo = 0) { ... }       // <-- should it be ($foo == 0) here?
     if ($bar = $baz) { ... }    // <-- ($bar == $baz) ?
 
-    // examples below are ok and doesn't trigger warning:
+    // examples below are ok and don't raise warning:
     if ($handle = fopen("file", "w") { ... }    // ok
     if ($ch = curl_init(...)) { ... }           // ok
 ```
 
+* <a name="xr051"></a> **Spaces before opening tag (%s)** (severity: warning, code: xr051)
+
+    Caused by spaces (new-line, byte-order-marks, etc) before opening php tag (<?php).
+    This is not important if output is text-based (e.g HTML or XML), but may break binary output.
+    If this warning is not important for your project, disable it with **lint.ignore-error** option.
+
+* <a name="xr052"></a> **Unneeded closing tag (%s)** (severity: warning, code: xr052)
+
+    Similar to the above - all text after closing tag (?>) will be in script's output.
+    The best practice is to omit closing tag completely.
+
+* <a name="xr061"></a> **Class (%s) is defined more than once** (severity: warning, code: xr061)
+
+    Caused by two class definitions with the same name.
+
+* <a name="xr062"></a> **Method (%s) is not defined in class (%s)** (severity: error, code: xr062)
+
+    Caused by code that tries to call a method that's not defined neither in the class or any of
+    its base classes.
+
+* <a name="xr063"></a> **Constant (%s) is not defined in class (%s)** (severity: error, code: xr063)
+
+    Caused by code that tries to access a class constant, and the class (or its base class) doesn't
+    define this constant.
+
+* <a name="xr064"></a> **Property (%s) is not declared in class (%s)** (severity: warning, code: xr064)
+
+    This is a warning, because if code assigns to undeclared property, the property will be created.
+    However, this is often an error:
+
+```php
+    // COUNTEREXAMPLE
+    class A {
+        protected $myPropery = null;
+        public function setProperty($value) {
+            $this->my_property = $value;        // <-- warning
+                                                // property 'my_property' will be created here
+                                                // is it ok or prop 'myPropery' was meant?
+        }
+    }
+```
+
+* <a name="xr065"></a> **Can't check members of class (%s) because its definition is missing** (severity: warning, code: xr065)
+
+    Caused by reference to any member (property, method or constant) of a class which definition is missing.
+
+```php
+    echo A::MY_CONST;   // warning
+                        // there is not definition of class A, so
+                        // it's not possible to check if there is a constant MY_CONST
+```
+
+    To disable this warning for a specific class, use **lint.ignore-missing-class** option.
+
+* <a name="xr066"></a> **Can't check members of class (%s) because definition of its base class (%s) is missing** (severity: warning, code: xr066)
+
+    Similar to the above, but caused by a missing definition of base class.
+
+```php
+    class B extends A {
+    }
+
+    echo B::MY_CONST;       // warning
+                            // there is no const B::MY_CONST, but it may be inherited from class A,
+                            // which definition is missing.
+```
+
+* <a name="xr067"></a> **Property (%s) is static, not instance** (severity: error, code: xr067)
+
+    Caused by attempt to access a static class property as it were an instance property.
+
+```php
+    // COUNTEREXAMPLE
+    class A {
+        public static $name = "my name";
+
+        public function test() {
+            echo $this->name;       // <-- error
+                                    // there is no $this->name, it's self::$name
+
+        }
+    }
+
+```
+
+* <a name="xr068"></a> **Member (%s) is instance, not static** (severity: error, code: xr068)
+
+    Caused by attempt to access an instance member (property or method) as if it were static one.
+
+```php
+    // COUNTEREXAMPLE
+    class A {
+        public function test() {}
+    }
+
+    echo A::test();     // <-- error
+                        // method test() is not static!
+```
+
+* <a name="xr069"></a> **Member (%s) of class (%s) is private** (severity: error, code: xr069)
+
+    Caused by attempt to access a private member (property or method) of a class outside of the class.
+
+```php
+    // COUNTEREXAMPLE
+    class A {
+        private $prop = null;
+    }
+    class B extends A {
+        public function test() {
+            echo $this->prop;       // <-- error
+                                    // class B doesn't declare it's own property 'prop'
+                                    // and can't access private prop of its parent class
+        }
+    }
+
+```
+
+* <a name="xr070"></a> **Member (%s) of class (%s) is protected** (severity: error, code: xr070)
+
+    Similar to the **xr069**, but caused by access to protected member (property or method).
+
+* <a name="xr081"></a> **Class (%s) doesn't call constructor of it's base class (%s)** (severity: warning, code: xr081)
+
+    If child class declares method '__construct' that doesn't call constructor of the parent class,
+    fields of the parent class can be left uninitialized.
+    This warning is not reported if either 1) child class doesn't declare constructor (then PHP will create a default one
+    and will call parent) or if 2) parent class doesn't have a constructor.
+
+```php
+    // COUNTEREXAMPLE
+    class A {
+        public $prop;
+        function __construct() { $this->prop = 42; }
+    }
+
+    class B extends A {
+        function __construct() {
+            // warning: there is no call to parent::__construct(),
+            // so property A::$prop is uninitialized
+            // when instance of class B is created.
+        }
+    }
+
+    $b = new B();
+    echo $b->prop;  // undefined!
+```
 
 CONFIG FILE
 ===========
@@ -493,12 +664,13 @@ determines which plugin to load for any of action. So, here is the checklist:
 
 1. Find the interface that your plugin should implement
     All interfaces are defined in lib/interfaces.php file; currently there are
-    four interfaces for plugins: XRef_IDocumentationPlugin, XRef_ILintPlugin,
-    XRef_IPersistentStorage, XRef_ISourceCodeManager and one interface for
-    parsers: XRef_IFileParser.
+    three interfaces for file processing plugins (XRef_IDocumentationPlugin, XRef_ILintPlugin, XRef_IProjectLintPlugin),
+    one interface for cache/storage (XRef_IPersistentStorage),
+    for source version control systems (XRef_ISourceCodeManager) and
+    for parsers (XRef_IFileParser).
 
 2. Create your implementation; you may inherit from XRef classes and override
-    just needed methods. If class is named My_Plugin place it into file named
+    only the needed methods. If class is named My_Plugin place it into file named
     My/Plugin.class.php
 
 3. Specifiy the root directory where to look for your plugins in

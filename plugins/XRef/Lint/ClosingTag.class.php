@@ -15,20 +15,20 @@ class XRef_Lint_ClosingTag extends XRef_ALintPlugin {
         parent::__construct("lint-closing-tag", "Lint (use of php closing tag)");
     }
 
-    const E_CLOSING_TAG     = "XC01";
-    const E_EXTRA_SPACES    = "XC02";
+    const E_EXTRA_SPACES    = "xr051";
+    const E_CLOSING_TAG     = "xr052";
 
     public function getErrorMap() {
         return array(
-            self::E_CLOSING_TAG => array(
-                "severity"  => XRef::WARNING,
-                "message"   => "Unneeded closing tag (%s)",
-            ),
             self::E_EXTRA_SPACES => array(
                 "severity"  => XRef::WARNING,
                 "message"   => "Spaces before opening tag (%s)",
             ),
-        );
+            self::E_CLOSING_TAG => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Unneeded closing tag (%s)",
+            ),
+       );
     }
 
     protected $supportedFileType    = XRef::FILETYPE_PHP;

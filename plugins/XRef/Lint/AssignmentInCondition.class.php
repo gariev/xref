@@ -7,7 +7,7 @@
 
 class XRef_Lint_AssignmentInCondition extends XRef_ALintPlugin {
 
-    const E_ASSIGNMENT_IN_CONDITION = "XA01";
+    const E_ASSIGNMENT_IN_CONDITION = "xr041";
 
     public function getErrorMap() {
         return array(

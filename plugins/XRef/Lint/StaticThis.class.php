@@ -7,20 +7,31 @@
 
 class XRef_Lint_StaticThis extends XRef_ALintPlugin {
 
-    const E_THIS_OUTSIDE_OF_METHOD  = "XT01";
-    const E_THIS_IN_GLOBAL_SCOPE    = "XT02";
+    const E_THIS_OUTSIDE_OF_METHOD              = "xr031";
+    const E_THIS_IN_GLOBAL_SCOPE                = "xr032";
+    const E_CLASS_CONSTRUCT_OUTSIDE_OF_METHOD   = "xr033";
+    const E_CLASS_CONSTRUCT_IN_GLOBAL_SCOPE     = "xr034";
+
 
     public function getErrorMap() {
         return array(
             self::E_THIS_OUTSIDE_OF_METHOD => array(
                 "severity"  => XRef::ERROR,
-                "message"   => "(%s) is used outside of instance/class scope"
+                "message"   => "(\$this) is used outside of instance/class scope"
             ),
             self::E_THIS_IN_GLOBAL_SCOPE => array(
                 "severity"  => XRef::WARNING,
-                "message"   => "Possible use of (%s) in global scope"
+                "message"   => "Possible use of (\$this) in global scope"
             ),
-        );
+            self::E_CLASS_CONSTRUCT_OUTSIDE_OF_METHOD => array(
+                "severity"  => XRef::ERROR,
+                "message"   => "Class keyword (%s) is used outside of instance/class scope"
+            ),
+            self::E_CLASS_CONSTRUCT_IN_GLOBAL_SCOPE => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Possible use of class keyword (%s) in global scope"
+            ),
+         );
     }
 
     public function __construct() {
@@ -101,9 +112,9 @@ class XRef_Lint_StaticThis extends XRef_ALintPlugin {
                 $p = $t->prevNS();
                 if ($n->text == '::' || $p->kind == T_NEW || $p->kind == T_INSTANCEOF) {
                     if ($allow_this_in_global_scope) {
-                        $this->addDefect($t, self::E_THIS_IN_GLOBAL_SCOPE);
+                        $this->addDefect($t, self::E_CLASS_CONSTRUCT_IN_GLOBAL_SCOPE);
                     } else {
-                        $this->addDefect($t, self::E_THIS_OUTSIDE_OF_METHOD);
+                        $this->addDefect($t, self::E_CLASS_CONSTRUCT_OUTSIDE_OF_METHOD);
                     }
                 }
             }

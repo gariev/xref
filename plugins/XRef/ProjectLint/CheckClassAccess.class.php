@@ -9,18 +9,18 @@
 class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IProjectLintPlugin {
 
     const
-        E_SEVERAL_CLASS_DEFINITIONS     = "exp01",
-        E_ACCESS_TO_UNDEFINED_METHOD    = "exp02",
-        E_ACCESS_TO_UNDEFINED_CONSTANT  = "exp03",
-        E_ACCESS_TO_UNDEFINED_PROPERTY  = "exp04",
-        E_MISSING_CLASS                 = "exp05",
-        E_MISSING_BASE_CLASS            = "exp06",
-        E_ACCESS_STATIC_AS_INSTANCE     = "exp07",
-        E_ACCESS_INSTANCE_AS_STATIC     = "exp08",
-        E_PRIVATE_MEMBER                = "exp09",
-        E_PROTECTED_MEMBER              = "exp10",
-        E_PROTECTED_ACCESS              = "exp11",
-        E_MAGIC_GETTER                  = "exp12";
+        E_SEVERAL_CLASS_DEFINITIONS     = "xr061",
+        E_ACCESS_TO_UNDEFINED_METHOD    = "xr062",
+        E_ACCESS_TO_UNDEFINED_CONSTANT  = "xr063",
+        E_ACCESS_TO_UNDEFINED_PROPERTY  = "xr064",
+        E_MISSING_CLASS                 = "xr065",
+        E_MISSING_BASE_CLASS            = "xr066",
+        E_ACCESS_STATIC_AS_INSTANCE     = "xr067",
+        E_ACCESS_INSTANCE_AS_STATIC     = "xr068",
+        E_PRIVATE_MEMBER                = "xr069",
+        E_PROTECTED_MEMBER              = "xr070",
+        E_PROTECTED_ACCESS              = "xr071",
+        E_MAGIC_GETTER                  = "xr072";
 
     public function getErrorMap() {
         return array(
@@ -34,7 +34,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             ),
             self::E_ACCESS_TO_UNDEFINED_CONSTANT => array(
                 "severity"  => XRef::ERROR,
-                "message"   => "Constant (%s) is not defined class (%s)",
+                "message"   => "Constant (%s) is not defined in class (%s)",
             ),
             self::E_ACCESS_TO_UNDEFINED_PROPERTY => array(
                 "severity"  => XRef::WARNING,
