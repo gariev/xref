@@ -34,6 +34,7 @@ check_clean:
 
 doctest:
 	bin/xref-doc \
+		--config=default \
 		-d 'project.source-code-dir[]=.' \
 		-d 'project.exclude-path[]=tmp' \
 		-d doc.output-dir=tmp \

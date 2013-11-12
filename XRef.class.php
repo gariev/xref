@@ -287,7 +287,7 @@ class XRef {
      */
     public function autoload($className) {
         $searchPath = self::getConfigValue("xref.plugins-dir", array());
-        $searchPath[] = dirname(__FILE__) . "/plugins";
+        $searchPath[] = dirname(__FILE__) . "/lib";
         $fileName = str_replace('_', '/', $className) . ".class.php";
 
         foreach ($searchPath as $dirName) {
@@ -1363,7 +1363,7 @@ class XRef {
         self::createDirIfNotExist("$smartyTmpDir/smarty/configs");
 
         $defaultTemplateDir = ("@data_dir@" == "@"."data_dir@") ?
-            dirname(__FILE__) . "/templates" : "@data_dir@/XRef/templates";
+            dirname(__FILE__) . "/templates/smarty" : "@data_dir@/XRef/templates/smarty";
         $templateDir = self::getConfigValue("xref.template-dir", $defaultTemplateDir);
 
         $smarty = new Smarty();
