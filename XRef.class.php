@@ -123,7 +123,7 @@ class XRef {
     }
 
     public static function version() {
-        return "0.1.8q";
+        return "1.0.0";
     }
 
     /*----------------------------------------------------------------
@@ -600,14 +600,6 @@ class XRef {
             }
         }
 
-        // config in installation dir?
-        if (!$filename) {
-            $f = ("@data_dir@" == "@"."data_dir@") ? dirname(__FILE__) . "/config/xref.ini" : "@data_dir@/XRef/config/xref.ini";
-            if (file_exists($f)) {
-                $filename = $f;
-            }
-        }
-
         // special value for filename - means don't read any config file
         if ($filename && $filename == 'default') {
             $filename = null;
@@ -763,6 +755,12 @@ class XRef {
             $config[] = array("data-dir", realpath("$cwd/.xref"));
             $config[] = array("project-check", "true");
             $config[] = array(";smarty-class", "/path/to/Smarty.class.php");
+            $config[] = array(";script-url", "http://xref.your.domain.com/bin");
+            $config[] = null;
+
+            $config[] = "[lint]";
+            $config[] = array("ignore-missing-class[]", 'PHPUnit_Framework_TestCase');
+            $config[] = array(";ignore-error[]", 'xr052');
             $config[] = null;
 
             $config[] = "[doc]";
@@ -799,10 +797,10 @@ class XRef {
                 } else {
                     list($k, $v) = $line;
                     if (preg_match('#^\\w+$#', $v)) {
-                        $l = sprintf("%-20s= %s\n", $k, $v);
+                        $l = sprintf("%-22s= %s\n", $k, $v);
                     } else {
                         $v = preg_replace('#\\\\#', '\\\\', $v);
-                        $l = sprintf("%-20s= \"%s\"\n", $k, $v);
+                        $l = sprintf("%-22s= \"%s\"\n", $k, $v);
                     }
                 }
                 fwrite($fh, $l);
@@ -879,8 +877,8 @@ class XRef {
         array('h::','help==',   '-h, --help',
             array(
                 "Print this help and exit",
-                "type '--help=defines' to show list of config values",
-                "type '--help=errors' to show list of errors and their codes",
+                "--help=defines  show list of config values",
+                "--help=errors   show list of errors and their codes",
             ),
             false
         ),
@@ -1236,14 +1234,18 @@ class XRef {
             }
         }
 
-        $path_to_readme = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md" : '@doc_dir@/XRef/README.md';
         $config_file = self::getConfigFilename();
         if (!$config_file) {
-            $config_file = "not found; using default values";
+            $config_file = "(not found; using default values)";
         }
-        echo "Config file: $config_file\n";
-        echo "See also: $path_to_readme\n";
-
+        $path_to_readme     = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md"    : '@doc_dir@/XRef/README.md';
+        $path_to_examples   = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/examples"     : '@doc_dir@/XRef/examples';
+        $path_to_webscripts = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/web-scripts"  : "@php_dir@/XRef/web-scripts";
+        echo "Locations:\n";
+        echo "  config file:    $config_file\n";
+        echo "  readme:         $path_to_readme\n";
+        echo "  examples:       $path_to_examples\n";
+        echo "  web-scripts:    $path_to_webscripts\n";
     }
 
     protected static function showErrors() {
@@ -1297,8 +1299,8 @@ class XRef {
             throw new Exception("Can't read file '$path_to_readme'");
         }
         ksort($config_values);
-        $format = "%-27s %-10s %-26s %s\n";
-        $spacer = sprintf($format, str_repeat('-', 27), str_repeat('-', 10), str_repeat('-', 26), str_repeat('-', 20));
+        $format = "%-30s %-10s %-26s %s\n";
+        $spacer = sprintf($format, str_repeat('-', 30), str_repeat('-', 10), str_repeat('-', 26), str_repeat('-', 20));
         printf($format, "Name", "Req?", "Type", "Value");
         echo $spacer;
         foreach ($config_values as $name => $l) {

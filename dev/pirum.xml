@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<server>
+  <name>pear.xref-lint.net</name>
+  <summary>XRef Lint PEAR channel</summary>
+  <alias>xref</alias>
+  <url>http://pear.xref-lint.net/</url>
+</server>

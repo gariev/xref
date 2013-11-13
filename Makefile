@@ -22,12 +22,16 @@ package: test clean check_clean package.xml
 	unix2dos bin/xref-doc.bat bin/xref-lint.bat
 	pear package
 	dos2unix bin/*
+	mkdir pear
+	cp dev/pirum.xml pear
+	pirum build pear
+	pirum add pear XRef*.tgz
 
 package.xml:
 	php dev/makePackageFile.php
 
 clean:
-	rm -rf package.xml XRef*.tgz
+	rm -rf package.xml XRef*.tgz pear
 
 check_clean:
 	files=`git status --porcelain`; if [ "$$files" != "" ]; then echo "extra files in dir: $$files"; exit 1; fi

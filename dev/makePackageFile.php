@@ -27,13 +27,13 @@ $pfm->setOptions( array(
 ));
 $pfm->setPackage('XRef');
 $pfm->setSummary('XRef - php source file toolkit');
-$pfm->setDescription('XRef - lint and cross-ref documentation generator');
-$pfm->setChannel('pear.php.net');
+$pfm->setDescription('XRef Lint - php lint and crossref doc tool');
+$pfm->setChannel('pear.xref-lint.net');
 $pfm->setAPIVersion($version);
 $pfm->setReleaseVersion($version);
-$pfm->setReleaseStability('alpha');
-$pfm->setAPIStability('alpha');
-$pfm->setNotes("initial release");
+$pfm->setReleaseStability('stable');
+$pfm->setAPIStability('stable');
+$pfm->setNotes("v1.0.0 release candidate #1");
 $pfm->setPackageType('php');
 
 // dependencies

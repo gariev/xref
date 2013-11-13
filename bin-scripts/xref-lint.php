@@ -20,7 +20,7 @@ XRef::registerCmdOption('r:', "report-level=",  '-r, --report-level=',  "either 
 XRef::registerCmdOption('',   "no-cache",       '--no-cache',           "don't use lint cache, if any");
 XRef::registerCmdOption('',   "init",           '--init',               "create a config file, init cache");
 XRef::registerCmdOption('',   "git",            '--git',                "git pre-commit mode: find new errors in modified tracked files");
-XRef::registerCmdOption('',   "git-cached",     '--git-cached',         array("implies --git option", "compare HEAD and files cached for commit"));
+XRef::registerCmdOption('',   "git-cached",     '--git-cached',         "git pre-commit mode: compare files cached for commit with HEAD");
 XRef::registerCmdOption('',   "git-rev=",       '--git-rev=<rev> or --git-rev=<from>:<to> ',
     array("", "find errors in revision <rev>, or find errors added since rev <from> to rev <to>")
 );

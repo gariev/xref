@@ -30,26 +30,20 @@ XRef is a set of tools to work with PHP source files. Currently it includes:
 
     <http://xref-lint.net/>
 
-INSTALLATION
-============
+INSTALL
+=======
+
+PEAR installation
+-----------------
 
 ```sh
-## get it
-curl -o XRef-stable.tgz http://xref-lint.net/releases/XRef-stable.tgz
-
-## install
-pear install ./XRef-stable.tgz
-
-## init for your project
-cd <your-project-dir>
-xref-lint --init
-
-## run
-xref-lint
-
+pear channel-discover pear.xref-lint.net
+pear install xref/XRef
 ```
 
-Alternatively, you can get the source code and add its 'bin' directory to your executable path:
+Install from git/source code
+----------------------------
+
 ```sh
 git clone git@github.com:gariev/xref.git
 export PATH=$PATH:xref/bin
@@ -57,24 +51,33 @@ export PATH=$PATH:xref/bin
 
 Any of the above will give you working command-line lint tool xref-lint (or xref-lint.bat on Windows platform).
 
-Full installation
------------------
+SETUP
+=====
 
-To get most of the xref package, configure it after the basic installation.
+To get most of the xref package, configure it for your project after the installation.
 
-1.  After you run "xref-lint --init" in your project dir, a default config file
-    is created in .xref/xref.ini. You can edit it as suitable for your project
-    (see section CONFIG FILE below; also see sample config in config/xref.ini.sample)
+```sh
+cd <your-project-dir>
+xref-lint --init
+```
+
+This will create a xref data directory (.xref), default config file (.xref/xref.ini) and
+will index files for faster checks.
+
+
+1.  Edit the config file (.xref/xref.ini). See section CONFIG FILE below;
+    also see sample config in examples/xref.ini.sample
 
 2.  Download and install Smarty template engine. <http://www.smarty.net/>;
     any of versions 2.x or 3.x should work, version 2 takes less memory.
-    Set the pass to Smarty.class.php file in *xref.smarty-class* param of config file.
+    Set the path to Smarty.class.php file in *xref.smarty-class* param of config file.
 
 3.  Configure web server to run scripts from web-scripts dir XRef/web-scripts/,
-    see also sample Apache config file in XRef/examples/httpd.conf
+    see sample Apache config file in examples/httpd.conf. To view where
+    examples and web-scripts are intalled, run 'xref-lint --help'.
 
 4. Set up crontab to run xref-ci to monitor your project,
-    see sample cronab script in
+    see sample cronab script in examples/ci.crontab
 
 
 REPORTED ERRORS
@@ -496,28 +499,27 @@ CONFIG FILE
 ===========
 
 XRef tools will look for the config file in the following places in order:
-* command-line options -c or --config, command-line scripts only
+* path set by command-line options -c (--config), affects command-line scripts only
 * environment variable XREF\_CONFIG
-* file named xref.ini in the current directory, or in any of it's parent directories
-* file named xref.ini in the directory where xref.init.sample was installed (@data\_dir@/XRef/config)
+* file .xref/xref.ini in the current directory, or in any of it's parent directories
 
-If no file found, default values will be used - they are good enough to run lint (both command-line and web version),
+If no file found, default values will be used - they are good enough to run command-line lint tool
 but not to run xref-doc or xref-ci.
 
 Each of the value below can be overridden by command-line option -d (--define), e.g.
 
 ```
-xref-lint -d lint.check-global-scope=false -d lint.ignore-error=XA01 ...
+xref-lint -d lint.check-global-scope=false -d lint.ignore-error=xr010 ...
 ```
 
-
 List of config file parameters:
+------------------------------
 
 * **project.name** (string; optional)
 
     The name of your project, will be mentioned in generated documentation
 
-* **project.source-code-dir[]** (array of path; required)
+* **project.source-code-dir[]** (array of paths; required)
 
     The set of paths where to look for source code of your project to create documentation
 

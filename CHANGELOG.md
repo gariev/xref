@@ -41,3 +41,7 @@ Version 0.1.8
     - ability to disable errors by their codes
     - experimental support for DocComments
 
+Version 1.0.0
+=============
+- lint:
+    - project check (can check all files in the project and make cross-reference checks)

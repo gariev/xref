@@ -5,7 +5,7 @@
 
 [project]
 name                    = "My Project"
-source-code-dir[]       = /path/to/your/code
+source-code-dir[]       = /path/to/project/code
 
 [xref]
 data-dir                = /home/you/xref/data
@@ -44,4 +44,3 @@ to[]                    = you@your.domain.com
 to[]                    = "{%ae}"
 to[]                    = "{%an}@your.domain"
 
-; vim: expandtab tabstop=4
