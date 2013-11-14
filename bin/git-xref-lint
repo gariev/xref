@@ -5,7 +5,7 @@
 ##
 ## This is a plugin for git that runs xref-lint for all modified PHP files
 ## 
-## Usage: git xref-lint [--cached]
+## Usage: git xref-lint [--git-cached]
 ##
 ## @author Igor Gariev <gariev@hotmail.com>
 ## @copyright Copyright (c) 2013 Igor Gariev
@@ -24,24 +24,9 @@ else
 	PHP="@php_bin@"
 fi
 
+if [ "$XREF_MEMORY_LIMIT" == "" ]; then
+	XREF_MEMORY_LIMIT=1G
+fi
 
-GIT_OPTIONS=""
-XREF_OPTIONS=""
-
-for i; do
-    case "$i" in 
-        --cached|--staged )
-            GIT_OPTIONS=" --cached $GIT_OPTIONS"
-            shift ;;
-        *)
-            XREF_OPTIONS=" $i $XREF_OPTIONS"
-            shift ;;
-    esac
-done
-
-FILES=$(git diff-index $GIT_OPTIONS HEAD --name-only)
-
-echo $FILES
-
-$PHP $SCRIPTDIR/xref-lint.php $XREF_OPTIONS $FILES
+$PHP -d memory_limit=$XREF_MEMORY_LIMIT $SCRIPTDIR/xref-lint.php --git $@
 

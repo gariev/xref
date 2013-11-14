@@ -52,47 +52,47 @@
 
 class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
 
-    const E_UNKNOWN_VAR             = "XV01";
-    const E_UNKNOWN_VAR_RELAXED     = "XV02";
-    const E_UNKNOWN_VAR_ARGUMENT    = "XV03";
-    const E_ARRAY_AUTOVIVIFICATION  = "XV04";
-    const E_SCALAR_AUTOVIVIFICATION = "XV05";
-    const E_NON_VAR_PASSED_BY_REF   = "XV06";
-    const E_EMPTY_STATEMENT         = "XV07";
-    const E_LOSS_OF_STRICT_MODE     = "XV08";
+    const E_UNKNOWN_VAR             = "xr010";
+    const E_UNKNOWN_VAR_RELAXED     = "xr011";
+    const E_UNKNOWN_VAR_ARGUMENT    = "xr012";
+    const E_ARRAY_AUTOVIVIFICATION  = "xr013";
+    const E_SCALAR_AUTOVIVIFICATION = "xr014";
+    const E_NON_VAR_PASSED_BY_REF   = "xr015";
+    const E_EMPTY_STATEMENT         = "xr016";
+    const E_LOSS_OF_STRICT_MODE     = "xr017";
 
     public function getErrorMap() {
         return array(
             self::E_UNKNOWN_VAR  => array(
-                "message"   => "Use of unknown variable",
+                "message"   => "Use of unknown variable (%s)",
                 "severity"  => XRef::ERROR,
             ),
             self::E_UNKNOWN_VAR_RELAXED  => array(
-                "message"   => "Possible use of unknown variable",
+                "message"   => "Possible use of unknown variable (%s)",
                 "severity"  => XRef::WARNING,
             ),
             self::E_UNKNOWN_VAR_ARGUMENT  => array(
-                "message"   => "Possible use of unknown variable as function argument",
+                "message"   => "Possible use of unknown variable as function argument (%s)",
                 "severity"  => XRef::WARNING,
             ),
             self::E_ARRAY_AUTOVIVIFICATION  => array(
-                "message"   => "Array autovivification",
+                "message"   => "Array autovivification (%s)",
                 "severity"  => XRef::WARNING,
             ),
             self::E_SCALAR_AUTOVIVIFICATION  => array(
-                "message"   => "Scalar autovivification",
+                "message"   => "Scalar autovivification (%s)",
                 "severity"  => XRef::WARNING,
             ),
             self::E_NON_VAR_PASSED_BY_REF => array(
-                "message"   => "Possible attempt to pass non-variable by reference",
+                "message"   => "Possible attempt to pass non-variable by reference (%s)",
                 "severity"  => XRef::ERROR,
             ),
             self::E_EMPTY_STATEMENT  => array(
-                "message"   => "Empty declaration-like statement",
+                "message"   => "Empty declaration-like statement (%s)",
                 "severity"  => XRef::NOTICE,
             ),
             self::E_LOSS_OF_STRICT_MODE => array(
-                "message"   => "Can't reliable detect var usage from here",
+                "message"   => "Can't reliable detect var usage from here (%s)",
                 "severity"  => XRef::NOTICE,
             ),
         );
@@ -868,6 +868,23 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 }
                 continue;
             }
+
+            // eval: a common pattern:
+            //      eval('$foo = ...');
+            //      eval "\$foo = ...';
+            if ($t->kind == T_EVAL) {
+                $n = $t->nextNS();
+                if ($n->text == '(') {
+                    $n = $n->nextNS();
+                }
+                if ($n->kind == T_CONSTANT_ENCAPSED_STRING) {
+                    if (preg_match('#^\'\s*(\\$\\w+)\\s*=#', $n->text, $matches) || preg_match('#^"\s*\\\\(\\$\\w+)\\s*=#', $n->text, $matches)) {
+                        $this->currentScope->getOrCreateVarByName($matches[1]);
+                    }
+                }
+                continue;
+            }
+
 
             // Part 2.
             // Check if a variable is defined

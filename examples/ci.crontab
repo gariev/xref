@@ -1,4 +1,7 @@
 MAILTO=your.email@here
 
-## this is a cron-script to run XRef Continuous Integration every 2 minutes
-*/2	*	*	*	*	xref-ci --config=/path/to/your/config.file.ini
+## run XRef Continuous Integration every 2 minutes
+*/2	*	*	*	*	xref-ci --config=/path/to/xref.ini
+
+## run XRef doc once per day
+20  3   *   *   *   xref-doc --config=/path/to/xref.ini

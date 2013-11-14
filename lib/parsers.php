@@ -10,7 +10,11 @@
  */
 
 class XRef_ParseException extends Exception {
-    function __construct($token, $expected_text = null) {
+    /** @var XRef_Token */
+    public $token;
+
+    function __construct(XRef_Token $token, $expected_text = null) {
+        $this->token = $token;
         $filename = $token->parsedFile->getFileName();
         $message = ($expected_text)
                 ? "Found '$token->text' instead of $expected_text at $filename:$token->lineNumber"
@@ -315,7 +319,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
                     "bracket_count" => $bracket_count,
                     "lineNumber"    => $t->lineNumber,
                     "expect"        => $expect_bracket,
-                    "text"          => $t->text,
+                    "token"         => $t,
                 );
                 $bracket_count++;
                 continue;
@@ -331,14 +335,13 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
                     $this->pairedBrackets[$top->index] = $i;
                     $this->pairedBrackets[$i] = $top->index;
                 } else {
-                    throw new Exception("Unmatched closing bracket '$t->text' at $this->filename:" . $t->lineNumber);
+                    throw new XRef_ParseException($t, "Unmatched closing bracket");
                 }
             }
         }
 
         if (count($stack)) {
-            $t = $stack[0];
-            throw new Exception("Unmatched opening bracket '$t->text' at $this->filename: $t->lineNumber");
+            throw new XRef_ParseException($stack[0]->token, "Unmatched opening bracket");
         }
     }
 
@@ -445,6 +448,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
         $namespace = new XRef_Namespace();
         $namespace->index = $t->index;
+        $namespace->lineNumber = $t->lineNumber;
 
         $this->nextNS();
         $name = $this->parseTypeName();
@@ -483,6 +487,13 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         while (true) {
             $this->nextNS();
             $name = $this->parseTypeName();
+            if (substr($name, 0, 1) == '\\') {
+                // not recommended, but commonly used:
+                // use \Foo\Bar as Alias;
+                // all namespaces are global anyway and not related to current namespace
+                $name = substr($name, 1);
+            }
+
             $t = $this->current();
 
             if ($t->kind == T_AS) {
@@ -535,6 +546,13 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         $class = new XRef_Class();
         $class->index = $t->index;
         $class->kind = $t->kind;
+        $class->lineNumber = $t->lineNumber;
+
+        // ugly part: backtracking
+        $p = $t->prevNS();
+        if ($p->kind == T_ABSTRACT) {
+            $class->isAbstract = true;
+        }
 
         $t = $this->nextNS();
         if ($t->kind == T_STRING) {
@@ -710,9 +728,11 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         }
 
         $prop = new XRef_Property();
-        $prop->name = $t->text;
+        $prop->name = substr($t->text, 1); // strip the leading '$' sign
         $prop->index = $t->index;
-        $prop->attribures = $attributes;
+        $prop->attributes = $attributes;
+        $prop->lineNumber = $t->lineNumber;
+        $prop->className = $class->name;
         $class->properties[] = $prop;
 
         $t = $this->nextNS();
@@ -744,6 +764,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
             $const = new XRef_Constant;
             $const->index = $t->index;
+            $const->lineNumber = $t->lineNumber;
             $const->attributes = $attributes;
             $this->constants[] = $const;
             if ($class) {
@@ -780,7 +801,9 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
 
         $function = new XRef_Function();
         $function->index = $t->index;
+        $function->lineNumber = $t->lineNumber;
         $function->attributes = $attributes;
+
         $t = $this->nextNS();
         if ($t->text == '&') {
             $t = $this->nextNS();
@@ -959,6 +982,10 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
             return $name;
         }
 
+        if ($name == 'self' || $name == 'parent' || $name == 'static') {
+            return $name;
+        }
+
         if (substr($name, 0, 1)== '\\') {
             // this is an absolute name, '\foo\bar' --> 'foo\bar'
             return substr($name, 1);
@@ -966,6 +993,7 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
             // relative name
             $namespace = $this->getNamespaceAt($index);
             if (!$namespace) {
+                // no namespace and no import map
                 return $name;
             } else {
                 $parts = explode('\\', $name);
@@ -974,7 +1002,10 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
                 } elseif (isset($namespace->importMap[ $parts[0] ])) {
                     $parts[0] = $namespace->importMap[ $parts[0] ];
                 } else {
-                    array_unshift($parts, $namespace->name);
+                    if ($namespace->name) {
+                        // not default namespace
+                        array_unshift($parts, $namespace->name);
+                    }
                 }
                 return implode('\\', $parts);
             }
@@ -985,8 +1016,14 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
     // input: simple type name, e.g. 'Foo'
     // output: fully-qualified name, e.g. 'My\NameSpace\Foo'
     private function qualifySimpleName($name, $index) {
+        // special keywords/names
+        if ($name == 'self' || $name == 'parent' || $name == 'static') {
+            return $name;
+        }
+
         $namespace = $this->getNamespaceAt($index);
-        if (!$namespace) {
+        if (!$namespace || !$namespace->name) {
+            // name is in global namespace
             return $name;
         } else {
             return $namespace->name . '\\' . $name;

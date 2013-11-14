@@ -21,7 +21,7 @@ class TestParsers extends PHPUnit_Framework_TestCase {
                 }
             }
         ';
-        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
         $classes = $pf->getClasses();
         $methods = $pf->getMethods();
         $this->assertTrue(count($classes)==1);
@@ -49,7 +49,7 @@ class TestParsers extends PHPUnit_Framework_TestCase {
                 $bar(10);
             }
         ';
-        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
         $tokens = $pf->getTokens();
 
         // checking "namespace" statement
@@ -113,7 +113,7 @@ class TestParsers extends PHPUnit_Framework_TestCase {
             namespace foo;
             trait Foo { }
         ';
-        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
         $tokens = $pf->getTokens();
 
         $is_namespace_found = false;
@@ -143,7 +143,7 @@ class TestParsers extends PHPUnit_Framework_TestCase {
                 }
             }
         ';
-        $pf = $this->xref->getParsedFile("filename.php", "php", $testPhpCode);
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
         $tokens = $pf->getTokens();
 
         $is_namespace_found = false;
@@ -158,6 +158,111 @@ class TestParsers extends PHPUnit_Framework_TestCase {
         }
         $this->assertTrue(!$is_namespace_found);
         $this->assertTrue(!$is_trait_found);
+        $pf->release();
+    }
+
+    /**
+     * @requires PHP 5.3
+     */
+    public function testImportNamespaces() {
+
+        //
+        // correctly parse namespaces and traits statements, even in compat mode
+        //
+        $testPhpCode =
+        '<?php
+            namespace foo;
+            use \Foo;
+            use Bar\Baz;
+            use asdf\qwerty as z;
+
+            class A extends Foo {}
+            class B extends Baz {}
+            class C extends Qux {}
+            class D extends \Quux {}
+            class E extends z {}
+            class F extends qwerty {}
+        ';
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
+        $classes = $pf->getClasses();
+        $this->assertTrue( count($classes) == 6 );
+
+        $this->assertTrue( $classes[0]->name == 'foo\\A' );
+        $this->assertTrue( count($classes[0]->extends) == 1);
+        $this->assertTrue( $classes[0]->extends[0] == 'Foo');
+
+        $this->assertTrue( $classes[1]->name == 'foo\\B' );
+        $this->assertTrue( count($classes[1]->extends) == 1);
+        $this->assertTrue( $classes[1]->extends[0] == 'Bar\\Baz');
+
+        $this->assertTrue( $classes[2]->name == 'foo\\C' );
+        $this->assertTrue( count($classes[2]->extends) == 1);
+        $this->assertTrue( $classes[2]->extends[0] == 'foo\\Qux');
+
+        $this->assertTrue( $classes[3]->name == 'foo\\D' );
+        $this->assertTrue( count($classes[3]->extends) == 1);
+        $this->assertTrue( $classes[3]->extends[0] == 'Quux');
+
+        $this->assertTrue( $classes[4]->name == 'foo\\E' );
+        $this->assertTrue( count($classes[4]->extends) == 1);
+        $this->assertTrue( $classes[4]->extends[0] == 'asdf\\qwerty');
+
+        $this->assertTrue( $classes[5]->name == 'foo\\F' );
+        $this->assertTrue( count($classes[5]->extends) == 1);
+        $this->assertTrue( $classes[5]->extends[0] == 'foo\\qwerty');
+
+        $pf->release();
+    }
+    /**
+     * @requires PHP 5.3
+     */
+    public function testDefaultNamespace() {
+
+        //
+        // correctly parse namespaces and traits statements, even in compat mode
+        //
+        $testPhpCode =
+        '<?php
+
+            use \Foo;
+            use Bar\Baz;
+            use asdf\qwerty as z;
+
+            class A extends Foo {}
+            class B extends Baz {}
+            class C extends Qux {}
+            class D extends \Quux {}
+            class E extends z {}
+            class F extends qwerty {}
+        ';
+        $pf = $this->xref->getParsedFile("filename.php", $testPhpCode);
+        $classes = $pf->getClasses();
+        $this->assertTrue( count($classes) == 6 );
+
+        $this->assertTrue( $classes[0]->name == 'A' );
+        $this->assertTrue( count($classes[0]->extends) == 1);
+        $this->assertTrue( $classes[0]->extends[0] == 'Foo');
+
+        $this->assertTrue( $classes[1]->name == 'B' );
+        $this->assertTrue( count($classes[1]->extends) == 1);
+        $this->assertTrue( $classes[1]->extends[0] == 'Bar\\Baz');
+
+        $this->assertTrue( $classes[2]->name == 'C' );
+        $this->assertTrue( count($classes[2]->extends) == 1);
+        $this->assertTrue( $classes[2]->extends[0] == 'Qux');
+
+        $this->assertTrue( $classes[3]->name == 'D' );
+        $this->assertTrue( count($classes[3]->extends) == 1);
+        $this->assertTrue( $classes[3]->extends[0] == 'Quux');
+
+        $this->assertTrue( $classes[4]->name == 'E' );
+        $this->assertTrue( count($classes[4]->extends) == 1);
+        $this->assertTrue( $classes[4]->extends[0] == 'asdf\\qwerty');
+
+        $this->assertTrue( $classes[5]->name == 'F' );
+        $this->assertTrue( count($classes[5]->extends) == 1);
+        $this->assertTrue( $classes[5]->extends[0] == 'qwerty');
+
         $pf->release();
     }
 }

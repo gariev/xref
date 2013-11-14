@@ -10,26 +10,29 @@
 class XRef_Doc_LintReport extends XRef_APlugin implements XRef_IDocumentationPlugin {
     protected $supportedFileType    = XRef::FILETYPE_PHP;
 
+    /** @var XRef_ILintEngine */
+    protected $lintEngine;
+
     public function __construct() {
         parent::__construct("php-lint", "Lint report");
     }
 
-    // array: $filename --> array($filepos, defectLevel, $message)
-    protected $totalReport = array();
+    public function setXRef(XRef $xref) {
+        parent::setXRef($xref);
+        $this->lintEngine = XRef::getConfigValue("xref.project-check", true)
+            ? new XRef_LintEngine_ProjectCheck($xref)
+            : new XRef_LintEngine_Simple($xref);
+    }
 
     public function generateFileReport(XRef_IParsedFile $pf) {
         if ($pf->getFileType() != $this->supportedFileType) {
             return;
         }
-
-        $report = $this->xref->getLintReport($pf);
-        if (count($report)) {
-            $this->totalReport[ $pf->getFileName() ] = $report;
-        }
+        $this->lintEngine->addParsedFile($pf);
     }
 
     public function generateTotalReport() {
-        ksort($this->totalReport);
+        $report = $this->lintEngine->collectReport();
 
         list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, null);
         fwrite($fh,
@@ -39,7 +42,7 @@ class XRef_Doc_LintReport extends XRef_APlugin implements XRef_IDocumentationPlu
                     'reportName' => $this->getName(),
                     'reportId'   => $this->getId(),
                     'root'       => $root,
-                    'report'     => $this->totalReport,
+                    'report'     => $report,
                 )
             )
         );

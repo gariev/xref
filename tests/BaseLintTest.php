@@ -14,31 +14,34 @@ class BaseLintTest extends PHPUnit_Framework_TestCase {
         XRef::setConfigValue("lint.check-global-scope", true);
     }
 
-    protected function checkFoundDefect($foundDefect, $tokenText, $lineNumber, $severity) {
-        $descr = print_r($foundDefect, true);   // TODO
-        $this->assertTrue($foundDefect->tokenText==$tokenText,      "Invalid token:\n$descr");
-        $this->assertTrue($foundDefect->lineNumber==$lineNumber,    "Invalid line number:\n$descr");
-        $this->assertTrue($foundDefect->severity==$severity,        "Invalid severity:\n$descr");
+    protected function checkFoundDefect($found_defect, $token_text, $line_number, $severity) {
+        $descr = print_r($found_defect, true);   // TODO
+        $this->assertTrue($found_defect->tokenText  == $token_text,     "Invalid token:\n$descr");
+        $this->assertTrue($found_defect->lineNumber == $line_number,    "Invalid line number:\n$descr");
+        $this->assertTrue($found_defect->severity   == $severity,       "Invalid severity:\n$descr");
     }
 
-    protected function checkPhpCode($phpCode, $expectedDefectsList) {
-        $pf = $this->xref->getParsedFile("filename.php", "php", $phpCode);
-        $report = $this->xref->getLintReport($pf);
+    protected function checkPhpCode($php_code, $expected_defects) {
+        $pf = $this->xref->getParsedFile("filename.php", $php_code);
+        $lint_engine = new XRef_LintEngine_Simple($this->xref, false);
+        $lint_engine->addParsedFile($pf);
         $pf->release();
+        $report = $lint_engine->collectReport();
+        $errors = (isset($report["filename.php"])) ? $report["filename.php"] : array();
 
-        $countFound = count($report);
-        $countExpected = count($expectedDefectsList);
-        if ($countFound != $countExpected) {
+        $count_found = count($errors);
+        $count_expected = count($expected_defects);
+        if ($count_found != $count_expected) {
             print_r($report);
-            $this->fail( "Wrong number of errors: found=$countFound, expected=$countExpected" );
+            $this->fail( "Wrong number of errors: found=$count_found, expected=$count_expected" );
         } else {
-            $this->assertTrue($countFound == $countExpected, "Excpected number of defects");
+            $this->assertTrue($count_found == $count_expected, "Expected number of defects");
         }
 
-        for ($i=0; $i<count($report); ++$i) {
-            $foundDefect = $report[$i];
-            list($tokenText, $lineNumber, $severity) = $expectedDefectsList[$i];
-            $this->checkFoundDefect($foundDefect, $tokenText, $lineNumber, $severity);
+        for ($i=0; $i<count($errors); ++$i) {
+            $found_defect = $errors[$i];
+            list($token_text, $line_number, $severity) = $expected_defects[$i];
+            $this->checkFoundDefect($found_defect, $token_text, $line_number, $severity);
         }
     }
 

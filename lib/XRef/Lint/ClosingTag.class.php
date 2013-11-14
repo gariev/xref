@@ -15,20 +15,20 @@ class XRef_Lint_ClosingTag extends XRef_ALintPlugin {
         parent::__construct("lint-closing-tag", "Lint (use of php closing tag)");
     }
 
-    const E_CLOSING_TAG     = "XC01";
-    const E_EXTRA_SPACES    = "XC02";
+    const E_EXTRA_SPACES    = "xr051";
+    const E_CLOSING_TAG     = "xr052";
 
     public function getErrorMap() {
         return array(
-            self::E_CLOSING_TAG => array(
-                "severity"  => XRef::WARNING,
-                "message"   => "Unneeded closing tag",
-            ),
             self::E_EXTRA_SPACES => array(
                 "severity"  => XRef::WARNING,
-                "message"   => "Spaces before opening tag",
+                "message"   => "Spaces before opening tag (%s)",
             ),
-        );
+            self::E_CLOSING_TAG => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Unneeded closing tag (%s)",
+            ),
+       );
     }
 
     protected $supportedFileType    = XRef::FILETYPE_PHP;
@@ -55,8 +55,9 @@ class XRef_Lint_ClosingTag extends XRef_ALintPlugin {
             }
 
             // is there are spaces only or meaningful html?
-            // optionally, file can starts with byte order mark
-            if (preg_match("#^(\\xEF\\xBB\\xBF|\\xFE\\xFF|\\xFF\\xFE|\\x00\\x00\\xFE\\xFF|\\xFF\\xFE\\x00\\x00)?\\s*\$#", $t->text)) {
+            // regexp = optional byte order mark in the beginning + (spaces or nbsp)+
+            $regexp = "#^(\\xEF\\xBB\\xBF|\\xFE\\xFF|\\xFF\\xFE|\\x00\\x00\\xFE\\xFF|\\xFF\\xFE\\x00\\x00)?[\\s\\xa0]*$#";
+            if (preg_match($regexp, $t->text)) {
                 $this->addDefect($t, self::E_EXTRA_SPACES);
             } else {
                 $skip_closing_tag_checks = true;
@@ -74,7 +75,7 @@ class XRef_Lint_ClosingTag extends XRef_ALintPlugin {
                         $this->addDefect($t, self::E_CLOSING_TAG);
                     } elseif ($i == $count-2) {
                         $n = $tokens[$count-1];
-                        if (preg_match('#^\\s+$#', $n->text)) {
+                        if (preg_match('#^[\\s+\\xa0]*$#', $n->text)) {
                             $this->addDefect($t, self::E_CLOSING_TAG);
                         }
                     }

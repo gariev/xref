@@ -57,14 +57,14 @@ class StaticThisLintTest extends BaseLintTest {
         }
         class Bar {
             public static function foo() {
-                $this;          // error
+                echo $this->f;  // error
                 self::foo();    // ok
                 parent::foo();  // ok
             }
             public function bar() {
                 self::$foo;     // ok
                 parent::bar();  // ok
-                $this;          // ok
+                echo $this->f;  // ok
             }
         }
         echo $this->lastTime(); // error

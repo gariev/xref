@@ -91,6 +91,17 @@ class XRef {
         T_FINAL     => XRef::MASK_FINAL,
     );
 
+
+    /** error code & message for fatal "can't parse file" error */
+    const ERROR_CODE_CANT_PARSE_FILE = "xr001";
+    const ERROR_MESSAGE_CANT_PARSE_FILE = "Can't parse file (%s)";
+
+    /**
+     * special filename for project errors that are not specific to any file,
+     * e.g. a class is defined twice in the project
+     */
+    const DUMMY_PROJECT_FILENAME = "(project)";
+
     /** constructor */
     public function __construct() {
         spl_autoload_register(array($this, "autoload"), true);
@@ -112,7 +123,7 @@ class XRef {
     }
 
     public static function version() {
-        return "0.1.8";
+        return "1.0.0";
     }
 
     /*----------------------------------------------------------------
@@ -197,7 +208,7 @@ class XRef {
 
     /**
      * Method to load plugins defined in config file.
-     * For the name $gloupName, plugins/parsers config-defined as $groupName.plugins[] and $groupName.parsers[] will be loaded.
+     * For the name $groupName, plugins/parsers config-defined as $groupName.plugins[] and $groupName.parsers[] will be loaded.
      *
      * @param string $groupName
      */
@@ -242,29 +253,29 @@ class XRef {
         return $this->storageManager;
     }
 
+    /** directory where the cross-reference will be stored */
+    public function setOutputDir($outputDir) {
+        $this->outputDir = $outputDir;
+        self::createDirIfNotExist($outputDir);
+    }
+
     /**
      * Method finds parser for given fileType and returns parsed file object
      * If $content is null, it will be read from $filename
      * TODO: made fileType optional param - take it from filename
      *
      * @param string $filename
-     * @param enum $fileType
      * @param string $content
      * @return XRef_IParsedFile
      */
-    public function getParsedFile($filename, $fileType, $content = null) {
-        $parser = $this->parsers[$fileType];
+    public function getParsedFile($filename, $content = null) {
+        $file_type = strtolower( pathinfo($filename, PATHINFO_EXTENSION) );
+        $parser = isset($this->parsers[$file_type]) ? $this->parsers[$file_type] : null;
         if (!$parser) {
-            throw new Exception("No parser is registered for filetype $fileType ($filename)");
+            throw new Exception("No parser is registered for filetype $file_type ($filename)");
         }
         if ($content==null) {
             $content = file_get_contents($filename);
-        }
-
-        // if the filename starts with the $this->removePathPrefix,
-        // then remove the prefix
-        if ($this->removePathPrefix && strpos($filename, $this->removePathPrefix)===0) {
-            $filename = substr($filename, strlen($this->removePathPrefix));
         }
 
         $pf = $parser->parse( $content, $filename );
@@ -276,7 +287,7 @@ class XRef {
      */
     public function autoload($className) {
         $searchPath = self::getConfigValue("xref.plugins-dir", array());
-        $searchPath[] = dirname(__FILE__) . "/plugins";
+        $searchPath[] = dirname(__FILE__) . "/lib";
         $fileName = str_replace('_', '/', $className) . ".class.php";
 
         foreach ($searchPath as $dirName) {
@@ -298,85 +309,12 @@ class XRef {
 
     /*----------------------------------------------------------------
      *
-     * CROSS-REFERENCE DOCUMENTATION: SOURCE FILE TRAVERSING AND REPORT FILENAMES FUNCTIONS
+     * CROSS-REFERENCE DOCUMENTATION
      *
-     * TODO: move this to plugin; add more config variables
      ---------------------------------------------------------------*/
-    protected $paths        = array();
-    protected $seenFiles    = array();
-    protected $inputFiles   = array(); // ($filename => $file_extension)
-    protected $removePathPrefix;
 
     protected $outputDir;
 
-    /** path where to look for source files */
-    public function addPath($path) {
-        $this->paths[] = $path;
-        $this->inputFiles = null; // invalidate cache
-    }
-
-    /** starting common part of the path that can be removed from file names */
-    public function removeStartingPath($pathPrefix) {
-        $this->removePathPrefix = $pathPrefix;
-    }
-
-    /** directory where the cross-reference will be stored */
-    public function setOutputDir($outputDir) {
-        $this->outputDir = $outputDir;
-        self::createDirIfNotExist($outputDir);
-    }
-
-    /**
-     * Method traversed given root paths and return found filenames.
-     *
-     * @return string[]
-     */
-    public function getFiles() {
-        if (!$this->inputFiles) {
-            $this->inputFiles = array();
-            $this->seenFiles = array();
-            foreach ($this->paths as $p) {
-                $this->findInputFiles($p);
-            }
-        }
-
-        return $this->inputFiles;
-    }
-
-    /**
-     * Internal method to traverse source files from given root; called recursively.
-     * No return value, $this->inputFiles is filled with found filenames.
-     *
-     * @param string $file - file or directory name
-     */
-    protected function findInputFiles($file) {
-        // prevent visiting the same dir several times
-        if (array_key_exists($file, $this->seenFiles)) {
-            return;
-        } else {
-            $this->seenFiles[$file] = 1;
-        }
-
-        if (is_dir($file)) {
-            foreach (scandir($file) as $filename) {
-                // skip svn/git directories
-                // TODO: create ignore config list
-                if ($filename == '.svn' || $filename == '.git' || $filename == '.build.sand.mk') {
-                    continue;
-                }
-                if ($filename == '.' || $filename == '..') {
-                    // skip "." and ".." dirs
-                    continue;
-                }
-                $this->findInputFiles( ($file=='.') ? $filename : "$file/$filename" );
-            }
-        } else if (is_file($file)) {
-            $ext = strtolower( pathinfo($file, PATHINFO_EXTENSION) );
-            if (array_key_exists($ext, $this->parsers)) {
-                $this->inputFiles[$file] = $ext;
-            }
-        }
-    }
 
     /**
      * Utility method to create file names for given reportId/objectId report
@@ -434,7 +372,7 @@ class XRef {
         // TODO: create case insensitive file names for Windows
         $objectId = preg_replace("#\\\\#", '/', $objectId);
         $objectId = preg_replace("#[^a-zA-Z0-9\\.\\-\\/]#", '-', $objectId);
-        $objectId = preg_replace("#\.\.#", '--', $objectId);
+        $objectId = preg_replace("#\\.\\.#", '--', $objectId);
         return "$objectId.$extension";
     }
 
@@ -506,12 +444,21 @@ class XRef {
      *
      * ---------------------------------------------------------------*/
 
-     /**
-     * Affects what kind of defects the lint plugins will report.
-     *
-     * @param int $reportLevel - one of constants XRef::NOTICE, XRef::WARNING or XRef::ERROR
-     * @return void
-     */
+
+    public function filterFiles($files) {
+        // TODO(?): use extension list from parser plugins
+        $extensions = array('php' => true );
+        $filtered_files = array();
+
+        foreach ($files as $f) {
+            $ext = strtolower( pathinfo($f, PATHINFO_EXTENSION) );
+            if (! isset($extensions[$ext])) {
+                continue;
+            }
+            $filtered_files[] = $f;
+        }
+        return $filtered_files;
+    }
 
     /** $lintReportLevel: XRef::ERROR, XRef::WARNING etc */
     protected $lintReportLevel = null;
@@ -522,45 +469,42 @@ class XRef {
     /** map error_code -> true */
     protected $lintIgnoredErrors = null;
 
+    /**
+    * Affects what kind of defects the lint plugins will report.
+    *
+    * @param int $reportLevel - one of constants XRef::NOTICE, XRef::WARNING or XRef::ERROR
+    * @return void
+    */
     public function setLintReportLevel($reportLevel) {
         $this->lintReportLevel = $reportLevel;
     }
 
-    /**
-     * Runs all registered lint plugins for the given parsed file.
-     *
-     * @param XRef_IParsedFile $pf - parsed file object
-     * @return array of XRef_CodeDefect objects
-     */
-    public function getLintReport(XRef_IParsedFile $pf) {
 
-        $plugins = $this->getPlugins("XRef_ILintPlugin");
-
-        // init once
-        if (is_null($this->lintErrorMap)) {
-            $this->lintErrorMap = array();
-            foreach ($plugins as $pluginId => $plugin) {
-                foreach ($plugin->getErrorMap() as $error_code => $error_description) {
-                    if (isset($this->lintErrorMap[ $error_code ])) {
-                        throw new Exception("Plugin " . $plugin->getId() . " tries to redefine error code '$error_code'");
-                    }
-                    $this->lintErrorMap[$error_code] = $error_description;
-                }
-            }
+    // experimental
+    public function getProjectReport(XRef_IProjectDatabase $db) {
+        $plugins = $this->getPlugins("XRef_IProjectLintPlugin");
+        $report = array();
+        foreach ($plugins as /** @var $plugin XRef_IProjectLintPlugin */ $plugin) {
+            $plugin_report = $plugin->getProjectReport($db);
+            $report = array_merge_recursive($report, $plugin_report);
         }
 
-        // also init once
+        return $report;
+    }
+
+    /**
+     * @param array $report - array(filename => list of XRef_CodeDefects)
+     */
+    public function sortAndFilterReport(array $report) {
+        // init once
         if (is_null($this->lintIgnoredErrors)) {
             $this->lintIgnoredErrors = array();
             foreach (self::getConfigValue("lint.ignore-error", array()) as $error_code) {
-                if (! isset($this->lintErrorMap[$error_code])) {
-                    error_log("Unknown error code '$error_code'");
-                }
                 $this->lintIgnoredErrors[$error_code] = true;
             }
         }
 
-        // also once
+        // also init once
         if (is_null($this->lintReportLevel)) {
             $r = XRef::getConfigValue("lint.report-level", "warning");
             if ($r == "errors" || $r == "error") {
@@ -577,38 +521,30 @@ class XRef {
             $this->lintReportLevel = $reportLevel;
         }
 
-        $report = array();
-        foreach ($plugins as $pluginId => $plugin) {
-            $found_defects = $plugin->getReport($pf);
-            if ($found_defects) {
-                foreach ($found_defects as $d) {
-                    list($token, $error_code) = $d;
-
-                    if (isset($this->lintIgnoredErrors[ $error_code ])) {
-                        continue;
-                    }
-
-                    if (! isset($this->lintErrorMap[$error_code])) {
-                        error_log("No descriptions for error code '$error_code'");
-                        continue;
-                    }
-
-                    $description = $this->lintErrorMap[ $error_code ];
-                    if (! isset($description["severity"]) || ! isset($description["message"])) {
-                        error_log("Invalid description for error code '$error_code'");
-                        continue;
-                    }
-
-                    if ($description["severity"] < $this->lintReportLevel) {
-                        continue;
-                    }
-                    $report[] = new XRef_CodeDefect($token, $error_code, $description["severity"], $description["message"]);
+        $filtered_report = array();
+        foreach ($report as $file_name => $defects_list) {
+            $filtered_list = array();
+            foreach ($defects_list as /** @var XRef_CodeDefect $d */$d) {
+                if ($d->severity < $this->lintReportLevel) {
+                    continue;
                 }
+                if (isset($this->lintIgnoredErrors[ $d->errorCode ])) {
+                    continue;
+                }
+                $filtered_list[] = $d;
             }
-        }
 
-        usort($report, array("XRef", "_sortLintReportByLineNumber"));
-        return $report;
+            if ($filtered_list) {
+                $filtered_report[$file_name] = $filtered_list;
+            }
+
+        }
+        ksort($filtered_report); // sort report by file names
+        foreach ($filtered_report as $file_name => $r) {
+            // sort by line numbers
+            usort($filtered_report[$file_name], array("XRef", "_sortLintReportByLineNumber"));
+        }
+        return $filtered_report;
     }
 
     static function _sortLintReportByLineNumber ($a, $b) {
@@ -622,7 +558,6 @@ class XRef {
             return -1;
         }
     }
-
 
     /*----------------------------------------------------------------
      *
@@ -648,12 +583,26 @@ class XRef {
             $filename = getenv("XREF_CONFIG");
         }
 
-        // config in installation dir?
+        // config file in .xref dir in current dir, or in any parent dirs
         if (!$filename) {
-            $f = ("@data_dir@" == "@"."data_dir@") ? dirname(__FILE__) . "/config/xref.ini" : "@data_dir@/XRef/config/xref.ini";
-            if (file_exists($f)) {
-                $filename = $f;
+            $dir = getcwd();
+            while ($dir) {
+                if (file_exists("$dir/.xref/xref.ini")) {
+                    $filename = "$dir/.xref/xref.ini";
+                    break;
+                }
+                $parent_dir = dirname($dir); // one step up
+                if ($parent_dir == $dir) {
+                    // top level, can't go up
+                    break;
+                }
+                $dir = $parent_dir;
             }
+        }
+
+        // special value for filename - means don't read any config file
+        if ($filename && $filename == 'default') {
+            $filename = null;
         }
 
         return $filename;
@@ -678,7 +627,7 @@ class XRef {
                 throw new Exception("Error: can parse ini file '$filename'");
             }
         } else {
-            // if no file explicitely specified, and default config doesn't exist,
+            // if no file explicitly specified, and default config doesn't exist,
             // don't throw error and provide default config values
             if (XRef::verbose()) {
                 echo "Using default config\n";
@@ -722,12 +671,14 @@ class XRef {
                 'XRef_Lint_StaticThis',
                 'XRef_Lint_AssignmentInCondition',
                 'XRef_Lint_ClosingTag',
+                'XRef_ProjectLint_CheckClassAccess',
+                'XRef_ProjectLint_MissedParentConstructor',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
             ),
-            'lint.ignore-error'       => array(),
             'lint.add-constant'             => array(),
             'lint.add-function-signature'   => array(),
             'lint.add-global-var'           => array(),
+            'lint.ignore-missing-class'     => array('PEAR', 'PHPUnit_Framework_TestCase'), // most commonly used library classes
             'lint.ignore-error'       => array(),
             'lint.check-global-scope' => true,
             'ci.source-code-manager'  => 'XRef_SourceCodeManager_Git',
@@ -772,6 +723,113 @@ class XRef {
         return self::$config;
     }
 
+    public function init() {
+
+        $cwd = getcwd();
+        // create data dir
+        if (!file_exists(".xref")) {
+            echo "Creating dir .xref\n";
+            if (!mkdir(".xref")) {
+                throw new Exception("Can't create dir .xref");
+            }
+        }
+
+        $config_filename = ".xref/xref.ini";
+        if (file_exists($config_filename)) {
+            echo "Config file $config_filename exists; won't overwrite\n";
+        } else {
+            echo "Creating config file $config_filename\n";
+            // create config file
+            $fh = fopen($config_filename, "w");
+            if (!$fh) {
+                throw new Exception("Can't create file $config_filename");
+            }
+            $config = array();
+
+            $config[] = "[project]";
+            $config[] = array("name", basename($cwd));
+            $config[] = array("source-code-dir[]", realpath($cwd));
+            $config[] = null;
+
+            $config[] = "[xref]";
+            $config[] = array("data-dir", realpath("$cwd/.xref"));
+            $config[] = array("project-check", "true");
+            $config[] = array(";smarty-class", "/path/to/Smarty.class.php");
+            $config[] = array(";script-url", "http://xref.your.domain.com/bin");
+            $config[] = null;
+
+            $config[] = "[lint]";
+            $config[] = array("ignore-missing-class[]", 'PHPUnit_Framework_TestCase');
+            $config[] = array(";ignore-error[]", 'xr052');
+            $config[] = null;
+
+            $config[] = "[doc]";
+            $config[] = array(";output-dir", "/path/for/generated/doc");
+            $config[] = null;
+
+            if (file_exists(".git")) {
+                // TODO: need a better way to check that this is a git project
+                // http://stackoverflow.com/questions/957928
+                // git rev-parse --show-toplevel
+                $config[] = "[git]";
+                $config[] = array("repository-dir", realpath($cwd));
+                $config[] = null;
+
+                $config[] = "[ci]";
+                $config[] = array("incremental", "true");
+                $config[] = array("update-repository", "true");
+                $config[] = null;
+
+                $config[] = "[mail]";
+                $config[] = array("from", "XRef Continuous Integration");
+                $config[] = array(";reply-to", "you@your.domain.com");
+                $config[] = array(";to[]", "{%ae}");
+                $config[] = array(";to[]", "you@your.domain.com");
+                $config[] = null;
+            }
+
+            foreach ($config as $line) {
+                $l = null;
+                if (!$line) {
+                    $l = "\n";
+                } elseif (!is_array($line)) {
+                    $l = "$line\n";
+                } else {
+                    list($k, $v) = $line;
+                    if (preg_match('#^\\w+$#', $v)) {
+                        $l = sprintf("%-22s= %s\n", $k, $v);
+                    } else {
+                        $v = preg_replace('#\\\\#', '\\\\', $v);
+                        $l = sprintf("%-22s= \"%s\"\n", $k, $v);
+                    }
+                }
+                fwrite($fh, $l);
+            }
+            fclose($fh);
+
+            // re-read config values from the file
+            self::getConfig(true);
+        }
+
+        // index files for the first time
+        $this->loadPluginGroup('lint');
+        $file_provider = new XRef_FileProvider_FileSystem( $cwd );
+        $lint_engine = new XRef_LintEngine_ProjectCheck($this);
+        $lint_engine->setShowProgressBar(true);
+        $lint_engine->setRewriteCache(true);    // re-index files and refill cache
+        echo "Indexing files\n";
+        $lint_engine->getReport($file_provider);
+        echo "\nDone.\n";
+        // done
+    }
+
+    /** basic console progress bar: 10/100 files processed */
+    public static function progressBar($current, $total, $text) {
+        $len = strlen($text);
+        $text = ($len < 60) ? str_pad($text, 60) : "..." . substr($text, $len-57);
+        echo sprintf("\r%4d/%4d %s ", $current, $total, $text);
+    }
+
     /**
      * Returns value of given key from config if defined in config, or default value if supplied, or throws exception.
      *
@@ -812,11 +870,18 @@ class XRef {
     private static $needHelp;
     private static $verbose;
 
-    // optionsList: array of arrays (shortOpt, longOpt, usage, description)
+    // optionsList: array of arrays (shortOpt, longOpt, usage, description, isArray)
     private static $optionsList = array(
         array('c:', 'config=',  '-c, --config=FILE',    'Path to config file',          false),
         array('v',  'verbose',  '-v, --verbose',        'Be noisy',                     false),
-        array('h',  'help',     '-h, --help',           'Print this help and exit',     false),
+        array('h::','help==',   '-h, --help',
+            array(
+                "Print this help and exit",
+                "--help=defines  show list of config values",
+                "--help=errors   show list of errors and their codes",
+            ),
+            false
+        ),
         array('d:', 'define=',  '-d, --define key=val', 'Override config file values',  true),
     );
 
@@ -827,7 +892,7 @@ class XRef {
     /**
      * Parses command line-arguments and returns found options/arguments.
      *
-     *  input (for tests only, by default it takes real comman-line option list):
+     *  input (for tests only, by default it takes real command-line option list):
      *      array("scriptname.php", "--help", "-d", "foo=bar", "--config=xref.ini", "filename.php")
      *
      *  output:
@@ -836,11 +901,11 @@ class XRef {
      *          array( "filename.php" )
      *      );
      *
-     * @return tuple(array $commandLineOptions, array $commandLineArguments)
+     * @return array(array $commandLineOptions, array $commandLineArguments)
      */
-    public static function getCmdOptions( $testArgs = null ) {
+    public static function getCmdOptions( $test_args = null ) {
 
-        if (is_null($testArgs)) {
+        if (is_null($test_args)) {
             if (self::$options) {
                 return array(self::$options, self::$arguments);
             }
@@ -850,37 +915,52 @@ class XRef {
             }
         }
 
-        $shortOptionsList = array();    // array( 'h', 'v', 'c:' )
-        $longOptionsList = array();     // array( 'help', 'verbose', 'config=' )
-        $renameMap = array();           // array( 'h' => 'help', 'c' => 'config' )
-        $isArrayMap = array();          // array( 'help' => false, 'define' => true, )
+        $short_options_list = array();  // array( 'h', 'v', 'c:' )
+        $long_options_list = array();   // array( 'help', 'verbose', 'config=' )
+        $rename_map = array();          // array( 'h' => 'help', 'c' => 'config' )
+        $is_array_map = array();        // array( 'help' => false, 'define' => true, )
         foreach (self::$optionsList as $o) {
-            $shortOptionsList[] = $o[0];
-            $longOptionsList[] = $o[1];
-            $short = preg_replace('/\W$/', '', $o[0]); // remove ':' and '=' at the end of specificators
-            $long = preg_replace('/\W$/', '', $o[1]);
-            $renameMap[ $short ] = $long;
-            $isArrayMap[ $long ] = $o[4];
+            $short = $o[0];
+            $long = $o[1];
+            if ($short) {
+                $short_options_list[] = $short;
+            }
+            if ($long) {
+                $long_options_list[] = $long;
+            }
+            $short = preg_replace('/\W+$/', '', $short); // remove ':' and '=' at the end of specificatios
+            $long = preg_replace('/\W+$/', '', $long);
+            if ($short && $long) {
+                $rename_map[ $short ] = $long;
+            }
+            $is_array_map[ ($long) ? $long : $short ] = $o[4];
         }
 
-        // TODO: write a better command-line parser
-        // too bad: the code below (from official Console/Getopt documentation) doesn't work in E_STRICT mode
-        // and Console_GetoptPlus is not installed by default on most systems :(
-        $error_reporting = error_reporting();
-        error_reporting($error_reporting & ~E_STRICT);
-        require_once 'Console/Getopt.php';
-        $getopt = new Console_Getopt();
-        $args = ($testArgs) ? $testArgs : $getopt->readPHPArgv();
-        $getoptResult = $getopt->getopt( $args, implode('', $shortOptionsList), $longOptionsList);
-        if (PEAR::isError($getoptResult)) {
-            throw new Exception('Error: ' . $getoptResult->getMessage());
+        // * DONE: write a better command-line parser
+        // * too bad: the code below (from official Console/Getopt documentation) doesn't work in E_STRICT mode
+        // * and Console_GetoptPlus is not installed by default on most systems :(
+        // $error_reporting = error_reporting();
+        // error_reporting($error_reporting & ~E_STRICT);
+        // require_once 'Console/Getopt.php';
+        // $getopt = new Console_Getopt();
+        // $args = ($test_args) ? $test_args : $getopt->readPHPArgv();
+        // $getoptResult = $getopt->getopt( $args, implode('', $short_options_list), $long_options_list);
+        // if (PEAR::isError($getoptResult)) {
+        //     throw new Exception( $getoptResult->getMessage() );
+        // }
+        // error_reporting($error_reporting);
+        // * end of Console_Getopt dependent code
+
+        global $argv;
+        $args = ($test_args) ? $test_args : $argv;
+        $getopt_result = self::myGetopt($args, implode('', $short_options_list), $long_options_list);
+        if (!is_array($getopt_result)) {
+            throw new Exception($getopt_result);
         }
-        error_reporting($error_reporting);
-        // end of Console_Getopt dependent code
 
         $options = array();
-        list($optList, $arguments) = $getoptResult;
-        foreach ($optList as $o) {
+        list($opt_list, $arguments) = $getopt_result;
+        foreach ($opt_list as $o) {
             list($k, $v) = $o;
             // change default value for command-line options that doesn't require a value
             if (is_null($v)) {
@@ -890,11 +970,11 @@ class XRef {
             $k = preg_replace('#^-+#', '', $k);
 
             // force long option names
-            if (isset($renameMap[$k])) {
-                $k = $renameMap[$k];
+            if (isset($rename_map[$k])) {
+                $k = $rename_map[$k];
             }
 
-            if ($isArrayMap[$k]) {
+            if ($is_array_map[$k]) {
                 if (!isset($options[$k])) {
                     $options[$k] = array();
                 }
@@ -909,6 +989,206 @@ class XRef {
         return array($options, $arguments);
     }
 
+    const
+        OPT_REQ_VALUE = 1,
+        OPT_MAY_VALUE = 2,
+        OPT_NO_VALUE = 3;
+
+    /**
+     * This is a replacement for Console_Getopt()
+     *
+     * The wheel is reinvented here because other options were:
+     * 1) getopt()
+     *      "=" as argument/value separator is added only in php 5.3+
+     * 2) Console_GetOpt
+     *      recommended code from examples "if (PEAR::isError($result))"
+     *      dies in strict mode in php 5.5
+     * 3) Console_GetoptPlus
+     *      has only PEAR distribution, which requires extra steps on MacOS
+     *      (PEAR php_dir is not in "include_path" by default
+     * 4) Composer's ulrichsg/getopt-php
+     *      requires PHP 5.3+
+     *
+     * So, if you need code to parse command-line arguments that works in
+     * range of php 5.2 - php 5.5, feel free to take it from here.
+     * Or invent your own wheel.
+     *
+     * @param string $short_options - e.g. 'a:b::c'
+     *      ('-a' requires value, for '-b' value is optional, '-c' takes no values)
+     * @param array $long_options, e.g. array('foo=', 'bar==', 'baz')
+     *      ":" and "=" are fully interchangeable
+     * @param array $args
+     * @return array|string - returns either
+     *  string with error message or
+     *  array($options, $arguments)
+     */
+    public static function myGetopt($args, $short_options, $long_options) {
+        $options = array();
+        $arguments = array();
+
+        $s_options = array();   // map ('short option letter' => OPT_REQ_VALUE)
+        $l_options = array();   // map ('long option name'  => OPT_NO_VALUE)
+
+        // 1. parse specification for short options
+        $s_chars = preg_split('##', $short_options, -1, PREG_SPLIT_NO_EMPTY);
+        while ($s_chars) {
+            $char = array_shift($s_chars);
+            if (!preg_match('#[A-Za-z]#', $char)) {
+                return "Invalid short option specification ($short_options, $char)";
+            }
+
+            $spec = self::OPT_NO_VALUE;
+            if ($s_chars && ($s_chars[0] == ':' || $s_chars[0] == '=')) {
+                $spec = self::OPT_REQ_VALUE;
+                array_shift($s_chars);
+                if ($s_chars && ($s_chars[0] == ':' || $s_chars[0] == '=')) {
+                    $spec = self::OPT_MAY_VALUE;
+                    array_shift($s_chars);
+                }
+            }
+            if (isset($s_options[$char])) {
+                return "Duplicate short option specification ($short_options, $char)";
+            }
+            $s_options[$char] = $spec;
+        }
+
+        // 2. parse long option specifications
+        foreach ($long_options as $long_name) {
+            if (!preg_match('#^([A-Za-z0-9_-]+)([:=]{0,2})$#', $long_name, $matches)) {
+                return "Invalid long option specification: $long_name";
+            }
+            $name = $matches[1];
+            switch (strlen($matches[2])) {
+                case 0: $spec = self::OPT_NO_VALUE; break;
+                case 1: $spec = self::OPT_REQ_VALUE; break;
+                case 2: $spec = self::OPT_MAY_VALUE; break;
+                default: return "Invalid long option specification: $long_name";
+            }
+            if (isset($l_options[$name])) {
+                return "Duplicate long option specification ($long_name)";
+            }
+            $l_options[$name] = $spec;
+        }
+
+        // 3. parse command-line arguments
+        array_shift($args); // remove the first argument - the script name
+        while (count($args)) {
+            $arg = array_shift($args);
+            if ($arg == '--') {
+                // -- arg
+                $arguments = array_merge($arguments, $args);
+                break;
+            } elseif (strlen($arg) > 2 && substr($arg, 0, 2) == '--') {
+                // long option:
+                //  --foo
+                //  --foo=bar
+                //  --foo bar
+                $name = substr($arg, 2);
+                $value = null;
+                if (preg_match('#^(.*?)=(.*)$#', $name, $matches)) {
+                    // --foo=bar
+                    // --foo=
+                    $name = $matches[1];
+                    $value = $matches[2];
+                }
+
+                if (!isset($l_options[$name])) {
+                    return "Unknown option '--$name'";
+                }
+
+                if ($l_options[$name] == self::OPT_REQ_VALUE) {
+                    // long option requires a value
+                    // --long=value     // ok
+                    // --long value     // ok
+                    // --long <EOF>     // error
+                    if (is_null($value)) {
+                        if (!$args) {
+                            return "Option '--$name' requires a value";
+                        } else {
+                            $value = array_shift($args);
+                        }
+                    }
+                } elseif ($l_options[$name] == self::OPT_MAY_VALUE) {
+                    // long option may have an optional value
+                    // --long=value     // ok
+                    // --long value     // ok
+                    // --long <EOF>     // ok, default value
+                    // --long --another // ok, default value
+                    if (is_null($value)) {
+                        if ($args && substr($args[0], 0, 1) != '-') {
+                            $value = array_shift($args);
+                        } else {
+                            $value = true;
+                        }
+                    }
+                } else {
+                    // long option doesn't have a valuea
+                    // --long
+                    // --long=value // error
+                    if (is_null($value)) {
+                        $value = true;
+                    } else {
+                        return "Option '--$name' doesn't support values";
+                    }
+                }
+                $options[] = array($name, $value);
+            } elseif (strlen($arg) > 1 && substr($arg, 0, 1) == '-') {
+                // short options
+                // -a
+                // -a foo
+                // -abc
+
+                $chars = preg_split('##', substr($arg, 1), -1, PREG_SPLIT_NO_EMPTY);
+                while ($chars) {
+                    $char = array_shift($chars);
+                    $value = null;
+                    if (!isset($s_options[$char])) {
+                       return "Unknown option '$char'";
+                    }
+                    if ($s_options[$char] == self::OPT_REQ_VALUE) {
+                        // short option requires a value:
+                        // -s foo       // ok
+                        // -sfoo        // ok
+                        // -s <EOF>     // error
+                        if ($chars) {
+                            // -sfoo
+                            $value = implode($chars);
+                            $chars = null;
+                        } else {
+                            // -s foo
+                            if ($args) {
+                                $value = array_shift($args);
+                            } else {
+                                return "Option '$char' requires a value";
+                            }
+                        }
+                    } elseif ($s_options[$char] == self::OPT_MAY_VALUE) {
+                        if ($chars) {
+                            // -sfoo
+                            $value = implode($chars);
+                        } else {
+                            if (substr($args[0], 0, 1) != '-') {
+                                // -s --other-option
+                                $value = array_shift($args);
+                            } else {
+                                // -s foo
+                                $value = true;
+                            }
+                        }
+                    } else {
+                        $value = true;
+                    }
+                    $options[] = array($char, $value);
+                }
+            } else {
+                // just an argument
+                $arguments[] = $arg;
+            }
+        }
+
+        return array($options, $arguments);
+    }
+
     /**
      * For CLI scripts only: if -h / --help option was in command-line arguments
      *
@@ -917,33 +1197,133 @@ class XRef {
     public static function needHelp() {
         if (! isset(self::$needHelp)) {
             list($options) = self::getCmdOptions();
-            self::$needHelp = isset($options['help']) && $options['help'];
+            self::$needHelp = isset($options['help']) ? $options['help'] : false;
         }
         return self::$needHelp;
     }
 
-    public static function showHelpScreen($toolName, $usageString=null) {
+    public static function showHelpScreen($tool_name, $usage_string = null) {
         global $argv;
-        if (!$usageString) {
-            $usageString = "$argv[0] [options]";
+        if (!$usage_string) {
+            $usage_string = "$argv[0] [options]";
         }
 
-        $pathToReadMe = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md" : '@doc_dir@/XRef/README.md';
-        $configFile = self::getConfigFilename();
-        if (!$configFile) {
-            $configFile = "not found; using default values";
-        }
-        echo "$toolName, v. " . self::version() . "\n";
+        echo "$tool_name, v. " . self::version() . "\n";
         echo "Usage:\n";
-        echo "  $usageString\n";
-        echo "Options:\n";
-        foreach (self::$optionsList as $o) {
-            list($shortName, $longName, $usage, $desc) = $o;
-            echo sprintf("  %-20s %s\n", $usage, $desc);
+        echo "    $usage_string\n";
+
+        if (self::needHelp() === "defines" || self::needHelp() === "define") {
+            // show settings that can be changes with "--define"
+            echo "List of config file settings:\n";
+            self::showConfigValues();
+        } elseif (self::needHelp() === "errors" || self::needHelp() === "error") {
+            echo "List of errors:\n";
+            self::showErrors();
+        } else {
+            echo "Options:\n";
+            foreach (self::$optionsList as $o) {
+                list($shortName, $longName, $usage, $desc) = $o;
+                if (!is_array($desc)) {
+                    printf("    %-20s %s\n", $usage, $desc);
+                } else {
+                    printf("    %-20s %s\n", $usage, array_shift($desc));
+                    foreach ($desc as $d) {
+                        printf("        %s\n", $d);
+                    }
+                }
+            }
         }
-        echo "Config file:\n";
-        echo "  $configFile\n";
-        echo "See also: $pathToReadMe\n";
+
+        $config_file = self::getConfigFilename();
+        if (!$config_file) {
+            $config_file = "(not found; using default values)";
+        }
+        $path_to_readme     = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md"    : '@doc_dir@/XRef/README.md';
+        $path_to_examples   = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/examples"     : '@doc_dir@/XRef/examples';
+        $path_to_webscripts = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/web-scripts"  : "@php_dir@/XRef/web-scripts";
+        echo "Locations:\n";
+        echo "  config file:    $config_file\n";
+        echo "  readme:         $path_to_readme\n";
+        echo "  examples:       $path_to_examples\n";
+        echo "  web-scripts:    $path_to_webscripts\n";
+    }
+
+    protected static function showErrors() {
+
+        // map: error code => array("message" => message, "severity" => severity)
+        $errors = array(
+            XRef::ERROR_CODE_CANT_PARSE_FILE => array(
+                "message"   => XRef::ERROR_MESSAGE_CANT_PARSE_FILE,
+                "severity"  => XRef::FATAL,
+            ),
+        );
+
+        $xref = new XRef();
+        $xref->loadPluginGroup('lint');
+        foreach ($xref->getPlugins('XRef_ILintPlugin') as /** @var XRef_ILintPlugin $plugin */ $plugin) {
+            $map = $plugin->getErrorMap();
+            $errors = array_merge($errors, $map);
+        }
+        foreach ($xref->getPlugins('XRef_IProjectLintPlugin') as /** @var XRef_IProjectLintPlugin $plugin */ $plugin) {
+            $map = $plugin->getErrorMap();
+            $errors = array_merge($errors, $map);
+        }
+
+        ksort($errors);
+
+        $format = "%-6s %-10s %s\n";
+        $spacer = sprintf($format, str_repeat('-', 6), str_repeat('-', 10), str_repeat('-', 50));
+        printf($format, "Code", "Severity", "Message");
+        echo $spacer;
+        foreach ($errors as $code => $details) {
+            printf($format, $code, XRef::$severityNames[ $details["severity"] ], $details["message"]);
+        }
+        echo $spacer;
+    }
+
+    protected static function showConfigValues() {
+        $config_values = array();   // map: name => array("type descr", "required/optional/etc");
+        $path_to_readme = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md" : '@doc_dir@/XRef/README.md';
+        if ($fh = fopen($path_to_readme, "r")) {
+            while (true) {
+                $line = fgets($fh);
+                if ($line === false) {
+                    break;
+                }
+                if (preg_match('#\\* \\*\\*(\\S+)\\*\\*\\s+\\((.+);\s+(.+)\\)#', $line, $matches)) {
+                    $config_values[ $matches[1] ] = array($matches[2], $matches[3]);
+                }
+            }
+            fclose($fh);
+        } else {
+            throw new Exception("Can't read file '$path_to_readme'");
+        }
+        ksort($config_values);
+        $format = "%-30s %-10s %-26s %s\n";
+        $spacer = sprintf($format, str_repeat('-', 30), str_repeat('-', 10), str_repeat('-', 26), str_repeat('-', 20));
+        printf($format, "Name", "Req?", "Type", "Value");
+        echo $spacer;
+        foreach ($config_values as $name => $l) {
+            list($type, $req) = $l;
+            $n = preg_replace('#\\[\\]$#', '', $name);
+            $value = self::getConfigValue($n, '');
+            if (is_array($value)) {
+                $value = "[" . implode(", ", $value) . "]";
+            } elseif ($value === true || $value === "1") {
+                $value = 'true';
+            } elseif ($value === false) {
+                $value = 'false';
+            } elseif ($value) {
+                $value = "'$value'";
+            } else {
+                $value = '';
+            }
+            if (strlen($value) > 30) {
+                $value = substr($value, 0, 27) . "...";
+            }
+            printf($format, $name, $req, $type, $value);
+        }
+        echo $spacer;
     }
 
     /**
@@ -985,7 +1365,7 @@ class XRef {
         self::createDirIfNotExist("$smartyTmpDir/smarty/configs");
 
         $defaultTemplateDir = ("@data_dir@" == "@"."data_dir@") ?
-            dirname(__FILE__) . "/templates" : "@data_dir@/XRef/templates";
+            dirname(__FILE__) . "/templates/smarty" : "@data_dir@/XRef/templates/smarty";
         $templateDir = self::getConfigValue("xref.template-dir", $defaultTemplateDir);
 
         $smarty = new Smarty();
@@ -1042,6 +1422,25 @@ class XRef {
         $str = XRef::$severityNames[ $params['severity'] ];
         return ($params['html']) ? "<span class='$str'>$str</span>" : $str;
     }
+
+    public static function isPublic($attriburtes) {
+        // either explicit public, or no visibility modifier at all (compat mode with php 4)
+        return
+            ($attriburtes & self::MASK_PUBLIC) != 0
+            || ($attriburtes & self::MASK_PRIVATE) == 0 && ($attriburtes & self::MASK_PROTECTED) == 0;
+
+    }
+
+    public static function isPrivate($attriburtes) {
+        return ($attriburtes & self::MASK_PRIVATE);
+    }
+    public static function isProtected($attriburtes) {
+        return ($attriburtes & self::MASK_PROTECTED);
+    }
+    public static function isStatic($attriburtes) {
+        return ($attriburtes & self::MASK_STATIC);
+    }
+
 
 }
 

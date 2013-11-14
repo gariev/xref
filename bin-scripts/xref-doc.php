@@ -13,7 +13,13 @@ $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@ph
 require_once("$includeDir/XRef.class.php");
 
 // command-line arguments
-list ($options, $arguments) = XRef::getCmdOptions();
+try {
+    list ($options, $arguments) = XRef::getCmdOptions();
+} catch (Exception $e) {
+    error_log($e->getMessage());
+    error_log("See 'xref-doc --help'");
+    exit(1);
+}
 
 //help
 if (XRef::needHelp() || count($arguments)) {
@@ -22,21 +28,24 @@ if (XRef::needHelp() || count($arguments)) {
 }
 
 $xref = new XRef();
-foreach (XRef::getConfigValue("doc.source-code-dir") as $path) {
-    $xref->addPath($path);
-}
-$xref->removeStartingPath( XRef::getConfigValue("doc.remove-path", '') );
 $xref->setOutputDir( XRef::getConfigValue("doc.output-dir") );
-
 $xref->loadPluginGroup("doc");
 $plugins = $xref->getPlugins("XRef_IDocumentationPlugin");
+
+$path = XRef::getConfigValue("project.source-code-dir");
+$file_provider = new XRef_FileProvider_FileSystem( $path );
+$exclude_paths = XRef::getConfigValue("project.exclude-path", array());
+if ($exclude_paths) {
+    $file_provider->excludePaths($exclude_paths);
+}
 $numberOfFiles = 0;
 $numberOfCodeLines = 0;
 
 // 1. Call each plugin once for each input file
-foreach ($xref->getFiles() as $filename => $ext) {
+$files = $xref->filterFiles( $file_provider->getFiles() );
+foreach ($files as $filename) {
     try {
-        $pf = $xref->getParsedFile($filename, $ext);
+        $pf = $xref->getParsedFile($filename);
         foreach ($plugins as $pluginId => $plugin) {
             $plugin->generateFileReport($pf);
         }

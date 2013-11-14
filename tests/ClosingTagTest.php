@@ -18,7 +18,7 @@ class ClosingTagTest extends BaseLintTest {
         $testPhpCode = ' <?php
         ';
         $exceptedDefects = array(
-            array(' ',   1, XRef::WARNING),
+            array('\\x20',   1, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
 
@@ -44,7 +44,7 @@ class ClosingTagTest extends BaseLintTest {
         $testPhpCode = "\xef\xbb\xbf <?php
         ";
         $exceptedDefects = array(
-            array("\\xef\\xbb\\xbf ",   1, XRef::WARNING),
+            array("\\xef\\xbb\\xbf\\x20",   1, XRef::WARNING),
         );
         $this->checkPhpCode($testPhpCode, $exceptedDefects);
 

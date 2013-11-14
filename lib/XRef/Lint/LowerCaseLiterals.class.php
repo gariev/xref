@@ -7,18 +7,18 @@
 
 class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
-    const E_LOWER_CASE_STRING_LITERAL = "XL01";
-    const E_UNPREFIXED_CLASS_CONSTANT = "XL02";
+    const E_LOWER_CASE_STRING_LITERAL = "xr021";
+    const E_UNPREFIXED_CLASS_CONSTANT = "xr022";
 
     public function getErrorMap() {
         return array(
             self::E_LOWER_CASE_STRING_LITERAL => array(
                 "severity" => XRef::WARNING,
-                "message" => "Mixed/Lower-case unquoted string literal",
+                "message" => "Mixed/Lower-case unquoted string literal (%s)",
             ),
             self::E_UNPREFIXED_CLASS_CONSTANT => array(
                 "severity" => XRef::WARNING,
-                "message" => "Possible use of class constant without class prefix",
+                "message" => "Possible use of class constant without class prefix (%s)",
             ),
         );
     }
@@ -73,6 +73,8 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
         $tokens = $pf->getTokens();
         $tokens_count = count($tokens);
+        $is_inside_interpolated_string = false;
+
         for ($i=0; $i<$tokens_count; ++$i) {
             $t = $tokens[$i];
 
@@ -110,6 +112,10 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                 } while ($t->kind==T_STRING || $t->kind==T_NS_SEPARATOR);
                 $i = $t->index;
                 continue;
+            }
+
+            if ($t->kind == XRef::T_ONE_CHAR && $t->text == '"') {
+                $is_inside_interpolated_string = ! $is_inside_interpolated_string;
             }
 
             if ($t->kind == T_STRING) {
@@ -209,6 +215,24 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
 
                 }
 
+                if ($is_inside_interpolated_string) {
+                    // exception: it's ok to index arrays inside interpolated (double-quoted) strings
+                    // with bare words:
+                    //      "Foo is $data[foo]";        // ok
+                    //      "Foo is {$data['foo']}";    // ok
+                    //      "Foo is {$data[foo]}";      // NOT ok
+                    if ($p->text == '[') {
+                        $pp = $p->prev();
+                        if ($pp && $pp->kind == T_VARIABLE) {
+                            $pp = $pp->prev();
+                            if ($pp && $pp->kind != T_CURLY_OPEN) {
+                                // ok, allow "$data[something]"
+                                continue;
+                            }
+                        }
+                    }
+                }
+
                 // is it some known class constant used without prefix?
                 //  class Foo { const BAR = 1; }
                 //  echo BAR; // should be Foo::BAR (or self::BAR inside the class)
@@ -222,7 +246,6 @@ class XRef_Lint_LowerCaseLiterals extends XRef_ALintPlugin {
                     // ok, all-uppercase, SOME_CONSTANT, I hope
                     continue;
                 }
-
 
                 $this->addDefect($t, self::E_LOWER_CASE_STRING_LITERAL);
                 $seen_strings[ $t->text ] = 1;

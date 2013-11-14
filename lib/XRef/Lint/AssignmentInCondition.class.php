@@ -7,19 +7,19 @@
 
 class XRef_Lint_AssignmentInCondition extends XRef_ALintPlugin {
 
-    const E_ASSIGMENT_IN_CONDITION = "XA01";
+    const E_ASSIGNMENT_IN_CONDITION = "xr041";
 
     public function getErrorMap() {
         return array(
-            self::E_ASSIGMENT_IN_CONDITION => array(
+            self::E_ASSIGNMENT_IN_CONDITION => array(
                 "severity"  => XRef::WARNING,
-                "message"   => "Assignment in conditional expression",
+                "message"   => "Assignment in conditional expression (%s)",
             ),
         );
     }
 
     public function __construct() {
-        parent::__construct("lint-assignemnet-in-condition", "Lint (assignement in condition)");
+        parent::__construct("lint-assignment-in-condition", "Lint (assignment in condition)");
     }
 
     protected $supportedFileType    = XRef::FILETYPE_PHP;
@@ -66,7 +66,7 @@ class XRef_Lint_AssignmentInCondition extends XRef_ALintPlugin {
                         $n = $n->nextNS();
                         $nn = $n->nextNS();
                         if ($nn->text == ')' || $nn->kind == T_BOOLEAN_AND || $nn->kind == T_BOOLEAN_OR) {
-                            $this->addDefect($n, self::E_ASSIGMENT_IN_CONDITION);
+                            $this->addDefect($n, self::E_ASSIGNMENT_IN_CONDITION);
                         }
                     }
                 }

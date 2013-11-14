@@ -13,7 +13,6 @@
 
 $includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/XRef";
 require_once "$includeDir/XRef.class.php";
-require_once "$includeDir/lib/ci-tools.php";
 
 $xref = new XRef();
 $xref->loadPluginGroup("lint");
@@ -24,34 +23,18 @@ $rev2 = isset($_REQUEST["rev2"]) ? preg_replace('#[^\w\-/}{ @]#', '', $_REQUEST[
 
 if ($rev1 && $rev2) {
     $fileErrors = array();
-    $listOfFiles = $scm->getListOfModifiedFiles($rev1, $rev2);
-    foreach ($listOfFiles as $file) {
-        if (!preg_match("#\\.php\$#", $file)) {
-            continue;
-        }
-        try {
-            $oldErrors = XRef_getErrorsList($xref, $file, $rev1);
-        } catch (Exception $e) {
-            // oops, syntax errors in previsous version of the file?
-            // let's report all errors in the file then.
-            $oldErrors = array();
-        }
-        try {
-            $curErrors = XRef_getErrorsList($xref, $file, $rev2);
-        } catch (Exception $e) {
-            $fileErrors[$file] = "Can't parse file, syntax error? (" . $e->getMessage() . ")";
-            continue;
-        }
-        $errors = XRef_getNewErrors($oldErrors, $curErrors);
-        if (count($errors)) {
-            $fileErrors[$file] = $errors;
-        }
-    }
+    $modified_files = $scm->getListOfModifiedFiles($rev1, $rev2);
+    $file_provider1 = $scm->getFileProvider($rev1);
+    $file_provider2 = $scm->getFileProvider($rev2);
+    $lint_engine = XRef::getConfigValue("xref.project-check", true)
+            ? new XRef_LintEngine_ProjectCheck($xref)
+            : new XRef_LintEngine_Simple($xref);
+    $errors = $lint_engine->getIncrementalReport($file_provider1, $file_provider2, $modified_files);
 }
 
 echo $xref->fillTemplate("ci-web.tmpl", array(
     'rev1'          => $rev1,
     'rev2'          => $rev2,
-    'fileErrors'    => $fileErrors,
+    'fileErrors'    => $errors,
 ));
 
