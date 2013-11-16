@@ -82,6 +82,9 @@ class XRef_Doc_ConstantsPHP extends XRef_APlugin implements XRef_IDocumentationP
                             // method call
                             continue;
                         }
+                    } elseif ($n->text == '$') {
+                        // rare case: Class::$$static_field_name
+                        continue;
                     } else {
                         error_log("What's this: $n->text");
                         continue;

@@ -138,6 +138,9 @@ class XRef_Plugin_Classes extends XRef_APlugin implements XRef_IDocumentationPlu
                         if ($nn->text != '(') {
                             continue;
                         }
+                    } elseif ($n->text == '$') {
+                        // rare case: Class::$$static_field_name
+                        continue;
                     } else {
                         throw new XRef_ParseException($n);
                     }
