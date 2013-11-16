@@ -1,5 +1,5 @@
 
-WHAT IS THIS?
+WHAT IS XREF?
 =============
 
 XRef is a set of tools to work with PHP source files. Currently it includes:
@@ -8,7 +8,7 @@ XRef is a set of tools to work with PHP source files. Currently it includes:
 
     A lint, i.e. static code analysis tool that finds errors.
     PHP is not a perfect language to catch programmer's errors,
-    so it's a good idea to have a tool that will do.
+    so xref will do.
     See section "ERROR MESSAGES REPORTED BY LINT" below.
 
 * xref-ci
@@ -322,7 +322,7 @@ class Foo {
 ```php
     // COUNTEREXAMPLE
     function bar() {
-        return new self()      // <-- error: no self class in regular function
+        return new self();  // <-- error: no self class in regular function
     }
 
 ```

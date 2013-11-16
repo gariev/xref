@@ -26,7 +26,7 @@ $report = null;
 $exceptionMessage = null;
 $formattedText = null;
 
-if (isset($_REQUEST["source"])) {
+if (isset($_REQUEST["source"]) && $_REQUEST["source"]) {
     $source = (get_magic_quotes_gpc()) ? stripslashes($_REQUEST["source"]) : $_REQUEST["source"];
     try {
         $parsed_file = $xref->getParsedFile("unknown.php", $source);
