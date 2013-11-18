@@ -19,6 +19,8 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
 
     /** map: lower-case class name => XRef_Class[] */
     private $classes = array();
+    /** map: lower-case function name => XRef_Method[] */
+    private $functions = array();
 
     private static $lookupResultNotFound;
 
@@ -43,6 +45,7 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         // TODO: add functions and constants
         $slice = array(
             "classes"   => $pf->getClasses(),
+            "functions" => array(), // TODO
         );
         return $slice;
     }
@@ -61,6 +64,14 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             }
             $this->classes[$class_name][] = $c;
         }
+        foreach ($file_slice["functions"] as /** @var XRef_Method $f */ $f) {
+            $function_name = strtolower($f->name);
+            if (! isset($this->functions[$function_name])) {
+                $this->functions[$function_name] = array();
+            }
+            $this->functions[$function_name][] = $f;
+        }
+
     }
 
     /**
@@ -69,7 +80,9 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
      */
     public function finalize() {
         $internal_classes = $this->getInternalClasses();
-        $this->addFileSlice( "[internal]", array("classes" => $internal_classes) );
+        $internal_functions = $this->getInternalFunctions();
+        $internal_slice = array("classes" => $internal_classes, "functions" => $internal_functions);
+        $this->addFileSlice("[internal]", $internal_slice);
     }
 
 
@@ -116,6 +129,15 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         return $this->lookupClassField($class_name, 'properties', $prop_name, true, $parent_class_only);
     }
 
+    /** @return XRef_LookupResult */
+    public function lookupFunction($function_name) {
+        $lc_name = strtolower($function_name);
+        if (isset($this->functions[$lc_name])) {
+            return new XRef_LookupResult(XRef_LookupResult::FOUND, $this->functions[$lc_name]);
+        } else {
+            return self::$lookupResultNotFound;
+        }
+    }
 
 
     /**
@@ -210,6 +232,19 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         return self::$internalClasses;
     }
 
+    private static $internalFunctions = null;
+    private function getInternalFunctions() {
+        if (! self::$internalFunctions) {
+            self::$internalFunctions = array();
+            $defined_functions = get_defined_functions();
+            foreach ($defined_functions["internal"] as $function_name) {
+                $rf = new ReflectionFunction($function_name);
+                self::$internalFunctions[] = $this->getFunctionByReflection($rf);
+            }
+        }
+        return self::$internalFunctions;
+    }
+
     /**
      * @param ReflectionClass $rc
      * @return XRef_Class
@@ -273,6 +308,25 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         $m->isDeclaration = false;
         $m->attributes = $this->getAttributes($rm, true);
         $m->returnsReference = $rm->returnsReference();
+        return $m;
+    }
+
+    /**
+     * @param ReflectionMethod $rm
+     * @return XRef_Function
+     */
+    private function getFunctionByReflection(ReflectionFunction $rf) {
+        $m = new XRef_Function();
+        $m->name = $rf->getName();
+        $m->index = $m->bodyStarts = $m->bodyEnds = $m->nameIndex = $m->nameStartIndex = -1;
+        $m->isDeclaration = false;
+        $m->returnsReference = $rf->returnsReference();
+        foreach ($rf->getParameters() as /** @var ReflectionParameter $param */ $rp) {
+            $p = new XRef_FunctionParameter();
+            $p->hasDefaultValue = $rp->isOptional();
+            $p->name = $rp->getName();
+            $m->parameters[] = $p;
+        }
         return $m;
     }
 

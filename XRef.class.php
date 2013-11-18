@@ -673,6 +673,7 @@ class XRef {
                 'XRef_Lint_ClosingTag',
                 'XRef_ProjectLint_CheckClassAccess',
                 'XRef_ProjectLint_MissedParentConstructor',
+                'XRef_ProjectLint_FunctionSignature',
                 'XRef_Doc_SourceFileDisplay',   // it's needed for web version of lint tool to display formatted source code
             ),
             'lint.add-constant'             => array(),
