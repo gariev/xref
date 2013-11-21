@@ -7,6 +7,8 @@ class GitTest extends PHPUnit_Framework_TestCase {
     protected $xref;
 
     public function __construct() {
+        // don't read config file, if any
+        XRef::setConfigFileName("default");
         XRef::setConfigValue("git.repository-dir", ".");
         $this->xref = new XRef();
     }

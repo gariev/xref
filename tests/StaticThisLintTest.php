@@ -1,6 +1,6 @@
 <?php
 
-require_once dirname(__FILE__) . "/BaseLintTest.php";
+require_once dirname(__FILE__) . "/BaseLintClass.php";
 
 /*
 Test for $this used out of instance method context.
@@ -27,7 +27,7 @@ All other cases:
      }
 
 */
-class StaticThisLintTest extends BaseLintTest {
+class StaticThisLintTest extends BaseLintClass {
 
    public function testOuterScopeThis() {
         $testPhpCode = '<?php

@@ -62,10 +62,11 @@ class XRef {
     );
 
     // Enums: lint severity levels
-    const FATAL     = -1;   // e.g. can't parse file
     const NOTICE    = 1;
     const WARNING   = 2;
     const ERROR     = 3;
+    const FATAL     = 4;   // e.g. can't parse file
+
     static $severityNames = array(
         XRef::FATAL     => "fatal",
         XRef::NOTICE    => "notice",
@@ -565,17 +566,24 @@ class XRef {
      *
      * ---------------------------------------------------------------*/
     private static $config;
+    private static $configFileName = null;
+
+    public static function setConfigFileName($value = null) {
+        self::$configFileName = $value;
+    }
 
     /**
      * @return string - the name of the config file
      */
     private static function getConfigFilename() {
-        $filename = null;
+        $filename = self::$configFileName;
 
-        // get name of config file from command-line args (-c, --config)
-        list($options, $arguments) = self::getCmdOptions();
-        if (isset($options["config"])) {
-            $filename = $options["config"];
+        if (!$filename) {
+            // get name of config file from command-line args (-c, --config)
+            list($options, $arguments) = self::getCmdOptions();
+            if (isset($options["config"])) {
+                $filename = $options["config"];
+            }
         }
 
         // get config filename from environment

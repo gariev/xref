@@ -89,6 +89,9 @@ class ConfigTest extends PHPUnit_Framework_TestCase {
         // reset and cache to empty (default) values
         list($options, $arguments) = XRef::getCmdOptions( array() );
 
+        // get config by value, save current settings
+        $old_config_value = XRef::getConfig();
+
         $config = XRef::getConfig(true);
         $this->assertTrue(is_array($config));
         $this->assertTrue(!isset($config["foo.bar"]));
@@ -112,9 +115,10 @@ class ConfigTest extends PHPUnit_Framework_TestCase {
         $this->assertTrue($config["p"] === false);
         $this->assertTrue($config["x"] === "y");
 
-        // reset and cache to empty (default) values
+        // reset command-line options, restore value of the config
         list($options, $arguments) = XRef::getCmdOptions( array() );
-        $config = XRef::getConfig(true);
+        $config_ref = & XRef::getConfig();
+        $config_ref = $old_config_value;
     }
 
 }

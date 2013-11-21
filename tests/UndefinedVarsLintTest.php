@@ -1,8 +1,8 @@
 <?php
 
-require_once dirname(__FILE__) . "/BaseLintTest.php";
+require_once dirname(__FILE__) . "/BaseLintClass.php";
 
-class UndefinedVarsLintTest extends BaseLintTest {
+class UndefinedVarsLintTest extends BaseLintClass {
 
     public function testSuperGlobals() {
         $testPhpCode = '<?php

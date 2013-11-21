@@ -1,53 +1,8 @@
 <?php
 
-$includeDir = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/.." : "@php_dir@/XRef";
-require_once "$includeDir/XRef.class.php";
+require_once dirname(__FILE__) . "/BaseLintClass.php";
 
-class ProjectCheckTest extends PHPUnit_Framework_TestCase {
-
-    private $xref;
-
-    public function __construct() {
-        $xref = new XRef();
-        $xref->loadPluginGroup('lint');
-        $this->xref = $xref;
-    }
-
-    protected function checkFoundDefect($found_defect, $file_name, $expected_file_name, $token_text, $line_number, $severity) {
-        $descr = print_r($found_defect, true);   // TODO
-        $this->assertTrue($file_name                == $expected_file_name, "Wrong filename: $file_name / $expected_file_name");
-        $this->assertTrue($found_defect->tokenText  == $token_text,         "Invalid token ($found_defect->tokenText, $token_text):\n$descr");
-        $this->assertTrue($found_defect->lineNumber == $line_number,        "Invalid line number ($line_number/$found_defect->lineNumber):\n$descr");
-        $this->assertTrue($found_defect->severity   == $severity,           "Invalid severity:\n$descr");
-    }
-
-    protected function checkProject($files, $expected_defects) {
-        $lint_engine = new XRef_LintEngine_ProjectCheck($this->xref, false);
-        $file_provider = new XRef_FileProvider_InMemory($files);
-        $report = $lint_engine->getReport($file_provider);
-
-        // 1. count errors
-        $count_found = 0;
-        foreach ($report as $file_name => $list) {
-            $count_found += count($list);
-        }
-        $count_expected = count($expected_defects);
-        if ($count_found != $count_expected) {
-            print_r($report);
-            $this->fail( "Wrong number of errors: found=$count_found, expected=$count_expected" );
-        } else {
-            $this->assertTrue($count_found == $count_expected, "Expected number of defects");
-        }
-
-        $i = 0;
-        foreach ($report as $file_name => $list) {
-            foreach ($list as $e) {
-                list($expected_file_name, $token_text, $line_number, $severity) = $expected_defects[$i];
-                $this->checkFoundDefect($e, $file_name, $expected_file_name, $token_text, $severity, $line_number);
-                ++$i;
-            }
-        }
-    }
+class ProjectCheckTest extends BaseLintClass {
 
     public function testProject() {
         $code =
@@ -65,6 +20,21 @@ class ProjectCheckTest extends PHPUnit_Framework_TestCase {
             )
         );
     }
+
+    /**
+     * @expectedException Exception
+     */
+    public function testException() {
+        $code =
+        '<?php
+            function foo(...) {} // this shouldnt be parsed
+        ';
+        $this->checkProject(    // here exception should be thrown
+            array( 'fileWithException.php' => $code ),
+            array()
+        );
+    }
+
 
     public function testMultifileProject() {
         $codeA =

@@ -1,8 +1,8 @@
 <?php
 
-require_once dirname(__FILE__) . "/BaseLintTest.php";
+require_once dirname(__FILE__) . "/BaseLintClass.php";
 
-class AssignmentInConditionTest extends BaseLintTest {
+class AssignmentInConditionTest extends BaseLintClass {
 
     public function testClassConstants() {
         $testPhpCode = '<?php

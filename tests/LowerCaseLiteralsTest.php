@@ -1,8 +1,8 @@
 <?php
 
-require_once dirname(__FILE__) . "/BaseLintTest.php";
+require_once dirname(__FILE__) . "/BaseLintClass.php";
 
-class LowerCaseLiteralsTest extends BaseLintTest {
+class LowerCaseLiteralsTest extends BaseLintClass {
 
    public function testBasicLiteral() {
         $testPhpCode = '<?php

@@ -1,8 +1,8 @@
 <?php
 
-require_once dirname(__FILE__) . "/BaseLintTest.php";
+require_once dirname(__FILE__) . "/BaseLintClass.php";
 
-class ClosingTagTest extends BaseLintTest {
+class ClosingTagTest extends BaseLintClass {
 
     public function testOpeningSpaces() {
 
