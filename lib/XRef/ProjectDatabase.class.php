@@ -42,10 +42,19 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
      * @return array file summary,
      */
     public function createFileSlice(XRef_IParsedFile $pf, $is_library_file = false) {
-        // TODO: add functions and constants
+        // TODO: add constants
+
+        // filter functions that are not methods and not closures
+        $functions = array();
+        foreach ($pf->getMethods() as /** @var XRef_Method $m*/ $m) {
+            if (!$m->className && $m->name) {
+                $functions[] = $m;
+            }
+        }
+
         $slice = array(
             "classes"   => $pf->getClasses(),
-            "functions" => array(), // TODO
+            "functions" => $functions,
         );
         return $slice;
     }
@@ -71,7 +80,6 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             }
             $this->functions[$function_name][] = $f;
         }
-
     }
 
     /**
@@ -327,6 +335,30 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             $p->name = $rp->getName();
             $m->parameters[] = $p;
         }
+
+        // fix some weirdness - function signatures returned by reflection
+        // (or by "php --rf <function-name>") are different from documentation
+        if ($m->name == 'define') {
+            $m->parameters[2]->hasDefaultValue = true;
+        }
+        if ($m->name == 'implode') {
+            $m->parameters[1]->hasDefaultValue = true;
+        }
+        if ($m->name == 'spl_autoload_register') {
+            if (count($m->parameters) < 2) {
+                $p = new XRef_FunctionParameter();
+                $p->hasDefaultValue = true;
+                $p->name = 'throw';
+                $m->parameters[] = $p;
+            }
+            if (count($m->parameters) < 3) {
+                $p = new XRef_FunctionParameter();
+                $p->hasDefaultValue = true;
+                $p->name = 'prepend';
+                $m->parameters[] = $p;
+            }
+        }
+
         return $m;
     }
 

@@ -1,14 +1,38 @@
 <?php
 class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IProjectLintPlugin {
 
-    public function checkFileSlice(XRef_IProjectDatabase $db, $file_name, $file_slice)
-    {
-        // TODO: Implement checkFileSlice() method.
+    const E_UNKNOWN_FUNCTION        = 'xr091';
+    const E_UNQUALIFIED_METHOD      = 'xr092';
+    const E_WRONG_NUMBER_OF_ARGS    = 'xr093';
+
+    const ELLIPSES_ARGS             = 10000;
+    /**
+     * @return array - map (errorCode => errorDescription)
+     */
+    public function getErrorMap() {
+        return array(
+            self::E_UNKNOWN_FUNCTION => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Unknown function (%s)",
+            ),
+            self::E_UNQUALIFIED_METHOD => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Possible call of method (%s) of class (%s) as function",
+            ),
+            self::E_WRONG_NUMBER_OF_ARGS => array(
+                "severity"  => XRef::WARNING,
+                "message"   => "Wrong number of arguments for function (%s): (%s) instead of (%s)",
+            ),
+        );
     }
+
 
     public function __construct() {
         parent::__construct("function-signature", "Check functions' signatures and parameters");
     }
+
+    // map: filename => list of errors
+    private $errors = array();
 
     /**
      * Parsing of files is expensive, so minimize them between runs of xref.
@@ -30,6 +54,8 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
 
         $db = new XRef_ProjectDatabase();
         $db->finalize();
+        $file_slice = array();
+        $uniqs = array();
 
         for ($i=0; $i<count($tokens); ++$i) {
             $t = $tokens[$i];
@@ -71,47 +97,89 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
 
                 $arguments = $pf->extractList($t->nextNS());
                 $num_of_arguments = count($arguments);
-                echo $function_name, " ", $num_of_arguments, "\n";
-                $lr = $db->lookupFunction($function_name);
-                if ($lr->code == XRef_LookupResult::NOT_FOUND) {
-                    echo " -> unknown function\n";
+                $class = $pf->getClassAt($t->index);
+                $class_name = ($class) ? $class->name : '';
+                $namespace = $pf->getNamespaceAt($t->index);
+                $uniq = "$function_name#$num_of_arguments#$class_name#$namespace";
+                if (!isset($uniqs[$uniq])) {
+                    $uniqs[$uniq] = true;
+                    $file_slice[] = array($function_name, $t->lineNumber, $num_of_arguments, $class_name, $namespace);
+                }
+            }
+        }
+        return $file_slice;
+    }
+
+    public function checkFileSlice(XRef_IProjectDatabase $db, $file_name, $file_slice) {
+        foreach ($file_slice as $s) {
+            list ($function_name, $line_number, $num_of_arguments, $class_name, $namespace) = $s;
+
+            $lr = $db->lookupFunction($function_name);
+            if ($lr->code == XRef_LookupResult::NOT_FOUND) {
+                // check if there is a method with the same name in class
+                if ($class_name) {
+                    $lr = $db->lookupMethod($class_name, $function_name);
+                }
+
+                if ($lr->code == XRef_LookupResult::FOUND) {
+                    $this->errors[$file_name][] = array(
+                        'code'      => self::E_UNQUALIFIED_METHOD,
+                        'text'      => $function_name,
+                        'params'    => array($function_name, $class_name),
+                        'location'  => array($file_name, $line_number),
+                    );
                 } else {
-                    $f = $lr->elements[0];
-                    if ($num_of_arguments != count($f->parameters)) {
+                    $this->errors[$file_name][] = array(
+                        'code'      => self::E_UNKNOWN_FUNCTION,
+                        'text'      => $function_name,
+                        'params'    => array($function_name),
+                        'location'  => array($file_name, $line_number),
+                    );
+                }
+            } else {
+                $f = $lr->elements[0];
+                if ($num_of_arguments != count($f->parameters)) {
 
-                        $min_number_of_arguments = 0;
-                        foreach ($f->parameters as $p) {
-                            if ($p->hasDefaultValue || $p->name = '...') {
-                                break;
-                            }
-                            $min_number_of_arguments++;
+                    $min_number_of_arguments = 0;
+                    foreach ($f->parameters as $p) {
+                        if ($p->hasDefaultValue || $p->name == '...') {
+                            break;
                         }
+                        $min_number_of_arguments++;
+                    }
 
-                        $last_parameter = end($f->parameters);
-                        $max_number_of_arguments = ($last_parameter->name = '...') ? 10000 : count($f->parameters);
-                        if ($num_of_arguments < $min_number_of_arguments || $num_of_arguments > $max_number_of_arguments) {
-                            echo " --> wrong number of arguments ($min_number_of_arguments, $num_of_arguments, $max_number_of_arguments)\n";
-                            print_r($f);
+                    $last_parameter = end($f->parameters);
+                    $max_number_of_arguments = ($last_parameter && $last_parameter->name == '...') ? 
+                        self::ELLIPSES_ARGS : count($f->parameters);
+                    if ($num_of_arguments < $min_number_of_arguments || $num_of_arguments > $max_number_of_arguments) {
+                        if ($min_number_of_arguments == $max_number_of_arguments) {
+                            $arg_str = $min_number_of_arguments;
+                        } elseif ($max_number_of_arguments == self::ELLIPSES_ARGS) {
+                            $arg_str = $min_number_of_arguments . "..n";
+                        } else {
+                            $arg_str = $min_number_of_arguments . ".." . $max_number_of_arguments;
                         }
+                        $this->errors[$file_name][] = array(
+                            'code'      => self::E_WRONG_NUMBER_OF_ARGS,
+                            'text'      => $function_name,
+                            'params'    => array($function_name, $num_of_arguments, $arg_str),
+                            'location'  => array($file_name, $line_number),
+                        );
                     }
                 }
             }
         }
     }
 
-    /**
-     * @return array - map (errorCode => errorDescription)
-     */
-    public function getErrorMap() {
-        return array();
-    }
+
 
     /** @return array - map (file name -> list of errors) */
     public function getProjectReport(XRef_IProjectDatabase $db) {
-        return array();
+        return $this->errors;
     }
 
     public function startLintCheck(XRef_IProjectDatabase $db) {
+        $this->errors = array();
     }
 }
 
