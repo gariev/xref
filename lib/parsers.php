@@ -831,14 +831,14 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
         }
 
         // list of parameters/arguments
-        $parameters = $this->parseFunctionParametersList($t);
+        $parameters = $this->parseFunctionParametersList();
         $function->parameters = $parameters;
         $t = $this->current();
 
         // closures: T_USE
         if (!$function->name && $t->kind == T_USE) {
             $this->nextNS();
-            $parameters = $this->parseFunctionParametersList($t);
+            $parameters = $this->parseFunctionParametersList();
             $function->usedVariables = $parameters;
         }
 

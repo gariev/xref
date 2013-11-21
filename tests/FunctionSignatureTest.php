@@ -121,5 +121,44 @@ class FunctionSignatureTest extends BaseLintClass {
             )
         );
     }
+    public function testMethodsThis() {
+        $codeA =
+        '<?php
+            function foo($a) {}
+            class A {
+                public function foo($a, &$b) {}
+            }
+
+            class B extends A {
+                public function bar(A $z = false) {}
+                public function test() {
+                    foo();              // global foo, warning
+                    foo(1);             // ok
+                    foo(1, 2);          // warning
+
+                    $this->foo();       // warning
+                    $this->foo(1);      // warning
+                    $this->foo(1, 2);   // ok
+                    $this->foo(1, 2, 3);// warning
+
+                    $this->bar();       // ok
+                    $this->bar(1);      // ok
+                    $this->bar(1, 2);   // warning
+                }
+            }
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA ),
+            array(
+                array('fileA.php', 'foo',   XRef::WARNING, 10),
+                array('fileA.php', 'foo',   XRef::WARNING, 12),
+                array('fileA.php', 'foo',   XRef::WARNING, 14),
+                array('fileA.php', 'foo',   XRef::WARNING, 15),
+                array('fileA.php', 'foo',   XRef::WARNING, 17),
+                array('fileA.php', 'bar',   XRef::WARNING, 21),
+            )
+        );
+    }
+
 
 }

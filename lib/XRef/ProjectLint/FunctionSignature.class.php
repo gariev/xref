@@ -21,7 +21,7 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
             ),
             self::E_WRONG_NUMBER_OF_ARGS => array(
                 "severity"  => XRef::WARNING,
-                "message"   => "Wrong number of arguments for function (%s): (%s) instead of (%s)",
+                "message"   => "Wrong number of arguments for function/method (%s): (%s) instead of (%s)",
             ),
         );
     }
@@ -68,13 +68,28 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                     continue;
                 }
 
+                $function_name = null;
+                $class_name = '';
+
                 $pp = $p->prevNS();
                 if ($pp->kind == T_NS_SEPARATOR) {
                     // Foo\bar();
+                    // \bar();
                     continue; // TODO
                 } elseif ($pp->kind == T_OBJECT_OPERATOR) {
                     // something->bar()
-                    continue; // TODO
+                    $pp = $pp->prevNS();
+                    if ($pp->kind == T_VARIABLE && $pp->text == '$this') {
+                        $class = $pf->getClassAt($t->index);
+                        if ($class) {
+                            $class_name = $class->name;
+                            $function_name = $p->text;
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        continue; // TODO
+                    }
                 } elseif ($pp->kind == T_DOUBLE_COLON) {
                     // Foo::bar();
                     // Foo\Bar::bar();
@@ -97,13 +112,13 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
 
                 $arguments = $pf->extractList($t->nextNS());
                 $num_of_arguments = count($arguments);
-                $class = $pf->getClassAt($t->index);
-                $class_name = ($class) ? $class->name : '';
+                $from_class = $pf->getClassAt($t->index);
+                $from_class_name = ($from_class) ? $from_class->name : '';
                 $namespace = $pf->getNamespaceAt($t->index);
-                $uniq = "$function_name#$num_of_arguments#$class_name#$namespace";
+                $uniq = "$class_name::$function_name#$num_of_arguments#$from_class_name#$namespace";
                 if (!isset($uniqs[$uniq])) {
                     $uniqs[$uniq] = true;
-                    $file_slice[] = array($function_name, $t->lineNumber, $num_of_arguments, $class_name, $namespace);
+                    $file_slice[] = array($class_name, $function_name, $t->lineNumber, $num_of_arguments, $from_class_name, $namespace);
                 }
             }
         }
@@ -112,31 +127,45 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
 
     public function checkFileSlice(XRef_IProjectDatabase $db, $file_name, $file_slice) {
         foreach ($file_slice as $s) {
-            list ($function_name, $line_number, $num_of_arguments, $class_name, $namespace) = $s;
+            list ($class_name, $function_name, $line_number, $num_of_arguments, $from_class, $namespace) = $s;
 
-            $lr = $db->lookupFunction($function_name);
-            if ($lr->code == XRef_LookupResult::NOT_FOUND) {
-                // check if there is a method with the same name in class
-                if ($class_name) {
-                    $lr = $db->lookupMethod($class_name, $function_name);
-                }
-
-                if ($lr->code == XRef_LookupResult::FOUND) {
-                    $this->errors[$file_name][] = array(
-                        'code'      => self::E_UNQUALIFIED_METHOD,
-                        'text'      => $function_name,
-                        'params'    => array($function_name, $class_name),
-                        'location'  => array($file_name, $line_number),
-                    );
-                } else {
-                    $this->errors[$file_name][] = array(
-                        'code'      => self::E_UNKNOWN_FUNCTION,
-                        'text'      => $function_name,
-                        'params'    => array($function_name),
-                        'location'  => array($file_name, $line_number),
-                    );
-                }
+            if ($class_name) {
+                $lr = $db->lookupMethod($class_name, $function_name);
             } else {
+                $lr = $db->lookupFunction($function_name);
+            }
+
+            if ($lr->code == XRef_LookupResult::CLASS_MISSING) {
+                // method not found because class/base class is missing
+                // don't report error here, CheckClassAccess will do
+                continue;
+            } elseif ($lr->code == XRef_LookupResult::NOT_FOUND) {
+                // check only missed functions;
+                // missed methods are covered by CheckClassAccess plugin
+                if (!$class_name) {
+                    // check if there is a method with the same name in class
+                    if ($from_class) {
+                        $lr = $db->lookupMethod($from_class, $function_name);
+                    }
+
+                    if ($lr->code == XRef_LookupResult::FOUND) {
+                        $this->errors[$file_name][] = array(
+                            'code'      => self::E_UNQUALIFIED_METHOD,
+                            'text'      => $function_name,
+                            'params'    => array($function_name, $from_class),
+                            'location'  => array($file_name, $line_number),
+                        );
+                    } else {
+                        $this->errors[$file_name][] = array(
+                            'code'      => self::E_UNKNOWN_FUNCTION,
+                            'text'      => $function_name,
+                            'params'    => array($function_name),
+                            'location'  => array($file_name, $line_number),
+                        );
+                    }
+                }
+            } elseif ($lr->code == XRef_LookupResult::FOUND) {
+                // method/function is found; check the number of arguments
                 $f = $lr->elements[0];
                 if ($num_of_arguments != count($f->parameters)) {
 
@@ -149,7 +178,7 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                     }
 
                     $last_parameter = end($f->parameters);
-                    $max_number_of_arguments = ($last_parameter && $last_parameter->name == '...') ? 
+                    $max_number_of_arguments = ($last_parameter && $last_parameter->name == '...') ?
                         self::ELLIPSES_ARGS : count($f->parameters);
                     if ($num_of_arguments < $min_number_of_arguments || $num_of_arguments > $max_number_of_arguments) {
                         if ($min_number_of_arguments == $max_number_of_arguments) {
@@ -167,6 +196,8 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                         );
                     }
                 }
+            } else {
+                throw new Exception($lr->code);
             }
         }
     }
