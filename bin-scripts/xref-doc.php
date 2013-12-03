@@ -45,7 +45,8 @@ $numberOfCodeLines = 0;
 $files = $xref->filterFiles( $file_provider->getFiles() );
 foreach ($files as $filename) {
     try {
-        $pf = $xref->getParsedFile($filename);
+        $file_content = $file_provider->getFileContent($filename);
+        $pf = $xref->getParsedFile($filename, $file_content);
         foreach ($plugins as $pluginId => $plugin) {
             $plugin->generateFileReport($pf);
         }
