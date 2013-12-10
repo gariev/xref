@@ -50,11 +50,11 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             ),
             self::E_ACCESS_STATIC_AS_INSTANCE => array(
                 "severity"  => XRef::ERROR,
-                "message"   => "Property (%s) is static, not instance",
+                "message"   => "Property (%s) of class (%s) is static, not instance",
             ),
             self::E_ACCESS_INSTANCE_AS_STATIC => array(
                 "severity"  => XRef::ERROR,
-                "message"   => "Member (%s) is instance, not static",
+                "message"   => "Member (%s) of class (%s) is instance, not static",
             ),
             self::E_PRIVATE_MEMBER => array(
                 "severity"  => XRef::ERROR,
@@ -227,7 +227,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
                 $this->errors[ XRef::DUMMY_PROJECT_FILENAME ][] = array(
                     'code'      => self::E_SEVERAL_CLASS_DEFINITIONS,
                     'text'      => $class_name,
-                    'params'    => array($class_name),
+                    'params'    => array($list_of_classes[0]->name),
                     'location'  => array(XRef::DUMMY_PROJECT_FILENAME, 0),
                 );
             }
@@ -325,7 +325,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
         } else {
             // got definition, check access
             $attributes = $lr->elements[0]->attributes;
-            $found_in_class = strtolower($lr->elements[0]->className);
+            $found_in_class = $lr->elements[0]->className;
 
             // 1. static vs. instance
             if ($key != 'constant' && !($key=='method' && $name=='__construct')) {
@@ -333,7 +333,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
                     if (!XRef::isStatic($attributes)) {
                         // reference to instance method or property as if they were static
                         if ($key == 'method' || $key == 'property') {
-                            return array(self::E_ACCESS_INSTANCE_AS_STATIC, "$from_class/$class_name/$key/$name", array($name));
+                            return array(self::E_ACCESS_INSTANCE_AS_STATIC, "$from_class/$class_name/$key/$name", array($name, $found_in_class));
                         } else {
                             throw new Exception($key);
                         }
@@ -341,7 +341,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
                 } else {
                     if ($key == 'property' && XRef::isStatic($attributes)) {
                         // reference to static property as if it were instance
-                        return array(self::E_ACCESS_STATIC_AS_INSTANCE, "$from_class/$class_name/$name", array($name));
+                        return array(self::E_ACCESS_STATIC_AS_INSTANCE, "$from_class/$class_name/$name", array($name, $found_in_class));
                     }
                 }
             }
@@ -350,7 +350,7 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             if (XRef::isPublic($attributes)) {
                 // ok
             } elseif (XRef::isPrivate($attributes)) {
-                if (!$from_class || $found_in_class != strtolower($from_class)) {
+                if (!$from_class || strtolower($found_in_class) != strtolower($from_class)) {
                     // attempt to access a private member (method or property) of class $found_in_class
                     // from $class_name
                     return array(self::E_PRIVATE_MEMBER, "$from_class/$class_name/$name", array($name, $found_in_class));
