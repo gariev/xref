@@ -7,7 +7,6 @@ all:
 test:
 	## self-test:
 	bin/xref-lint --config=default --no-cache \
-		--define lint.ignore-missing-class=PEAR \
 		--define lint.ignore-missing-class=PHPUnit_Framework_TestCase \
 		--define lint.ignore-missing-class=Smarty \
 		--define lint.ignore-missing-class=PEAR_PackageFileManager2 \
@@ -31,7 +30,7 @@ package.xml:
 	php dev/makePackageFile.php
 
 clean:
-	rm -rf package.xml XRef*.tgz pear
+	rm -rf package.xml XRef*.tgz pear tmp
 
 check_clean:
 	files=`git status --porcelain`; if [ "$$files" != "" ]; then echo "extra files in dir: $$files"; exit 1; fi

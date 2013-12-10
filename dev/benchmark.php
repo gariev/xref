@@ -35,9 +35,9 @@ $f = function () use ($compressed) {
 my_echo("PHP-P uncompress time", $b->timeIt($f), "sec");
 
 $f = function () use ($gzencoded) {
-    $data = (function_exists('gzdeocde'))
+    $data = (function_exists('gzdecode'))
         ? gzdecode($gzencoded)
-        : gzinflate(substr($gzencoded,10,-8));
+        : gzinflate(substr($gzencoded, 10, -8));
     if (!$data) throw new Exception();
 };
 my_echo("PHP-P gzdecode time", $b->timeIt($f), "sec");

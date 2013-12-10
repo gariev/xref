@@ -16,8 +16,9 @@ class XRef_Storage_File implements XRef_IPersistentStorage {
         if (!$fh) {
             throw new Exception("Can't write to file $filename");
         }
-
-        fwrite($fh, serialize($data));
+        // output of gzencode() takes more space than gzcompress()
+        // but is compatible with zgrep, zcat and other z* command-line tools
+        fwrite($fh, gzencode(serialize($data)));
         fclose($fh);
     }
 
@@ -35,10 +36,28 @@ class XRef_Storage_File implements XRef_IPersistentStorage {
         }
         $fh = fopen($filename, "r");
         if (!$fh) {
+            throw new Exception("Can't open file $filename");
+        }
+        $data = fread($fh, filesize($filename));
+        fclose($fh);
+
+        if ($data === false) {
             throw new Exception("Can't read from file $filename");
         }
-        $data = unserialize( fread($fh, filesize($filename)) );
-        fclose($fh);
+
+        if (substr($data, 0, 2) == "\x1f\x8b") {
+            // gz compressed data
+            $data = (function_exists('gzdecode')) // since php 5.4
+                ? gzdecode($data)
+                : gzinflate(substr($data, 10, -8));
+            // gzinflate(substr()) works with php gzencoded data,
+            // but not with gzip-compressed files with full gz header
+            if ($data === false) {
+                throw new Exception("Can't gunzip compressed data in file $filename");
+            }
+        }
+
+        $data = unserialize($data);
         return $data;
     }
 
