@@ -316,6 +316,12 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         $m->isDeclaration = false;
         $m->attributes = $this->getAttributes($rm, true);
         $m->returnsReference = $rm->returnsReference();
+        foreach ($rm->getParameters() as /** @var ReflectionParameter $param */ $rp) {
+            $p = new XRef_FunctionParameter();
+            $p->hasDefaultValue = $rp->isOptional();
+            $p->name = $rp->getName();
+            $m->parameters[] = $p;
+        }
         return $m;
     }
 
