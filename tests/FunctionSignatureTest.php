@@ -4,7 +4,7 @@ require_once dirname(__FILE__) . "/BaseLintClass.php";
 
 class FunctionSignatureTest extends BaseLintClass {
 
-    public function t_estBuildInFunction() {
+    public function testBuildInFunction() {
         $codeA =
         '<?php
             $foo = sprintf("a", "b");   // ok
@@ -121,6 +121,7 @@ class FunctionSignatureTest extends BaseLintClass {
             )
         );
     }
+
     public function testMethodsThis() {
         $codeA =
         '<?php
@@ -159,6 +160,182 @@ class FunctionSignatureTest extends BaseLintClass {
             )
         );
     }
+
+    /**
+     * @requires PHP 5.3
+     */
+    public function testNamespacedFunctions() {
+        $codeA =
+        '<?php
+            namespace foo {
+                function foo($a) {}
+                function fopen() {}
+            }
+            namespace foo\\bar {
+                function foo($a, $b) {}
+            }
+        ';
+         $codeB =
+        '<?php
+            namespace foo;
+            use foo\\bar as B;
+
+            foo(1);                     // ok, \foo\foo;
+            \\foo\\foo(1);              // ok, \foo\foo;
+            foo();                      // warning, number of args
+
+            \\foo\\bar\\foo(1, 2);      // ok \foo\bar\foo()
+            B\\foo(1, 2);               // ok, same
+            bar\\foo(1, 2);             // ok, same
+            \\foo\\bar\\foo();          // warning, number of args, \foo\bar\foo()
+            B\\foo(1);                  // warning, same
+            bar\\foo(1,2,3);            // warning, same
+
+            fopen();                    // ok, this is \foo\fopen()
+            fopen("f", "r");            // warning, number of args
+            \\fopen("f", "r");          // ok, global fopen
+            \\fopen();                  // warning, global fopen, number of args
+
+            fclose(1);                  // ok, global fclose
+            \\fclose(1);                // ok, global fclose
+            fclose();                   // warning
+            \\fclose(1,2,3);            // warning
+
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA, 'fileB.php' => $codeB ),
+            array(
+                array('fileB.php', 'foo\\foo',      XRef::WARNING, 7),
+
+                array('fileB.php', 'foo\\bar\\foo', XRef::WARNING, 12),
+                array('fileB.php', 'foo\\bar\\foo', XRef::WARNING, 13),
+                array('fileB.php', 'foo\\bar\\foo', XRef::WARNING, 14),
+
+                array('fileB.php', 'foo\\fopen',    XRef::WARNING, 17),
+                array('fileB.php', 'fopen',         XRef::WARNING, 19),
+
+                array('fileB.php', 'fclose',        XRef::WARNING, 23),
+                array('fileB.php', 'fclose',        XRef::WARNING, 24),
+            )
+        );
+    }
+
+    public function testConstructorsSimple() {
+        $codeA =
+        '<?php
+            class A { }
+
+            class B extends A {
+                public function __construct($a) {}
+            }
+
+            class C {
+                public function __construct($a, $b) {}
+            }
+
+            class D extends C {
+                public function __construct($a, $b, $c) {
+                    parent::__construct($a, $b);        // ok
+                }
+            }
+
+            class E extends C {
+                public function __construct($a, $b, $c) {
+                    parent::__construct($a);            // warning
+                }
+            }
+        ';
+
+        $codeB =
+        '<?php
+            $a1 = new A();      // ok
+            $a2 = new A(1);     // warning
+
+            $b1 = new B();      // warning
+            $b2 = new B(1);     // ok
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA, 'fileB.php' => $codeB ),
+            array(
+                array('fileA.php', 'C', XRef::WARNING, 20),
+                array('fileB.php', 'A', XRef::WARNING, 3),
+                array('fileB.php', 'B', XRef::WARNING, 5),
+            )
+        );
+    }
+
+    public function testNamespacedConstructors() {
+        $codeA =
+        '<?php
+            namespace foo {
+                class A {
+                    public function __construct() {}
+                }
+
+                class B extends A {
+                    public function __construct($a) {
+                        parent::__construct();
+                    }
+                }
+            }
+
+            namespace foo\\bar {
+                class A {
+                    public function __construct($a, $b){}
+                }
+                class B extends \\foo\\A {
+                    public function __construct($a, $b, $c) {
+                        parent::__construct($a, $b);        // warning
+                    }
+                }
+                class C extends A {
+                    public function __construct($a, $b) {
+                        parent::__construct($a, $b);        // ok
+                    }
+                }
+            }
+        ';
+
+        $codeB =
+        '<?php
+            namespace foo;
+            use foo\\bar as Bar;
+
+            $a1 = new A();              // ok
+            $a2 = new \\foo\\A();       // ok
+            $a3 = new A(1);             // warning
+            $a4 = new \\foo\\A(1, 2);   // warning
+
+            $b1 = new B();              // warning
+            $b2 = new \\foo\\B(1, 2);   // warning
+            $b3 = new B(1);             // ok
+            $b4 = new \\foo\\B(1);      // ok
+
+            $a5 = new \\foo\\bar\\A(1,2);   // ok
+            $a6 = new Bar\\A(1,2);          // ok
+            $a7 = new bar\\A(1,2);          // ok
+            $a8 = new \\foo\\bar\\A();      // warning
+            $a9 = new Bar\\A(1);            // warning
+            $aa = new bar\\A(1,2,3);        // warning
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA, 'fileB.php' => $codeB ),
+            array(
+                array('fileA.php', 'foo\\A',        XRef::WARNING, 20),
+
+                array('fileB.php', 'foo\\A',        XRef::WARNING, 7),
+                array('fileB.php', 'foo\\A',        XRef::WARNING, 8),
+
+                array('fileB.php', 'foo\\B',        XRef::WARNING, 10),
+                array('fileB.php', 'foo\\B',        XRef::WARNING, 11),
+
+                array('fileB.php', 'foo\\bar\\A',   XRef::WARNING, 18),
+                array('fileB.php', 'foo\\bar\\A',   XRef::WARNING, 19),
+                array('fileB.php', 'foo\\bar\\A',   XRef::WARNING, 20),
+            )
+        );
+    }
+
 
 
 }

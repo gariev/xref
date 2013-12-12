@@ -192,10 +192,11 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                     } else {
                         $function_name = $function_name_parts[0];
                         $namespace = $pf->getNamespaceAt($t->index);
-                        $uniq = "$function_name##$namespace#$num_of_arguments";
+                        $namespace_name = ($namespace) ? $namespace->name : '';
+                        $uniq = "$function_name##$namespace_name#$num_of_arguments";
                         if (!isset($uniqs[$uniq])) {
                             $uniqs[$uniq] = true;
-                            $file_slice[] = array(self::F_NOT_QUALIFIED_FUNC, $function_name, $namespace, $t->lineNumber, $num_of_arguments, $from_class_name);
+                            $file_slice[] = array(self::F_NOT_QUALIFIED_FUNC, $function_name, $namespace_name, $t->lineNumber, $num_of_arguments, $from_class_name);
                         }
                     }
                 }
@@ -246,17 +247,25 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
             } elseif ($kind == self::F_NOT_QUALIFIED_FUNC) {
                 // that's tricky -
                 // foo() can be
-                //  1. global foo()
-                //  2. current \namespace\foo()
+                //  1. current \namespace\foo()
+                //  2. global foo()
                 //  3. method of current class (self::foo()) without class prefix, error
 
-                // 1. try to find global foo()
-                $lr = $db->lookupFunction($function_name);
-                if ($lr->code != XRef_LookupResult::FOUND) {
-                    // 2. try to find \namespace\foo()
-                    $namespace = $extra;
+                $lr = null;
+                $namespace = $extra;
+                if ($namespace) {
+                    // 1. try to find \namespace\foo()
                     $lr = $db->lookupFunction("$namespace\\$function_name");
+                    if ($lr->code == XRef_LookupResult::FOUND) {
+                        $function_name = "$namespace\\$function_name";
+                    }
                 }
+
+                if (!$lr || $lr->code != XRef_LookupResult::FOUND) {
+                    // 2. try to find global foo()
+                    $lr = $db->lookupFunction($function_name);
+                }
+
                 if ($lr->code != XRef_LookupResult::FOUND) {
                     // 3. try to find CurrentClass::foo()
                     $from_class = $s[5];
@@ -332,7 +341,7 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                     if ($kind == self::F_CLASS_CONSTRUCTOR) {
                         $this->errors[$file_name][] = array(
                             'code'      => self::E_WRONG_CONSTRUCTOR_ARGS,
-                            'text'      => $function_name,
+                            'text'      => $class_name,
                             'params'    => array($class_name, $num_of_arguments, $arg_str),
                             'location'  => array($file_name, $line_number),
                         );
