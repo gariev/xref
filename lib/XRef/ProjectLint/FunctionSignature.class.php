@@ -56,13 +56,15 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
      * @return * any data
      */
     public function createFileSlice(XRef_IParsedFile $pf, $is_library_file = false) {
-        $tokens = $pf->getTokens();
 
-        $db = new XRef_ProjectDatabase();
-        $db->finalize();
-        $file_slice = array();
+        /** array of arrays with info about called functions and methods */
+        $called_functions = array();
+        /** map: (function call info => true), to report any call once only */
         $uniqs = array();
+        /** map of function names, checked for existence by function_exists() */
+        $checked_for_functions = array();
 
+        $tokens = $pf->getTokens();
         for ($i=0; $i<count($tokens); ++$i) {
             $t = $tokens[$i];
 
@@ -138,7 +140,7 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                         $uniq = "new##$class_name#$num_of_arguments";
                         if (!isset($uniqs[$uniq])) {
                             $uniqs[$uniq] = true;
-                            $file_slice[] = array(self::F_CLASS_CONSTRUCTOR, null, $class_name, $t->lineNumber, $num_of_arguments);
+                            $called_functions[] = array(self::F_CLASS_CONSTRUCTOR, null, $class_name, $t->lineNumber, $num_of_arguments);
                         }
                     }
                 } elseif ($class_name) {
@@ -166,14 +168,14 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                             $uniq = "new##$class_name#$num_of_arguments";
                             if (!isset($uniqs[$uniq])) {
                                 $uniqs[$uniq] = true;
-                                $file_slice[] = array(self::F_CLASS_CONSTRUCTOR, null, $class_name, $t->lineNumber, $num_of_arguments);
+                                $called_functions[] = array(self::F_CLASS_CONSTRUCTOR, null, $class_name, $t->lineNumber, $num_of_arguments);
                             }
 
                         } else {
                             $uniq = "$function_name##$class_name#$num_of_arguments";
                             if (!isset($uniqs[$uniq])) {
                                 $uniqs[$uniq] = true;
-                                $file_slice[] = array(self::F_CLASS_METHOD, $function_name, $class_name, $t->lineNumber, $num_of_arguments);
+                                $called_functions[] = array(self::F_CLASS_METHOD, $function_name, $class_name, $t->lineNumber, $num_of_arguments);
                             }
                         }
                     }
@@ -187,7 +189,7 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                         $uniq = "$function_name##$num_of_arguments";
                         if (!isset($uniqs[$uniq])) {
                             $uniqs[$uniq] = true;
-                            $file_slice[] = array(self::F_FULLY_QUALIFIED_FUNC, $function_name, null, $t->lineNumber, $num_of_arguments);
+                            $called_functions[] = array(self::F_FULLY_QUALIFIED_FUNC, $function_name, null, $t->lineNumber, $num_of_arguments);
                         }
                     } else {
                         $function_name = $function_name_parts[0];
@@ -196,17 +198,29 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                         $uniq = "$function_name##$namespace_name#$num_of_arguments";
                         if (!isset($uniqs[$uniq])) {
                             $uniqs[$uniq] = true;
-                            $file_slice[] = array(self::F_NOT_QUALIFIED_FUNC, $function_name, $namespace_name, $t->lineNumber, $num_of_arguments, $from_class_name);
+                            $called_functions[] = array(self::F_NOT_QUALIFIED_FUNC, $function_name, $namespace_name, $t->lineNumber, $num_of_arguments, $from_class_name);
+                        }
+                    }
+
+                    if ($function_name == 'function_exists') {
+                        $n = $t->nextNS();
+                        if ($n->kind == T_CONSTANT_ENCAPSED_STRING) {
+                            $checked_for_function_name = trim($n->text, '\'"');
+                            $checked_for_functions[$checked_for_function_name] = true;
                         }
                     }
                 }
             }
         }
+
+        $file_slice = array("called" => $called_functions, "checked" => $checked_for_functions);
         return $file_slice;
     }
 
     public function checkFileSlice(XRef_IProjectDatabase $db, $file_name, $file_slice) {
-        foreach ($file_slice as $s) {
+        $checked_for_functions = $file_slice["checked"];
+
+        foreach ($file_slice["called"] as $s) {
             list ($kind, $function_name, $extra, $line_number, $num_of_arguments) = $s;
 
             if ($kind == self::F_CLASS_METHOD) {
@@ -286,24 +300,28 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                 }
 
                 if ($lr->code != XRef_LookupResult::FOUND) {
-                    $this->errors[$file_name][] = array(
-                        'code'      => self::E_UNKNOWN_FUNCTION,
-                        'text'      => $function_name,
-                        'params'    => array($function_name),
-                        'location'  => array($file_name, $line_number),
-                    );
+                    if (! isset($checked_for_functions[$function_name])) {
+                        $this->errors[$file_name][] = array(
+                            'code'      => self::E_UNKNOWN_FUNCTION,
+                            'text'      => $function_name,
+                            'params'    => array($function_name),
+                            'location'  => array($file_name, $line_number),
+                        );
+                    }
                     continue;
                 }
 
             } elseif ($kind == self::F_FULLY_QUALIFIED_FUNC) {
                 $lr = $db->lookupFunction($function_name);
                 if ($lr->code != XRef_LookupResult::FOUND) {
-                    $this->errors[$file_name][] = array(
-                        'code'      => self::E_UNKNOWN_FUNCTION,
-                        'text'      => $function_name,
-                        'params'    => array($function_name),
-                        'location'  => array($file_name, $line_number),
-                    );
+                    if (! isset($checked_for_functions[$function_name])) {
+                        $this->errors[$file_name][] = array(
+                            'code'      => self::E_UNKNOWN_FUNCTION,
+                            'text'      => $function_name,
+                            'params'    => array($function_name),
+                            'location'  => array($file_name, $line_number),
+                        );
+                    }
                     continue;
                 }
             } else {

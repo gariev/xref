@@ -336,6 +336,41 @@ class FunctionSignatureTest extends BaseLintClass {
         );
     }
 
+    public function testFunctionExists() {
+        $codeA =
+        '<?php
+            unknown_function();                 // warning
+            if (function_exists(\'unknown_function1\')) {
+                unknown_function1();            // ok
+                unknown_function1(1,2,3);       // ok
+            }
+            $foo = \\function_exists("unknown_function2") ?
+                unknown_function2() : null;     // ok
+
+            if ($foo->function_exists("unknown_function3")) {
+                unknown_function3();            // warning, have no idea what $foo->function_exists() does
+            }
+        ';
+
+        $codeB =
+        '<?php
+            unknown_function1();                // warning
+            unknown_function2();                // warning
+            if (function_exists("unknown_function")) {
+                unknown_function();             // ok
+            }
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA, 'fileB.php' => $codeB ),
+            array(
+                array('fileA.php', 'unknown_function',  XRef::WARNING, 2),
+                array('fileA.php', 'unknown_function3', XRef::WARNING, 11),
+
+                array('fileB.php', 'unknown_function1', XRef::WARNING, 2),
+                array('fileB.php', 'unknown_function2', XRef::WARNING, 3),
+            )
+        );
+    }
 
 
 }
