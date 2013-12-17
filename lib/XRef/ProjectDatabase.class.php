@@ -91,6 +91,47 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         $internal_functions = $this->getInternalFunctions();
         $internal_slice = array("classes" => $internal_classes, "functions" => $internal_functions);
         $this->addFileSlice("[internal]", $internal_slice);
+
+        // config-defined functions & class methods
+        $functions = array();
+        $classes = array();
+        foreach (XRef::getConfigValue("lint.add-function-signature", array()) as $str) {
+            $function = self::getFunctionFromString($str);
+            if ($function->className) {
+                $cl_name = strtolower($function->className);
+                if (isset($classes[$cl_name])) {
+                    $c = $classes[$cl_name];
+                } else {
+                    $c = new XRef_Class();
+                    $c->index = -1;
+                    $c->nameIndex = -1;
+                    $c->bodyStarts = -1;
+                    $c->bodyEnds = -1;
+                    $c->kind = T_CLASS;
+                    $c->name = $function->className;
+                    $classes[$cl_name] = $c;
+                }
+                $c->methods[] = $function;
+            } else {
+                $functions[] = $function;
+            }
+        }
+        $this->addFileSlice("[config]", array('classes' => array_values($classes), 'functions' => $functions));
+
+        //
+        // add functions that are defined in extensions that the given PHP runtime may miss
+        // e.g. my dev box misses apc extension
+        // array_multisort is another exception - it may pass several args by reference, but
+        // only the first one is guaranteed
+        $override_list = array(
+            "apc_fetch"               => array(1),      // apc_fetch($key, &$success = null)
+            'apc_dec'                 => array(2),      // apc_dec($key, $step = 1, &success=null)
+            'apc_inc'                 => array(2),      // apc_inc($key, $step = 1, &success=null)
+            'pcntl_waitpid'           => array(1),
+            "pcntl_wait"              => array(0),
+            "array_multisort"         => array(0),
+        );
+
     }
 
 
@@ -320,6 +361,7 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             $p = new XRef_FunctionParameter();
             $p->hasDefaultValue = $rp->isOptional();
             $p->name = $rp->getName();
+            $p->isPassedByReference = $rp->isPassedByReference();
             $m->parameters[] = $p;
         }
         return $m;
@@ -339,6 +381,7 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             $p = new XRef_FunctionParameter();
             $p->hasDefaultValue = $rp->isOptional();
             $p->name = $rp->getName();
+            $p->isPassedByReference = $rp->isPassedByReference();
             $m->parameters[] = $p;
         }
 
@@ -347,9 +390,11 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         if ($m->name == 'define') {
             $m->parameters[2]->hasDefaultValue = true;
         }
+
         if ($m->name == 'implode') {
             $m->parameters[1]->hasDefaultValue = true;
         }
+
         if ($m->name == 'spl_autoload_register') {
             if (count($m->parameters) < 2) {
                 $p = new XRef_FunctionParameter();
@@ -365,8 +410,51 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             }
         }
 
+        if ($m->name == 'array_multisort') {
+            // the first param must be passed by reference
+            // all other parameters are optional and do not require pass-by-ref
+            $p0 = $m->parameters[0];
+            $p1 = new XRef_FunctionParameter();
+            $p1->name = '...';
+            $m->parameters = array($p0, $p1);
+        }
+
         return $m;
     }
+
+    // input: string like
+    //      "my_function($a, $b = null, &$c)"
+    //      "MyClass::myMethod($a, $b, &$c)"
+    //      "namespace\MyClass::method()"
+    //      "?::myMethod($a, $b, &$c)"
+    // output: XRef_Function object
+    public static function getFunctionFromString($str) {
+        // TODO: tokenize all $str and get rig of regular expressions
+        if (!preg_match('#^\\s*(?:([\\w\\\\]+|\\?)::)?([\\w\\\\]+)\\s*\\((.+)\\)\\s*$#', $str, $matches)) {
+            throw new Exception("Can't parse function specification from config file: $str");
+        }
+
+        $function = new XRef_Function();
+        $function->name = $matches[2];
+        $function->className = ($matches[1]) ? $matches[1] : null;
+        $function->index = $function->bodyStarts = $function->bodyEnds = $function->nameIndex = $function->nameStartIndex = -1;
+
+        $arg_list = explode(',', $matches[3]);
+        for ($i = 0; $i < count($arg_list); ++$i) {
+            $t = $arg_list[$i];
+            if (preg_match('#^\\s*(&)?\s*\\$(\\w+)(?:\\s*=)?#', $t, $matches)) {
+                $p = new XRef_FunctionParameter();
+                $p->isPassedByReference = (bool) $matches[1];
+                $p->name = $matches[2];
+                $p->hasDefaultValue = count($matches) > 3 && $matches[3];
+                $function->parameters[] = $p;
+            } else {
+                throw new Exception("Can't parse function parameter '$t' in $str");
+            }
+        }
+        return $function;
+    }
+
 
     /**
      * @param string $name

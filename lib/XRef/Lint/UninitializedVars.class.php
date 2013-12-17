@@ -130,6 +130,11 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
      */
     protected static $internalFunctionsThatDoesntInitializePassedByReferenceParams = array();
 
+    /** @var XRef_Function[] - map function name => XRef_Function object */
+    protected $functionsOfCurrentFile = array();
+
+    protected $projectDatabase = null;
+
     public function __construct() {
         parent::__construct("lint-uninitialized-vars", "Lint (use of uninitialized vars)");
 
@@ -151,9 +156,16 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             XRef::getConfigValue("lint.add-global-var", array())
         );
 
-        if (!self::$internalFunctions) {
-            self::initialize_internal_php_function_list();
-        }
+        //  some functions take pass-by-reference params but they don't initialize them,
+        //  the params must already exist, e.g. bool sort ( array &$array [, int $sort_flags] )
+        $exceptions = array(
+            'array_multisort', 'array_pop', 'array_push', 'array_shift', 'array_splice', 'array_unshift',
+            'array_walk', 'array_walk_recursive', 'arsort', 'asort', 'call_user_method',
+            'call_user_method_array', 'current', 'each', 'end', 'extract', 'key', 'krsort', 'ksort',
+            'mb_convert_variables', 'natcasesort', 'natsort', 'next', 'openssl_csr_new', 'pos', 'prev',
+            'reset', 'rsort', 'settype', 'shuffle', 'sort', 'uasort', 'uksort', 'usort', 'xml_set_object',
+        );
+        self::$internalFunctionsThatDoesntInitializePassedByReferenceParams = array_fill_keys($exceptions, true);
 
     }
 
@@ -229,6 +241,12 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         $tokens = $pf->getTokens();
         $tokens_count = count($tokens);
 
+        // TODO: this should be in constructor!
+        // however, right now unit tests fails
+        // because they can't set "lint.add-function-signature" after ProjectDatabase is created
+        $this->projectDatabase = new XRef_ProjectDatabase();
+        $this->projectDatabase->finalize();
+
         // initialization/clean-up after previous parsed file, if any
         $this->listOfScopes = array();
         $this->listOfCommands = array();
@@ -275,6 +293,18 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             $this->addCommand(array($method->index, self::CMD_SKIP_TO_TOKEN, $skip_to_index));
         }
 
+        // add functions of the current file - we'll use their signatures to find functions/methods
+        // that can initialize passed-by-reference variables
+        $this->functionsOfCurrentFile = array();
+        foreach ($pf->getMethods() as $function) {
+            if ($function->name) {
+                $full_name = ($function->className)
+                        ? $function->className . '::' . $function->name
+                        : $function->name;
+                $this->functionsOfCurrentFile[ strtolower($full_name) ] = $function;
+            }
+        }
+
         // skip the content of class body from checks; check method bodies only
         // add commands:
         //      skip from class start to start of body of first method
@@ -295,20 +325,9 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             }
         }
 
-        // TODO: move the line below into constructor. It's here for unit tests only.
-        // Config doesn't change during normal work, and neither the var below.
-        $this->userFunctionsFromConfig = &self::getUserFunctionsFromConfig();
-        $this->userFunctionsFromCurrentFile = &self::getUserFunctionsFromCurrentFile($pf);
-
         // to check or not to check variables in the global scope
         // variables in local scope (inside functions) will always be checked
         $checkGlobalScope = XRef::getConfigValue("lint.check-global-scope", true);
-
-        $function_knowledge_sources = array(
-            $this->userFunctionsFromConfig,
-            $this->userFunctionsFromCurrentFile,
-            self::$internalFunctions,
-        );
 
         for  ($i = 0; $i < $tokens_count; ++$i) {
             $t = $tokens[$i];
@@ -749,54 +768,47 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
             if ($t->kind == T_STRING) {
                 $n = $t->nextNS();
                 if ($n->text == '(') {
-                    $function_name = $this->getFullyQualifiedFunctionName($pf, $t);
+                    $function = $this->getFunctionAtToken($pf, $t);
                     $arguments = $pf->extractList($n->nextNS());
-                    $is_known_function = false;
 
-                    foreach ($function_knowledge_sources as $s) {
-                        if (array_key_exists($function_name, $s)) {
-                            $args = $s[$function_name];
-                            $is_known_function = true;
-                            break;
-                        }
-                    }
-
-                    if ($is_known_function) {
+                    if ($function) {
                         // For known functions:
                         //  - mark variables that are used as passed-by-reference return arguments as known
                         //  - do nothing with variables that are not returned by function - they will be checked later
-                        if ($args) {
-                            foreach ($args as $argPos) {
-                                if (count($arguments) > $argPos) {
-                                    $n = $arguments[$argPos];
-                                    if ($n->text == '&') {
-                                        $n = $n->nextNS();
+                        $function_name = ($function->className)
+                                ? $function->className . '::' . $function->name
+                                : $function->name;
+
+                        foreach ($function->parameters as $pos => $param) {
+                            if ($pos < count($arguments) && $param->isPassedByReference) {
+                                $n = $arguments[$pos];
+                                if ($n->text == '&') {
+                                    $n = $n->nextNS();
+                                }
+
+                                if ($n->kind == T_VARIABLE) {
+                                    if (isset(self::$internalFunctionsThatDoesntInitializePassedByReferenceParams[$function_name])) {
+                                        // if the function takes parameters by reference, but they must be defined prior to that
+                                        // (e.g. sort), than check that this var exists
+                                        $this->checkVarAndAddDefectIfMissing($n);
+                                    } else {
+                                        // otherwise, just note that this var will be initialized by this method call
+                                        $var = $this->currentScope->getOrCreateVar($n);
+                                        $var->status = self::VAR_ASSIGNED;
+                                    }
+                                } else {
+                                    // warn about non-variable being passed by reference
+                                    // allow static class variable: Foo::$bar, \Foo\Bar::$baz
+                                    $is_class_variable = false;
+                                    if ($n->kind == T_STRING || $n->kind == T_NS_SEPARATOR) {
+                                        list($type, $t) = self::parseType($n);
+                                        if ($t->kind == T_DOUBLE_COLON && $t->nextNS()->kind == T_VARIABLE) {
+                                            $is_class_variable = true;
+                                        }
                                     }
 
-                                    if ($n->kind == T_VARIABLE) {
-                                        if (isset(self::$internalFunctionsThatDoesntInitializePassedByReferenceParams[$function_name])) {
-                                            // if the function takes parameters by reference, but they must be defined prior to that
-                                            // (e.g. sort), than check that this var exists
-                                            $this->checkVarAndAddDefectIfMissing($n);
-                                        } else {
-                                            // otherwise, just note that this var will be initialized by this method call
-                                            $var = $this->currentScope->getOrCreateVar($n);
-                                            $var->status = self::VAR_ASSIGNED;
-                                        }
-                                    } else {
-                                        // warn about non-variable being passed by reference
-                                        // allow static class variable: Foo::$bar, \Foo\Bar::$baz
-                                        $is_class_variable = false;
-                                        if ($n->kind == T_STRING || $n->kind == T_NS_SEPARATOR) {
-                                            list($type, $t) = self::parseType($n);
-                                            if ($t->kind == T_DOUBLE_COLON && $t->nextNS()->kind == T_VARIABLE) {
-                                                $is_class_variable = true;
-                                            }
-                                        }
-
-                                        if (!$is_class_variable) {
-                                            $this->addDefect($n, self::E_NON_VAR_PASSED_BY_REF);
-                                        }
+                                    if (!$is_class_variable) {
+                                        $this->addDefect($n, self::E_NON_VAR_PASSED_BY_REF);
                                     }
                                 }
                             }
@@ -928,159 +940,6 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         return null;
     }
 
-    // initialize:
-    //  1. self::$internalFunctions
-    //      - the list of internal php function with their arguments that can be passed by reference
-    //  2. self::$internalFunctionsThatDoesntInitializePassedByReferenceParams
-    //
-    private static function initialize_internal_php_function_list() {
-        //
-        // use PHP introspection to get all known functions
-        //
-        $defined_functions = get_defined_functions();
-        $internal_functions = $defined_functions["internal"];
-        foreach ($internal_functions as $function_name) {
-            $r = new ReflectionFunction($function_name);
-            $params = $r->getParameters();
-            $ref_params_list = array();
-            foreach ($params as $p) {
-                if ($p->isPassedByReference()) {
-                    $pos = $p->getPosition();
-                    if ($p->getName() == "...") {
-                        // functions like sscanf takes unlimited number of args
-                        // TODO: create a better way to work with unlimited lists
-                        for ($i = $pos; $i<10; ++$i) {
-                            $ref_params_list[] = $i;
-                        }
-                    } else {
-                        $ref_params_list[] = $pos;
-                    }
-                }
-            }
-            self::$internalFunctions[$function_name] = (count($ref_params_list)) ? $ref_params_list : null;
-        }
-
-        // add functions that are defined in extensions that the given PHP runtime may miss
-        // e.g. my dev box misses apc extension
-        // array_multisort is another exception - it may pass several args by reference, but
-        // only the first one is guaranteed
-        $override_list = array(
-            "apc_fetch"               => array(1),
-            'apc_dec'                 => array(2),
-            'apc_inc'                 => array(2),
-            'grapheme_extract'        => array(4),
-            'ncurses_color_content'   => array(1, 2, 3),
-            'ncurses_getmaxyx'        => array(1, 2),
-            'ncurses_getmouse'        => array(0),
-            'ncurses_getyx'           => array(1, 2),
-            'ncurses_instr'           => array(0),
-            'ncurses_mouse_trafo'     => array(0, 1),
-            'ncurses_mousemask'       => array(1),
-            'ncurses_pair_content'    => array(1, 2),
-            'ncurses_wmouse_trafo'    => array(1, 2),
-            'numfmt_parse'            => array(3),
-            'numfmt_parse_currency'   => array(2, 3),
-            'pcntl_waitpid'           => array(1),
-            "pcntl_wait"              => array(0),
-            "array_multisort"         => array(0),
-        );
-
-        foreach ($override_list as $function_name => $args) {
-            self::$internalFunctions[$function_name] = $args;
-        }
-
-        //  some functions take pass-by-reference params but they don't initialize them,
-        //  the params must already exist, e.g. bool sort ( array &$array [, int $sort_flags] )
-        $exceptionList = array(
-            'array_multisort', 'array_pop', 'array_push', 'array_shift', 'array_splice', 'array_unshift',
-            'array_walk', 'array_walk_recursive', 'arsort', 'asort', 'call_user_method',
-            'call_user_method_array', 'current', 'each', 'end', 'extract', 'key', 'krsort', 'ksort',
-            'mb_convert_variables', 'natcasesort', 'natsort', 'next', 'openssl_csr_new', 'pos', 'prev',
-            'reset', 'rsort', 'settype', 'shuffle', 'sort', 'uasort', 'uksort', 'usort', 'xml_set_object',
-        );
-        self::$internalFunctionsThatDoesntInitializePassedByReferenceParams = array_fill_keys($exceptionList, true);
-    }
-
-    private static function &getUserFunctionsFromCurrentFile(XRef_IParsedFile $pf) {
-        $functions = array();
-
-        // add functions/methods defined in this file
-        $pf_methods = $pf->getMethods();
-        foreach ($pf_methods as $m) {
-            $function_name = $m->name;
-            if (!$function_name) {
-                // anonymous function
-                continue;
-            }
-            if ($function_name=='__construct') {
-                // constructors are too different from regular functions/methods
-                // in decl/usage syntax
-                continue;
-            }
-
-            $ref_params_list = array();
-            for ($i=0; $i<count($m->parameters); ++$i) {
-                if ($m->parameters[$i]->isPassedByReference) {
-                    $ref_params_list[] = $i;
-                }
-            }
-            if (!count($ref_params_list)) {
-                $ref_params_list = null;
-            }
-
-            if ($m->className) {
-                $functions[ $m->className . '::' . $function_name ] = $ref_params_list;
-            } else {
-                $functions[$function_name] = $ref_params_list;
-            }
-        }
-
-        return $functions;
-    }
-
-    private static function &getUserFunctionsFromConfig() {
-        $functions = array();
-
-        // add user-defined functions/methods from config file
-        // add-function-signature = "my_function($a, $b, &$c)"
-        // add-function-signature = "MyClass::myMethod($a, $b, &$c)"
-        // add-function-signature = "?::myMethod($a, $b, &$c)"
-        foreach (XRef::getConfigValue("lint.add-function-signature", array()) as $str) {
-            // TODO: tokenize all $str and get rig of regular expressions
-            if (!preg_match('#^\s*(?:(\w+|\?)::)?(\w+)\s*\((.+)\)\s*$#', $str, $matches)) {
-                throw new Exception("Can't parse function specification from config file: $str");
-            }
-
-            if ($matches[1]) {
-                $class_name = $matches[1];
-                $function_name = $matches[2];
-            } else {
-                $class_name = null;
-                $function_name = $matches[2];
-            }
-
-            $ref_params_list = array();
-            $arg_list = explode(',', $matches[3]);
-            for ($i = 0; $i < count($arg_list); ++$i) {
-                $t = $arg_list[$i];
-                if (preg_match('#^\s*&#', $t)) {
-                    $ref_params_list[] = $i;
-                }
-            }
-
-            if (!count($ref_params_list)) {
-                $ref_params_list = null;
-            }
-
-            if ($class_name) {
-                $functions[ $class_name . '::' . $function_name ] = $ref_params_list;
-            } else {
-                $functions[$function_name] = $ref_params_list;
-            }
-        }
-        return $functions;
-    }
-
     // input: token where starts the (optionally typed) declaration of variable
     // output: tuple(fully qualified type name, next token)
     // e.g.
@@ -1114,38 +973,53 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
     // $unknownTypeVar->bar()   --> "?::bar"
     // $knownTypeVar->bar()     --> "VarType::bar"
     // bar()                    --> "bar"
-    private function getFullyQualifiedFunctionName($pf, $token) {
+    /** @return XRef_Function object */
+    private function getFunctionAtToken($pf, $token) {
         $function_name = $token->text;
+        $class_name = null;
+
         $p = $token->prevNS();
         $pp = $p->prevNS();
         $current_class = $pf->getClassAt( $token->index );
 
         if ($p->kind == T_OBJECT_OPERATOR) {
             if ($pp->text == '$this') {
-                if ($current_class) {
-                    return $current_class->name . "::" . $function_name;
-                }
+                $class_name = ($current_class) ? $current_class->name : '?';
             } elseif ($pp->kind == T_VARIABLE) {
-                $type = $this->currentScope->getVarType($pp->text);
-                if ($type) {
-                    // TODO: check that the type is a class name and not e.g. an array or int.
-                    // Otherwise, add defect "Can't call method on value of <...> type"
-                    return $type . "::" . $function_name;
-                }
+                // TODO: check that the type is a class name and not e.g. an array or int.
+                // Otherwise, add defect "Can't call method on value of <...> type"
+                $var_type = $this->currentScope->getVarType($pp->text);
+                $class_name = ($var_type) ? $var_type : '?';
+            } else {
+                $class_name = '?';
             }
-            return "?::" . $function_name;
         } elseif ($p->kind == T_DOUBLE_COLON) {
             if ($pp->text == 'self') {
-                if ($current_class) {
-                    return $current_class->name . "::" . $function_name;
-                }
-                return "?::" . $function_name;
+                $class_name = ($current_class) ? $current_class->name : '?';
             } else {
                 // TODO: scan left for complex type names: \Foo\Bar::baz()
-                return $pp->text . "::" . $function_name;
+                $class_name = $pp->text;
             }
         }
-        return $function_name;
+        $full_name = ($class_name)
+                ? $class_name . '::' . $function_name
+                : $function_name;
+        $full_name = strtolower($full_name);
+
+        if (isset($this->functionsOfCurrentFile[$full_name])) {
+            // the function is defined in current file
+            return $this->functionsOfCurrentFile[$full_name];
+        } else {
+            // maybe this is one of standard functions or
+            // function defined via lint.add-function-signature
+            $lr = ($class_name)
+                    ? $this->projectDatabase->lookupMethod($class_name, $function_name)
+                    : $this->projectDatabase->lookupFunction($function_name);
+            $function = ($lr->code == XRef_LookupResult::FOUND)
+                    ? $lr->elements[0]
+                    : null;
+            return $function;
+        }
     }
 
     // input: doc comment text
