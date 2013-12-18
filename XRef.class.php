@@ -587,9 +587,8 @@ class XRef {
 
         if (!$filename) {
             // get name of config file from command-line args (-c, --config)
-            list($options, $arguments) = self::getCmdOptions();
-            if (isset($options["config"])) {
-                $filename = $options["config"];
+            if (self::$options && isset(self::$options["config"])) {
+                $filename = self::$options["config"];
             }
         }
 
@@ -706,9 +705,8 @@ class XRef {
         }
 
         // override values with -d command-line option
-        list($options, $arguments) = self::getCmdOptions();
-        if (isset($options["define"])) {
-            foreach ($options["define"] as $d) {
+        if (self::$options && isset(self::$options["define"])) {
+            foreach (self::$options["define"] as $d) {
                 list($k, $v) = explode("=", $d, 2);
                 if ($v) {
                     if ($v=="true" || $v=="on") {
@@ -883,7 +881,6 @@ class XRef {
      * ---------------------------------------------------------------*/
     private static $options;
     private static $arguments;
-    private static $needHelp;
     private static $verbose;
 
     // optionsList: array of arrays (shortOpt, longOpt, usage, description, isArray)
@@ -1183,7 +1180,7 @@ class XRef {
                             // -sfoo
                             $value = implode($chars);
                         } else {
-                            if (substr($args[0], 0, 1) != '-') {
+                            if (count($args) > 0 && substr($args[0], 0, 1) != '-') {
                                 // -s --other-option
                                 $value = array_shift($args);
                             } else {
@@ -1211,11 +1208,7 @@ class XRef {
      * @return bool
      */
     public static function needHelp() {
-        if (! isset(self::$needHelp)) {
-            list($options) = self::getCmdOptions();
-            self::$needHelp = isset($options['help']) ? $options['help'] : false;
-        }
-        return self::$needHelp;
+        return (self::$options && isset(self::$options['help'])) ? self::$options['help'] : false;
     }
 
     public static function showHelpScreen($tool_name, $usage_string = null) {
@@ -1248,20 +1241,20 @@ class XRef {
                     }
                 }
             }
-        }
 
-        $config_file = self::getConfigFilename();
-        if (!$config_file) {
-            $config_file = "(not found; using default values)";
+            $config_file = self::getConfigFilename();
+            if (!$config_file) {
+                $config_file = "(not found; using default values)";
+            }
+            $path_to_readme     = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md"    : '@doc_dir@/XRef/README.md';
+            $path_to_examples   = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/examples"     : '@doc_dir@/XRef/examples';
+            $path_to_webscripts = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/web-scripts"  : "@php_dir@/XRef/web-scripts";
+            echo "Locations:\n";
+            echo "  config file:    $config_file\n";
+            echo "  readme:         $path_to_readme\n";
+            echo "  examples:       $path_to_examples\n";
+            echo "  web-scripts:    $path_to_webscripts\n";
         }
-        $path_to_readme     = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/README.md"    : '@doc_dir@/XRef/README.md';
-        $path_to_examples   = ('@doc_dir@' == '@'.'doc_dir@') ? dirname(__FILE__) . "/examples"     : '@doc_dir@/XRef/examples';
-        $path_to_webscripts = ("@php_dir@" == "@"."php_dir@") ? dirname(__FILE__) . "/web-scripts"  : "@php_dir@/XRef/web-scripts";
-        echo "Locations:\n";
-        echo "  config file:    $config_file\n";
-        echo "  readme:         $path_to_readme\n";
-        echo "  examples:       $path_to_examples\n";
-        echo "  web-scripts:    $path_to_webscripts\n";
     }
 
     protected static function showErrors() {
@@ -1347,8 +1340,7 @@ class XRef {
      */
     public static function verbose() {
         if (! isset(self::$verbose)) {
-            list($options) = self::getCmdOptions();
-            self::$verbose = isset($options['verbose']) && $options['verbose'];
+            self::$verbose = self::$options && isset(self::$options['verbose']) && self::$options['verbose'];
         }
         return self::$verbose;
     }
