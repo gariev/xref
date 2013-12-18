@@ -287,6 +287,10 @@ class UndefinedVarsLintTest extends BaseLintClass {
                 '?::qux(&$a, &$b)',
             )
         );
+
+        // re-create the lint plugins with new config settings
+        $this->resetPlugins();
+
         $testPhpCode = '<?php
 
             function t() {

@@ -167,6 +167,8 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         );
         self::$internalFunctionsThatDoesntInitializePassedByReferenceParams = array_fill_keys($exceptions, true);
 
+        $this->projectDatabase = new XRef_ProjectDatabase();
+        $this->projectDatabase->finalize();
     }
 
     const VAR_ASSIGNED = 1;
@@ -240,12 +242,6 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
         }
         $tokens = $pf->getTokens();
         $tokens_count = count($tokens);
-
-        // TODO: this should be in constructor!
-        // however, right now unit tests fails
-        // because they can't set "lint.add-function-signature" after ProjectDatabase is created
-        $this->projectDatabase = new XRef_ProjectDatabase();
-        $this->projectDatabase->finalize();
 
         // initialization/clean-up after previous parsed file, if any
         $this->listOfScopes = array();

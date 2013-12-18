@@ -87,53 +87,9 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
      * and the database is complete.
      */
     public function finalize() {
-        $internal_classes = $this->getInternalClasses();
-        $internal_functions = $this->getInternalFunctions();
-        $internal_slice = array("classes" => $internal_classes, "functions" => $internal_functions);
-        $this->addFileSlice("[internal]", $internal_slice);
-
-        // config-defined functions & class methods
-        $functions = array();
-        $classes = array();
-        foreach (XRef::getConfigValue("lint.add-function-signature", array()) as $str) {
-            $function = self::getFunctionFromString($str);
-            if ($function->className) {
-                $cl_name = strtolower($function->className);
-                if (isset($classes[$cl_name])) {
-                    $c = $classes[$cl_name];
-                } else {
-                    $c = new XRef_Class();
-                    $c->index = -1;
-                    $c->nameIndex = -1;
-                    $c->bodyStarts = -1;
-                    $c->bodyEnds = -1;
-                    $c->kind = T_CLASS;
-                    $c->name = $function->className;
-                    $classes[$cl_name] = $c;
-                }
-                $c->methods[] = $function;
-            } else {
-                $functions[] = $function;
-            }
-        }
-        $this->addFileSlice("[config]", array('classes' => array_values($classes), 'functions' => $functions));
-
-        //
-        // add functions that are defined in extensions that the given PHP runtime may miss
-        // e.g. my dev box misses apc extension
-        // array_multisort is another exception - it may pass several args by reference, but
-        // only the first one is guaranteed
-        $override_list = array(
-            "apc_fetch"               => array(1),      // apc_fetch($key, &$success = null)
-            'apc_dec'                 => array(2),      // apc_dec($key, $step = 1, &success=null)
-            'apc_inc'                 => array(2),      // apc_inc($key, $step = 1, &success=null)
-            'pcntl_waitpid'           => array(1),
-            "pcntl_wait"              => array(0),
-            "array_multisort"         => array(0),
-        );
-
+        $this->addFileSlice("[internal]", $this->getInternalSlice() );
+        $this->addFileSlice("[config]", $this->getConfigSlice() );
     }
-
 
     //
     // database query methods
@@ -253,48 +209,98 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
     }
 
     //
-    // internal methods collect info about internal/system classes
+    // internal methods collect info about internal/system classes & functions
     // using reflection API
     //
-    private static $internalClasses = null;
+    private static $internalClassesAndFunctions = null;
     private static $hasTraits;
 
     /**
-     * @return XRef_Class[]
+     * returns array( "classes" => XRef_Class[], "functions" => XRef_Function[])
+     * with internal (system defined) classes, traits, interfaces and functions.
      */
-    private function getInternalClasses() {
-        if (! self::$internalClasses) {
-            self::$internalClasses = array();
+    private function getInternalSlice() {
+        if (! self::$internalClassesAndFunctions) {
+
+            $classes = array();
             foreach (get_declared_classes() as $class_name) {
                 $rc = new ReflectionClass($class_name);
                 if ($rc->isInternal()) {
-                    self::$internalClasses[] = $this->getClassByReflection($rc);
+                    $classes[$class_name] = $this->getClassByReflection($rc);
                 }
             }
             foreach (get_declared_interfaces() as $class_name) {
                 $rc = new ReflectionClass($class_name);
                 if ($rc->isInternal()) {
-                    self::$internalClasses[] = $this->getClassByReflection($rc);
+                    $classes[$class_name] = $this->getClassByReflection($rc);
                 }
             }
-        }
-        return self::$internalClasses;
-    }
 
-    private static $internalFunctions = null;
-    private function getInternalFunctions() {
-        if (! self::$internalFunctions) {
-            self::$internalFunctions = array();
+            $functions = array();
             $defined_functions = get_defined_functions();
             foreach ($defined_functions["internal"] as $function_name) {
                 $rf = new ReflectionFunction($function_name);
-                self::$internalFunctions[] = $this->getFunctionByReflection($rf);
+                $functions[$function_name] = $this->getFunctionByReflection($rf);
             }
+
+            //
+            // add functions that are defined in extensions that the given PHP runtime may miss
+            // e.g. my dev box misses apc extension
+            $override_list = array(
+                "apc_fetch"     => 'apc_fetch($key, &$success = null)',
+                'apc_dec'       => 'apc_dec($key, $step = 1, &$success = null)',
+                'apc_inc'       => 'apc_inc($key, $step = 1, &$success = null)',
+                'pcntl_waitpid' => 'pcntl_waitpid ( $pid, &$status, $options = 0)',
+                'pcntl_wait'    => 'pcntl_wait ( &$status, $options = 0)',
+            );
+            foreach ($override_list as $function_name => $str) {
+                if (! isset($functions[$function_name])) {
+                    $functions[$function_name] = self::getFunctionFromString($str);
+                }
+            }
+
+            self::$internalClassesAndFunctions = array(
+                "classes"   => array_values($classes),
+                "functions" => array_values($functions),
+            );
         }
-        return self::$internalFunctions;
+
+        return self::$internalClassesAndFunctions;
     }
 
     /**
+     * returns array with config-defined functions
+     * (see config key "lint.add-function-signature" in README)
+     */
+    private function getConfigSlice() {
+        // config-defined functions & class methods
+        $functions = array();
+        $classes = array();
+        foreach (XRef::getConfigValue("lint.add-function-signature", array()) as $str) {
+            $function = self::getFunctionFromString($str);
+            if ($function->className) {
+                $cl_name = strtolower($function->className);
+                if (isset($classes[$cl_name])) {
+                    $c = $classes[$cl_name];
+                } else {
+                    $c = new XRef_Class();
+                    $c->index = -1;
+                    $c->nameIndex = -1;
+                    $c->bodyStarts = -1;
+                    $c->bodyEnds = -1;
+                    $c->kind = T_CLASS;
+                    $c->name = $function->className;
+                    $classes[$cl_name] = $c;
+                }
+                $c->methods[] = $function;
+            } else {
+                $functions[] = $function;
+            }
+        }
+        return array('classes' => array_values($classes), 'functions' => $functions);
+    }
+
+   /**
      * @param ReflectionClass $rc
      * @return XRef_Class
      */

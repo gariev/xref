@@ -233,6 +233,13 @@ class XRef {
         }
     }
 
+    /** method is needed for unit tests only to reset the list of plugins and/or re-create them */
+    public function resetPlugins() {
+        $this->plugins = array();
+        $this->parsers = array();
+        $this->storageManager = null;
+    }
+
     /**
      * @return XRef_ISourceCodeManager
      */

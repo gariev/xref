@@ -10,8 +10,12 @@ class BaseLintClass extends PHPUnit_Framework_TestCase {
     public function __construct() {
         // don't read a config file, if any
         XRef::setConfigFileName("default");
-
         $this->xref = new XRef();
+        $this->resetPlugins();
+    }
+
+    public function resetPlugins() {
+        $this->xref->resetPlugins();
         $this->xref->loadPluginGroup('lint');
         XRef::setConfigValue("lint.check-global-scope", true);
     }
