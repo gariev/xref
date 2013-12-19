@@ -51,12 +51,14 @@ abstract class XRef_Plugin_Methods extends XRef_APlugin implements XRef_IDocumen
         // collect all declared methods
         $pf_methods = $pf->getMethods();
         foreach ($pf_methods as /** @var $pfm XRef_Function */ $pfm) {
-            $m = $this->getOrCreate($pfm->name);
-            $definedAt = new XRef_FilePosition($pf, $pfm->nameIndex);
-            $m->definedAt[] = $definedAt;
+            if ($pfm->name) {
+                $m = $this->getOrCreate($pfm->name);
+                $definedAt = new XRef_FilePosition($pf, $pfm->nameIndex);
+                $m->definedAt[] = $definedAt;
 
-            // link from source file HTML page to report page "reportId/objectId"
-            $this->xref->addSourceFileLink($definedAt, $this->reportId, $m->id, true);
+                // link from source file HTML page to report page "reportId/objectId"
+                $this->xref->addSourceFileLink($definedAt, $this->reportId, $m->id, true);
+            }
         }
 
         // collect all method calls
