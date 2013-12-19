@@ -35,6 +35,7 @@ class XRef_Doc_LintReport extends XRef_APlugin implements XRef_IDocumentationPlu
         $report = $this->lintEngine->collectReport();
 
         list($fh, $root) = $this->xref->getOutputFileHandle($this->reportId, null);
+        $this->xref->addSourceCodeLinks($report, null, $root);
         fwrite($fh,
             $this->xref->fillTemplate(
                 'doc-lint-report.tmpl',

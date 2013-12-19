@@ -247,7 +247,9 @@ class XRef_LintEngine_Simple implements XRef_ILintEngine {
                 $this->parseException = null;
 
                 $this->stats["parsed_files"]++;
-            } catch(Exception $e) {
+            } catch (XRef_ParseException $e) {
+                // catch XRef_ParseException here and allow to process the next file
+                // however, all other exceptions are propagated
                 $this->pf = false;
                 $this->parseException = $e;
             }

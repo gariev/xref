@@ -763,6 +763,7 @@ class XRef {
             $config[] = "[project]";
             $config[] = array("name", basename($cwd));
             $config[] = array("source-code-dir[]", realpath($cwd));
+            $config[] = array(";source-url", 'https://github.com/<author>/<project>/blob/{%revision}/{%fileName}#L{%lineNumber}');
             $config[] = null;
 
             $config[] = "[xref]";
@@ -811,10 +812,10 @@ class XRef {
                 } else {
                     list($k, $v) = $line;
                     if (preg_match('#^\\w+$#', $v)) {
-                        $l = sprintf("%-22s= %s\n", $k, $v);
+                        $l = sprintf("%-24s= %s\n", $k, $v);
                     } else {
                         $v = preg_replace('#\\\\#', '\\\\', $v);
-                        $l = sprintf("%-22s= \"%s\"\n", $k, $v);
+                        $l = sprintf("%-24s= \"%s\"\n", $k, $v);
                     }
                 }
                 fwrite($fh, $l);
@@ -1415,38 +1416,133 @@ class XRef {
     }
 
     /**
-     * Function is called from Smarty templeate, returns formatted URL. Usage exampple (smarty code):
+     * Modifies the error report, returned by lint engine
+     * (see XRef_ILintEngine::getReport() and XRef_ILintEngine::collectReport())
+     * and inserts "source_url" into errors description
+     *
+     * @param array $errors_report
+     * @return void
+     */
+    public function addSourceCodeLinks($report, $revision = '', $root = '') {
+        if ($revision) {
+            // xref-ci report mode:
+            // add links to external url (github) or to web address of current installation of xref,
+            // whichever is configured
+            //
+            // url_template: 'https://github.com/<author>/<project>/blob/{%revision}/{%fileName}#L{%lineNumber}'
+            $url_template = self::getConfigValue("project.source-url", "");
+            if (!$url_template) {
+                $script_url = self::getConfigValue("xref.script-url", "");
+                if ($script_url) {
+                    $url_template = $script_url . '/view-source.php?revision={%revision}&filename={%fileName}#{%lineNumber}';
+                }
+            }
+
+            if ($url_template) {
+                $search     = array('{%revision}', '{%fileName}', '{%lineNumber}');
+                foreach ($report as $file_name => $errors_list) {
+                    foreach ($errors_list as $e) {
+                        if ($e->lineNumber) {
+                            $replace = array($revision, $file_name, $e->lineNumber);
+                            $e->sourceUrl = str_replace($search, $replace, $url_template);
+                        }
+                    }
+                }
+            }
+        } else {
+            // xref-doc report mode:
+            // add links to locally generated report files
+            foreach ($report as $file_name => $errors_list) {
+                foreach ($errors_list as $e) {
+                    if ($e->lineNumber) {
+                        $params = array(
+                            "reportId"  => "files",
+                            "itemName"  => $file_name,
+                            "root"      => $root,
+                            "lineNumber"=> $e->lineNumber,
+                        );
+                        $e->sourceUrl = $this->xref_report_link($params);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Function is called from Smarty template, returns formatted URL. Usage example (smarty code):
      * <a href='{xref_report_link reportId="files" itemName=$filePos->fileName root=$root lineNumber=$filePos->lineNumber}'>...</a>
      *
      * @return string
      */
-    public function xref_report_link($params, $smarty) {
+    public function xref_report_link($params, $smarty = null) {
         $itemName = isset($params['itemName']) ? $params['itemName'] : null;        // just to remove warning
         $lineNumber = isset($params['lineNumber']) ? $params['lineNumber'] : null;  // about optional params
         return $this->getHtmlLinkFor( $params['reportId'], $itemName, $params['root'], $lineNumber );
     }
 
-    public function xref_severity_str($params, $smarty) {
+    public function xref_severity_str($params, $smarty = null) {
         $str = XRef::$severityNames[ $params['severity'] ];
         return ($params['html']) ? "<span class='$str'>$str</span>" : $str;
     }
 
-    public static function isPublic($attriburtes) {
+    public function getNotificationEmail($report, $branch_name, $old_rev, $current_rev) {
+
+        $this->addSourceCodeLinks($report, $current_rev);
+
+        $reply_to       = XRef::getConfigValue('mail.reply-to');
+        $from           = XRef::getConfigValue('mail.from');
+        $mail_to        = XRef::getConfigValue('mail.to');
+        $project_name   = XRef::getConfigValue('project.name', '');
+
+        // this works for git, will it work for other scms?
+        $old_rev_short      = (strlen($old_rev) > 7)    ? substr($old_rev, 0, 7)     : $old_rev;
+        $current_rev_short  = (strlen($current_rev) > 7)? substr($current_rev, 0, 7) : $current_rev;
+
+        // $commitInfo: array('an'=>'igariev', 'ae'=>'igariev@9e1ac877-.', ...)
+        $commitInfo = $this->getSourceCodeManager()->getRevisionInfo($current_rev);
+
+        $subject    = "XRef CI $project_name: $branch_name/$current_rev_short";
+        $headers    =
+            "MIME-Version: 1.0\n".
+            "Content-type: text/html\n".
+            "Reply-to: $reply_to\n".
+            "From: $from\n";
+
+        $body = $this->fillTemplate("ci-email.tmpl", array(
+            'branchName'        => $branch_name,
+            'oldRev'            => $old_rev,
+            'oldRevShort'       => $old_rev_short,
+            'currentRev'        => $current_rev,
+            'currentRevShort'   => $current_rev_short,
+            'fileErrors'        => $report,
+            'commitInfo'        => $commitInfo,
+        ));
+
+        $recipients = array();
+        foreach ($mail_to as $to) {
+            $to = preg_replace('#\{%(\w+)\}#e', '$commitInfo["$1"]', $to);
+            $recipients[] = $to;
+        }
+
+        return array($recipients, $subject, $body, $headers);
+    }
+
+    public static function isPublic($attributes) {
         // either explicit public, or no visibility modifier at all (compat mode with php 4)
         return
-            ($attriburtes & self::MASK_PUBLIC) != 0
-            || ($attriburtes & self::MASK_PRIVATE) == 0 && ($attriburtes & self::MASK_PROTECTED) == 0;
+            ($attributes & self::MASK_PUBLIC) != 0
+            || ($attributes & self::MASK_PRIVATE) == 0 && ($attributes & self::MASK_PROTECTED) == 0;
 
     }
 
-    public static function isPrivate($attriburtes) {
-        return ($attriburtes & self::MASK_PRIVATE);
+    public static function isPrivate($attributes) {
+        return ($attributes & self::MASK_PRIVATE);
     }
-    public static function isProtected($attriburtes) {
-        return ($attriburtes & self::MASK_PROTECTED);
+    public static function isProtected($attributes) {
+        return ($attributes & self::MASK_PROTECTED);
     }
-    public static function isStatic($attriburtes) {
-        return ($attriburtes & self::MASK_STATIC);
+    public static function isStatic($attributes) {
+        return ($attributes & self::MASK_STATIC);
     }
 
 

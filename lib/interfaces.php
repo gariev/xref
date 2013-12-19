@@ -215,6 +215,7 @@ class XRef_CodeDefect {
     public $lineNumber;     // int
     public $inClass;        // string, may be null
     public $inMethod;       // string, may be null
+    public $sourceUrl;      // string, may be null, used by templates
 
     // helper constructors
     public static function fromTokenText($token_text, $error_code, $severity, $message_template, $message_params = null) {

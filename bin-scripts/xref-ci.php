@@ -119,7 +119,12 @@ foreach ($branches as $branch_name => $current_rev) {
         if (XRef::verbose()) {
             error_log(count($errors) . " file(s) with errors found");
         }
-        XRef_notifyAuthor($xref, $errors, $branch_name, $old_rev, $current_rev);
+
+        list ($recipients, $subject, $body, $headers) = $xref->getNotificationEmail($errors, $branch_name, $old_rev, $current_rev);
+        foreach ($recipients as $to) {
+            mail($to, $subject, $body, $headers);
+        }
+
         $db["numberOfSentLetters"]++;
     }
 
@@ -129,40 +134,4 @@ foreach ($branches as $branch_name => $current_rev) {
     $storage->saveData("ci", "database", $db);
 }
 $storage->releaseLock("ci");
-
-function XRef_notifyAuthor(XRef $xref, $fileErrors, $branch_name, $old_rev, $current_rev) {
-    $reply_to       = XRef::getConfigValue('mail.reply-to');
-    $from           = XRef::getConfigValue('mail.from');
-    $recepients     = XRef::getConfigValue('mail.to');
-    $project_name   = XRef::getConfigValue('project.name', '');
-
-    // this works for git, will it work for other scms?
-    $old_rev_short      = (strlen($old_rev)>7)     ? substr($old_rev, 0, 7)     : $old_rev;
-    $current_rev_short  = (strlen($current_rev)>7) ? substr($current_rev, 0, 7) : $current_rev;
-
-    // $commitInfo: array('an'=>'igariev', 'ae'=>'igariev@9e1ac877-.', ...)
-    $commitInfo = $xref->getSourceCodeManager()->getRevisionInfo($current_rev);
-
-    $subject    = "XRef CI $project_name: $branch_name/$current_rev_short";
-    $headers    =   "MIME-Version: 1.0\n".
-            "Content-type: text/html\n".
-            "Reply-to: $reply_to\n".
-            "From: $from\n";
-
-    $body = $xref->fillTemplate("ci-email.tmpl", array(
-        'branchName'        => $branch_name,
-        'oldRev'            => $old_rev,
-        'oldRevShort'       => $old_rev_short,
-        'currentRev'        => $current_rev,
-        'currentRevShort'   => $current_rev_short,
-        'fileErrors'        => $fileErrors,
-        'commitInfo'        => $commitInfo,
-    ));
-
-    foreach ($recepients as $to) {
-        $to = preg_replace('#\{%(\w+)\}#e', '$commitInfo["$1"]', $to);
-        mail($to, $subject, $body, $headers);
-    }
-}
-// vim: tabstop=4 expandtab
 
