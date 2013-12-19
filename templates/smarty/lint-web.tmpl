@@ -4,18 +4,22 @@
 <h1>XRef lint - tool to find problems in PHP source code</h1>
 
 {if $hasSource}
-    {if $report}
+    {if isset($report)}
 
         {if count($report)}
             <h2>Found defects:</h2>
             <ul>
-            {foreach from=$report item="e"}
-            <li>
-                {xref_severity_str severity=$e->severity html=true}
-                (<a href="https://github.com/gariev/xref/blob/master/README.md#{$e->errorCode}">{$e->errorCode}</a>):
-                {$e->message} at
-                <a href="#{$e->lineNumber}">line {$e->lineNumber}</a>
-            </li>
+            {foreach from=$report item="file_error_list"}
+                {foreach from=$file_error_list item="e"}
+                <li>
+                    {xref_severity_str severity=$e->severity html=true}
+                    (<a href="https://github.com/gariev/xref/blob/master/README.md#{$e->errorCode}">{$e->errorCode}</a>):
+                    {$e->message}
+                    {if $e->lineNumber}
+                        at <a href="#{$e->lineNumber}">line {$e->lineNumber}</a>
+                    {/if}
+                </li>
+                {/foreach}
             {/foreach}
             </ul>
         {else}
