@@ -12,7 +12,8 @@ test:
 		--define lint.ignore-missing-class=PEAR_PackageFileManager2 \
 		--define lint.ignore-missing-class=PHPParser_Lexer \
 		--define lint.ignore-missing-class=PHPParser_Parser \
-		--define lint.ignore-missing-class=XHProfRuns_Default
+		--define lint.ignore-missing-class=XHProfRuns_Default \
+		--define project.exclude-path[]=tmp
 	## unittests
 	phpunit tests
 

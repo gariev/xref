@@ -110,6 +110,8 @@ $xref->loadPluginGroup("lint");
 
 $total_report = array();
 
+$exclude_paths = XRef::getConfigValue("project.exclude-path", array());
+
 $lint_engine = XRef::getConfigValue("xref.project-check", true)
         ? new XRef_LintEngine_ProjectCheck($xref, $use_cache)
         : new XRef_LintEngine_Simple($xref, $use_cache);
@@ -142,11 +144,14 @@ if (isset($options['git']) && $options['git']) {
         // incremental mode: find errors, that are new in <$new_rev> since <$old_rev>
         $file_provider_old = $scm->getFileProvider( $old_rev );
         $file_provider_new = $scm->getFileProvider( $new_rev );
+        $file_provider_old->excludePaths($exclude_paths);
+        $file_provider_new->excludePaths($exclude_paths);
         $modified_files = $scm->getListOfModifiedFiles($old_rev, $new_rev);
         $total_report = $lint_engine->getIncrementalReport($file_provider_old, $file_provider_new, $modified_files);
     } else {
         // regular mode - find all errors in revision <$old_rev>
         $file_provider = $scm->getFileProvider( $old_rev );
+        $file_provider->excludePaths($exclude_paths);
         $total_report = $lint_engine->getReport($file_provider);
     }
 } else {
@@ -161,6 +166,7 @@ if (isset($options['git']) && $options['git']) {
         $paths = array(".");
     }
     $file_provider = new XRef_FileProvider_FileSystem( $paths );
+    $file_provider->excludePaths($exclude_paths);
     $total_report = $lint_engine->getReport($file_provider);
 }
 

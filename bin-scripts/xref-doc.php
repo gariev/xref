@@ -35,9 +35,7 @@ $plugins = $xref->getPlugins("XRef_IDocumentationPlugin");
 $path = XRef::getConfigValue("project.source-code-dir");
 $file_provider = new XRef_FileProvider_FileSystem( $path );
 $exclude_paths = XRef::getConfigValue("project.exclude-path", array());
-if ($exclude_paths) {
-    $file_provider->excludePaths($exclude_paths);
-}
+$file_provider->excludePaths($exclude_paths);
 $numberOfFiles = 0;
 $numberOfCodeLines = 0;
 

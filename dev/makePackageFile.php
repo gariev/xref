@@ -9,7 +9,7 @@ $pfm->setOptions( array(
     'baseinstalldir'    => 'XRef',
     'packagedirectory'  => '.',
     'filelistgenerator' => 'file',
-    'ignore'            => array('Makefile', 'dev/', '.idea', '.xref'),
+    'ignore'            => array('Makefile', 'dev/', '.idea', '.xref', 'tmp'),
     //'installexceptions' => array('bin' => '/'), // hm, doesn't  actually work
     'dir_roles'         => array(
         'bin'       => 'script',

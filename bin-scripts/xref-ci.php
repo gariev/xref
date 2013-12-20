@@ -29,13 +29,12 @@ if (XRef::needHelp() || count($arguments)) {
     exit(1);
 }
 
-$incremental= XRef::getConfigValue("ci.incremental", false);
-$xref       = new XRef();
+$incremental    = XRef::getConfigValue("ci.incremental", false);
+$xref           = new XRef();
 $xref->loadPluginGroup("lint");
-$scm        = $xref->getSourceCodeManager();
-$storage    = $xref->getStorageManager();
-
-
+$scm            = $xref->getSourceCodeManager();
+$storage        = $xref->getStorageManager();
+$exclude_paths  = XRef::getConfigValue("project.exclude-path", array());
 
 //
 // Normal run:
@@ -103,6 +102,8 @@ foreach ($branches as $branch_name => $current_rev) {
 
     $file_provider_old = $scm->getFileProvider($old_rev);
     $file_provider_new = $scm->getFileProvider($current_rev);
+    $file_provider_new->excludePaths($exclude_paths);
+    $file_provider_new->excludePaths($exclude_paths);
     $modified_files = $scm->getListOfModifiedFiles($old_rev, $current_rev);
     $lint_engine = XRef::getConfigValue("xref.project-check", true)
             ? new XRef_LintEngine_ProjectCheck($xref)
