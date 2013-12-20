@@ -65,7 +65,7 @@ class BaseLintTest extends BaseLintClass {
     }
 
     /**
-     * @expectedException Exception
+     * @expectedException XRef_ParseException
      */
     public function testException() {
         $code = '<?php

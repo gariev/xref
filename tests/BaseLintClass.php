@@ -69,7 +69,7 @@ class BaseLintClass extends PHPUnit_Framework_TestCase {
         foreach ($report as $file_name => $list) {
             foreach ($list as $e) {
                 if ($e->severity == XRef::FATAL) {
-                    throw new Exception("Can't parse file $file_name: $e->message");
+                    throw new XRef_DummyException("Can't parse file $file_name: $e->message");
                 }
             }
         }
@@ -98,4 +98,9 @@ class BaseLintClass extends PHPUnit_Framework_TestCase {
         }
     }
 }
+
+class XRef_DummyException extends Exception {
+    public function __construct($message) { parent::__construct($message); }
+}
+
 

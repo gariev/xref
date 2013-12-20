@@ -264,6 +264,9 @@ class FunctionSignatureTest extends BaseLintClass {
         );
     }
 
+    /**
+     * @requires PHP 5.3
+     */
     public function testNamespacedConstructors() {
         $codeA =
         '<?php

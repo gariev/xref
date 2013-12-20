@@ -22,7 +22,7 @@ class ProjectCheckTest extends BaseLintClass {
     }
 
     /**
-     * @expectedException Exception
+     * @expectedException XRef_DummyException
      */
     public function testException() {
         $code =

@@ -24,8 +24,65 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
 
     private static $lookupResultNotFound;
 
+    private static $overrideInternalFunctions = array();
+
     public function __construct() {
         self::$lookupResultNotFound = new XRef_LookupResult(XRef_LookupResult::NOT_FOUND);
+
+        // fix some weirdness - function signatures returned by reflection
+        // (or by "php --rf <function-name>") are inaccurate and
+        // different from documentation & from real world
+        $php_version = explode('.', phpversion());
+        $php_version_id = $php_version[0]*10000 + $php_version[1]*100 + $php_version[2];
+
+        if ($php_version_id < 50300) {
+            // hate php 5.2 - introspection is so inaccurate
+            // TODO: create a separate file with php 5.2 API
+            self::$overrideInternalFunctions = array_merge(
+                self::$overrideInternalFunctions,
+                array(
+                    'strlen'            => 'strlen($str)',
+                    'strncmp'           => 'strncmp($str1, $str2, $len)',
+
+                    'preg_split'        => 'preg_split($pattern, $subject, $limit = null, $flags = null)',
+                    'preg_replace'      => 'preg_replace($regex, $replace, $subject, $limit = null, $count = null)',
+                    'preg_match'        => 'preg_match($pattern, $subject, &$subpatterns = null, $flags = null, $offset = null)',
+                    'preg_replace_callback' => 'preg_replace_callback($regex, $callback, $subject, $limit = null, &$count = null)',
+                    'preg_match_all'    => 'preg_match_all($pattern, $subject, &$subpatterns, $flags = null, $offset = null)',
+
+                    'get_class'         => 'get_class($object = null)',
+                    'is_a'              => 'is_a($object, $class_name)',
+                    'function_exists'   => 'function_exists($function_name)',
+                    'token_get_all'     => 'token_get_all($source)',
+                    'token_name'        => 'token_name($token)',
+                    'defined'           => 'defined($constant_name)',
+
+                    'gzcompress'        => 'gzcompress($data, $level = null, $encoding = null)',
+                    'gzencode'          => 'gzencode($data, $level = null, $encoding_mode = null)',
+                    'gzuncompress'      => 'gzuncompress($data, $length = null)',
+                    'gzinflate'         => 'gzinflate($data, $length = null)',
+
+                    'posix_isatty'      => 'posix_isatty($fd)',
+                    'json_encode'       => 'json_encode($value, $flags = null)',
+                )
+            );
+        }
+
+        if ($php_version_id < 50400) {
+            // php 5.3 has some weirdness too
+            self::$overrideInternalFunctions = array_merge(
+                self::$overrideInternalFunctions,
+                array(
+                    'define'                => 'define($constant_name, $value, $case_insensitive = false)',
+                    'implode'               => 'implode($glue, $pieces = null)',    // allow 1-arg version of implode
+                    'spl_autoload_register' => 'spl_autoload_register($autoload_function = null, $throw = true, $prepend = false)',
+                    // the first param must be passed by reference
+                    // all other parameters are optional and do not require pass-by-ref
+                    'array_multisort'       => 'array_multisort(&$array, ...)',
+                )
+            );
+        }
+
     }
 
     //
@@ -239,8 +296,12 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             $functions = array();
             $defined_functions = get_defined_functions();
             foreach ($defined_functions["internal"] as $function_name) {
-                $rf = new ReflectionFunction($function_name);
-                $functions[$function_name] = $this->getFunctionByReflection($rf);
+                if (isset(self::$overrideInternalFunctions[$function_name])) {
+                    $functions[$function_name] = self::getFunctionFromString(self::$overrideInternalFunctions[$function_name]);
+                } else {
+                    $rf = new ReflectionFunction($function_name);
+                    $functions[$function_name] = $this->getFunctionByReflection($rf);
+                }
             }
 
             //
@@ -390,41 +451,6 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             $p->isPassedByReference = $rp->isPassedByReference();
             $m->parameters[] = $p;
         }
-
-        // fix some weirdness - function signatures returned by reflection
-        // (or by "php --rf <function-name>") are different from documentation
-        if ($m->name == 'define') {
-            $m->parameters[2]->hasDefaultValue = true;
-        }
-
-        if ($m->name == 'implode') {
-            $m->parameters[1]->hasDefaultValue = true;
-        }
-
-        if ($m->name == 'spl_autoload_register') {
-            if (count($m->parameters) < 2) {
-                $p = new XRef_FunctionParameter();
-                $p->hasDefaultValue = true;
-                $p->name = 'throw';
-                $m->parameters[] = $p;
-            }
-            if (count($m->parameters) < 3) {
-                $p = new XRef_FunctionParameter();
-                $p->hasDefaultValue = true;
-                $p->name = 'prepend';
-                $m->parameters[] = $p;
-            }
-        }
-
-        if ($m->name == 'array_multisort') {
-            // the first param must be passed by reference
-            // all other parameters are optional and do not require pass-by-ref
-            $p0 = $m->parameters[0];
-            $p1 = new XRef_FunctionParameter();
-            $p1->name = '...';
-            $m->parameters = array($p0, $p1);
-        }
-
         return $m;
     }
 
@@ -448,10 +474,10 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         $arg_list = explode(',', $matches[3]);
         for ($i = 0; $i < count($arg_list); ++$i) {
             $t = $arg_list[$i];
-            if (preg_match('#^\\s*(&)?\s*\\$(\\w+)(?:\\s*=)?#', $t, $matches)) {
+            if (preg_match('#^\\s*(&)?\s*(\\$\\w+|\\.\\.\\.)(\\s*=)?#', $t, $matches)) {
                 $p = new XRef_FunctionParameter();
                 $p->isPassedByReference = (bool) $matches[1];
-                $p->name = $matches[2];
+                $p->name = ($matches[2] == '...') ? '...' : substr($matches[2], 1);
                 $p->hasDefaultValue = count($matches) > 3 && $matches[3];
                 $function->parameters[] = $p;
             } else {
