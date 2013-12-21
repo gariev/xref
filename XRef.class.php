@@ -124,7 +124,7 @@ class XRef {
     }
 
     public static function version() {
-        return "1.1.0-rc1";
+        return "1.1.0";
     }
 
     /*----------------------------------------------------------------
