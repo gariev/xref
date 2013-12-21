@@ -40,7 +40,7 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             // so instead of relying on it, let's read prepared
             // descriptions of core functions
             $data_dir = ("@data_dir@" == "@"."data_dir@") ?
-                  dirname(__FILE__) . "/../../data" : "@data_dir@/XRef";
+                  dirname(__FILE__) . "/../../data" : "@data_dir@/XRef/data";
             $php_52_functions_file = $data_dir . "/php5.2.functions.ser";
             $content = file_get_contents($php_52_functions_file);
             if ($content === false) {
