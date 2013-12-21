@@ -36,36 +36,21 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         $php_version_id = $php_version[0]*10000 + $php_version[1]*100 + $php_version[2];
 
         if ($php_version_id < 50300) {
-            // hate php 5.2 - introspection is so inaccurate
-            // TODO: create a separate file with php 5.2 API
-            self::$overrideInternalFunctions = array_merge(
-                self::$overrideInternalFunctions,
-                array(
-                    'strlen'            => 'strlen($str)',
-                    'strncmp'           => 'strncmp($str1, $str2, $len)',
-
-                    'preg_split'        => 'preg_split($pattern, $subject, $limit = null, $flags = null)',
-                    'preg_replace'      => 'preg_replace($regex, $replace, $subject, $limit = null, $count = null)',
-                    'preg_match'        => 'preg_match($pattern, $subject, &$subpatterns = null, $flags = null, $offset = null)',
-                    'preg_replace_callback' => 'preg_replace_callback($regex, $callback, $subject, $limit = null, &$count = null)',
-                    'preg_match_all'    => 'preg_match_all($pattern, $subject, &$subpatterns, $flags = null, $offset = null)',
-
-                    'get_class'         => 'get_class($object = null)',
-                    'is_a'              => 'is_a($object, $class_name)',
-                    'function_exists'   => 'function_exists($function_name)',
-                    'token_get_all'     => 'token_get_all($source)',
-                    'token_name'        => 'token_name($token)',
-                    'defined'           => 'defined($constant_name)',
-
-                    'gzcompress'        => 'gzcompress($data, $level = null, $encoding = null)',
-                    'gzencode'          => 'gzencode($data, $level = null, $encoding_mode = null)',
-                    'gzuncompress'      => 'gzuncompress($data, $length = null)',
-                    'gzinflate'         => 'gzinflate($data, $length = null)',
-
-                    'posix_isatty'      => 'posix_isatty($fd)',
-                    'json_encode'       => 'json_encode($value, $flags = null)',
-                )
-            );
+            // hate php 5.2 - introspection is so inaccurate,
+            // so instead of relying on it, let's read prepared
+            // descriptions of core functions
+            $data_dir = ("@data_dir@" == "@"."data_dir@") ?
+                  dirname(__FILE__) . "/../../data" : "@data_dir@/XRef";
+            $php_52_functions_file = $data_dir . "/php5.2.functions.ser";
+            $content = file_get_contents($php_52_functions_file);
+            if ($content === false) {
+                throw new Exception("Can't read data from file '$php_52_functions_file'");
+            }
+            $functions = unserialize($content);
+            if ($functions === false) {
+                throw new Exception("Can't unserialize data from '$php_52_functions_file'");
+            }
+            self::$overrideInternalFunctions = array_merge(self::$overrideInternalFunctions, $functions);
         }
 
         if ($php_version_id < 50400) {
@@ -82,7 +67,6 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
                 )
             );
         }
-
     }
 
     //
@@ -462,7 +446,7 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
     // output: XRef_Function object
     public static function getFunctionFromString($str) {
         // TODO: tokenize all $str and get rig of regular expressions
-        if (!preg_match('#^\\s*(?:([\\w\\\\]+|\\?)::)?([\\w\\\\]+)\\s*\\((.+)\\)\\s*$#', $str, $matches)) {
+        if (!preg_match('#^\\s*(?:([\\w\\\\]+|\\?)::)?([\\w\\\\]+)\\s*\\((.*)\\)\\s*$#', $str, $matches)) {
             throw new Exception("Can't parse function specification from config file: $str");
         }
 
@@ -471,19 +455,22 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         $function->className = ($matches[1]) ? $matches[1] : null;
         $function->index = $function->bodyStarts = $function->bodyEnds = $function->nameIndex = $function->nameStartIndex = -1;
 
-        $arg_list = explode(',', $matches[3]);
-        for ($i = 0; $i < count($arg_list); ++$i) {
-            $t = $arg_list[$i];
-            if (preg_match('#^\\s*(&)?\s*(\\$\\w+|\\.\\.\\.)(\\s*=)?#', $t, $matches)) {
-                $p = new XRef_FunctionParameter();
-                $p->isPassedByReference = (bool) $matches[1];
-                $p->name = ($matches[2] == '...') ? '...' : substr($matches[2], 1);
-                $p->hasDefaultValue = count($matches) > 3 && $matches[3];
-                $function->parameters[] = $p;
-            } else {
-                throw new Exception("Can't parse function parameter '$t' in $str");
+        if (strlen($matches[3])) {
+            $arg_list = explode(',', $matches[3]);
+            for ($i = 0; $i < count($arg_list); ++$i) {
+                $t = $arg_list[$i];
+                if (preg_match('#^\\s*(&)?\s*(\\$\\w+|\\.\\.\\.)(\\s*=)?#', $t, $matches)) {
+                    $p = new XRef_FunctionParameter();
+                    $p->isPassedByReference = (bool) $matches[1];
+                    $p->name = ($matches[2] == '...') ? '...' : substr($matches[2], 1);
+                    $p->hasDefaultValue = count($matches) > 3 && $matches[3];
+                    $function->parameters[] = $p;
+                } else {
+                    throw new Exception("Can't parse function parameter '$t' in $str");
+                }
             }
         }
+
         return $function;
     }
 
