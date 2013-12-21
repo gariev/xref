@@ -495,6 +495,32 @@ class Foo {
     echo $b->prop;  // undefined!
 ```
 
+* <a name="xr091"></a> **Unknown function (%s)** (severity: warning, code: xr091)
+
+    Either the function's name is misspelled, or it's defined somewhere outside of reach of xref.
+    Use **lint.add-function-signature[]** config directive to make the function known.
+
+* <a name="xr092"></a> **Possible call of method (%s) of class (%s) as function** (severity: warning, code: xr092)
+
+    Class method is called without a corresponding prefix ($this-> for instance methods, or self:: or ClassName:: for static methods).
+
+* <a name="xr093"></a> **Wrong number of arguments for function/method (%s): (%s) instead of (%s)** (severity: warning, code: xr093)
+
+* <a name="xr094"></a> **Wrong number of arguments for constructor of class (%s): (%s) instead of (%s)** (severity: warning, code: xr094)
+
+* <a name="xr095"></a> **Default constructor of class (%s) doesn't accept arguments** (severity: warning, code: xr095)
+
+    Attempt to create an object of a class that doesn't define constructor, and to pass some parameters to the default constructor.
+    Since default constructor takes no arguments, the parameters will be lost.
+
+```php
+    // COUNTEREXAMPLE
+    class MyMessage { public $text; }
+    $m = new MyMessage("text");     // <-- warning - the text will be lost.
+                                    // Class MyMessage doesn't define constructor,
+                                    // and default constructor doesn't accept arguments
+```
+
 CONFIG FILE
 ===========
 
