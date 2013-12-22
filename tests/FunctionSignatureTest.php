@@ -90,6 +90,33 @@ class FunctionSignatureTest extends BaseLintClass {
         );
     }
 
+    public function testStaticMethodCall() {
+        $codeA =
+        '<?php
+            function foo($a) {}
+            class Foo {
+                public static function foo() { }
+                public static function bar() { }
+                public static function baz() {}
+
+                public static function test() {
+                    foo(1);         // ok, global function foo()
+                    self::foo();    // ok, method foo();
+                    Foo::bar();     // ok, method bar()
+                    static::baz();  // ok, method baz();
+                    bar();          // warning - it should be self::bar();
+                }
+            }
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA ),
+            array(
+                array('fileA.php', 'bar', XRef::WARNING, 13),
+            )
+        );
+    }
+
+
     public function testFunctionsWithBrokenReflections() {
         $codeA =
         '<?php

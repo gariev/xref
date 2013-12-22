@@ -101,8 +101,10 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
                 } elseif ($pp->kind == T_DOUBLE_COLON) {
                     // Foo::bar();
                     // Foo\Bar::bar();
+                    // self::foo();
+                    // static::bar();
                     $pp = $pp->prevNS();
-                    while ($pp->kind == T_NS_SEPARATOR || $pp->kind == T_STRING) {
+                    while ($pp->kind == T_NS_SEPARATOR || $pp->kind == T_STRING || $pp->kind == T_STATIC) {
                         $class_name = $pp->text . $class_name;
                         $pp = $pp->prevNS();
                     }
