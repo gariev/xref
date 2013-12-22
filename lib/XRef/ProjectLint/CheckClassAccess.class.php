@@ -365,10 +365,14 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
             }
 
             // 3. check that the called method is defined, not only declared.
-            // however, allow to call declared methods from abstract classes
+            // however, allow to call declared methods from abstract classes and traits
             if ($key == 'method' && is_null($lr->elements[0]->bodyStarts)) {
                 $lc = $db->lookupClass($from_class);
-                if (!$lc || $lc->code != XRef_LookupResult::FOUND || !$lc->elements[0]->isAbstract) {
+                if ($lc && $lc->code == XRef_LookupResult::FOUND &&
+                    ($lc->elements[0]->isAbstract || $lc->elements[0]->kind == T_TRAIT))
+                {
+                    // ok, allow to call abstract method
+                } else {
                     return array(self::E_ACCESS_TO_UNDEFINED_METHOD, "$from_class/$class_name/$name", array($name, $class_name));
                 }
             }

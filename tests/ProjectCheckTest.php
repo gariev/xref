@@ -564,5 +564,49 @@ class ProjectCheckTest extends BaseLintClass {
 
     }
 
+    public function testCallAbstractMethods() {
+        $file_a =
+        '<?php
+            class A {
+                public function foo() {}
+                public function test() {
+                    $this->foo();               // ok
+                    $this->bar();               // error
+                }
+            }
+            abstract class B {
+                public function foo() {}
+                public abstract function bar();
+                public function test() {
+                    $this->foo();               // ok
+                    $this->bar();               // ok
+                    $this->baz();               // error
+                }
+
+            }
+
+            trait C {
+                public function foo() {}
+                public abstract function bar();
+
+                public function test() {
+                    $this->foo();               // ok
+                    $this->bar();               // ok
+                    $this->baz();               // error
+                }
+             }
+        ';
+
+        $this->checkProject(
+            array( 'fileA.php' => $file_a ),
+            array(
+                array('fileA.php', 'bar', XRef::ERROR, 6),
+                array('fileA.php', 'baz', XRef::ERROR, 15),
+                array('fileA.php', 'baz', XRef::ERROR, 27),
+            )
+        );
+
+    }
+
 
 }
