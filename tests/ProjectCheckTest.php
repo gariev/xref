@@ -493,6 +493,32 @@ class ProjectCheckTest extends BaseLintClass {
         );
     }
 
+    public function testConstructorFromInterface() {
+        $code =
+        '<?php
+            interface I {
+                public function __construct($a);
+            };
+
+            class A implements I {
+                public function __construct($a) { } // ok
+            }
+
+            class B implements I {
+                public function __construct($a) {
+                    parent::__construct($a);        // error
+                }
+            }
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $code ),
+            array(
+                array('fileA.php', '__construct', XRef::ERROR, 12),
+            )
+        );
+    }
+
+
     /**
      * @requires PHP 5.3
      */

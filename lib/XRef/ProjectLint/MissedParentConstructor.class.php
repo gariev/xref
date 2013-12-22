@@ -74,8 +74,10 @@ class XRef_ProjectLint_MissedParentConstructor extends XRef_APlugin implements X
         foreach ($file_slice as $c) {
             list ($class_name, $line_number) = $c;
             $lr = $db->lookupMethod($class_name, '__construct', true);
-            if ($lr->code == XRef_LookupResult::FOUND) {
-                // oops, there is a base-class constructor that won't be called
+            // if the base class has constructor, and the constructor is not abstract
+            // (it's valid to declare constructor in PHP's interfaces)
+            if ($lr->code == XRef_LookupResult::FOUND && !is_null($lr->elements[0]->bodyStarts)) {
+                // oops, child doesn't call parent's constructor
                 $base_class_name = $lr->elements[0]->className;
                 $error_descr = array(
                     'code'      => self::E_MISSED_CALL_TO_PARENT_CONSTRUCTOR,

@@ -373,7 +373,8 @@ class XRef_ProjectLint_CheckClassAccess extends XRef_APlugin implements XRef_IPr
                 {
                     // ok, allow to call abstract method
                 } else {
-                    return array(self::E_ACCESS_TO_UNDEFINED_METHOD, "$from_class/$class_name/$name", array($name, $class_name));
+                    $found_in_class = $lr->elements[0]->className;
+                    return array(self::E_ACCESS_TO_UNDEFINED_METHOD, "$from_class/$found_in_class/$name", array($name, $found_in_class));
                 }
             }
         }
