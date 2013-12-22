@@ -88,11 +88,12 @@ if (isset($options['no-cache']) && $options['no-cache']) {
 //
 // color: on/off/auto, for text output to console only
 //
-$color = XRef::getConfigValue("lint.color", '');
-if ($color=="auto") {
+$color = XRef::getConfigValue("lint.color", 'auto');
+if ($color === "auto") {
     $color = function_exists('posix_isatty') && posix_isatty(STDOUT);
 }
 $colorMap = array(
+    "fatal"     => "\033[0;31m",
     "error"     => "\033[0;31m",
     "warning"   => "\033[0;33m",
     "notice"    => "\033[0;32m",
@@ -178,8 +179,10 @@ foreach ($total_report as $file_name => $report) {
             $numberOfNotices++;
         } elseif ($code_defect->severity == XRef::WARNING) {
             $numberOfWarnings++;
-        } elseif ($code_defect->severity == XRef::ERROR) {
+        } elseif ($code_defect->severity == XRef::ERROR || $code_defect->severity == XRef::FATAL) {
             $numberOfErrors++;
+        } else {
+            error_log("Unknown severity: $code_defect->severity");
         }
     }
 }

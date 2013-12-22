@@ -660,6 +660,8 @@ class XRef {
         // default config values are for command-line xref tool only;
         // you have to specify a real config for xref-doc, CI and web-based tools
         $defaultConfig = array(
+            'project.exclude-path'  => array(),
+
             'xref.storage-manager'  => 'XRef_Storage_File',
 
             'doc.parsers'           => array('XRef_Parser_PHP'),
@@ -696,6 +698,7 @@ class XRef {
             'lint.ignore-missing-class'     => array('PEAR', 'PHPUnit_Framework_TestCase'), // most commonly used library classes
             'lint.ignore-error'       => array(),
             'lint.check-global-scope' => true,
+
             'ci.source-code-manager'  => 'XRef_SourceCodeManager_Git',
         );
         foreach ($defaultConfig as $key => $value) {
