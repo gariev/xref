@@ -812,7 +812,6 @@ class XRef_ParsedFile_PHP implements XRef_IParsedFile {
             $function->returnsReference = false;
         }
 
-        $function->nameStartIndex = $t->index; // TODO: remove this
         if ($t->kind == T_STRING) {
             $function->nameIndex = $t->index;
             if ($class) {

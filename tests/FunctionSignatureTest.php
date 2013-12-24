@@ -402,5 +402,44 @@ class FunctionSignatureTest extends BaseLintClass {
         );
     }
 
+    public function testGetArgs() {
+        $codeA =
+        '<?php
+            function a() {
+            }
+
+            function b() {
+                echo func_get_arg(0);
+            }
+
+            function c() {
+                print_r(func_get_args());
+            }
+            function d() {
+                return func_num_args();
+            }
+        ';
+        $codeB =
+        '<?php
+            a();        // ok
+            a(1);       // warning
+            b();        // ok
+            b(1);       // ok
+            b(1, 2, 3); // ok
+            c();        // ok
+            c(1, 2, 3); // ok
+            d();        // ok
+            d(1, 2, 3); // ok
+        ';
+
+        $this->checkProject(
+            array( 'fileA.php' => $codeA, 'fileB.php' => $codeB ),
+            array(
+                array('fileB.php', 'a', XRef::WARNING, 3),
+            )
+        );
+    }
+
+
 
 }

@@ -336,7 +336,12 @@ class XRef_ProjectLint_FunctionSignature extends XRef_APlugin implements XRef_IP
             }
 
             $f = $lr->elements[0];
-            if ($num_of_arguments != count($f->parameters)) {
+
+            // if the number of arguments doesn't match the number of parameters,
+            // (and the function called doesn't call func_get_args()
+            if ($num_of_arguments != count($f->parameters)
+                && ($f->flags & XRef_ProjectDatabase::FLAG_CALLS_GET_ARGS ) == 0)
+            {
 
                 $min_number_of_arguments = 0;
                 foreach ($f->parameters as $p) {

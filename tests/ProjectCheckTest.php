@@ -518,6 +518,45 @@ class ProjectCheckTest extends BaseLintClass {
         );
     }
 
+    public function testCallConstructorViaUserFunc() {
+        $code =
+        '<?php
+            class A {
+                public function __construct($a) { echo $a, "\n"; } // ok
+            }
+
+            class B extends A {
+                public function __construct($a) {
+                    call_user_func_array(
+                        array($this, "parent::__construct"),
+                        array(1)
+                    );
+                }
+            }
+
+            class C extends A {
+                public function __construct($a) {
+                    call_user_func(
+                        array($this, "parent::__construct"),
+                        2
+                    );
+                }
+            }
+
+            class D extends A {
+                public function __construct($a) { // warning
+                }
+            }
+        ';
+
+        $this->checkProject(
+            array( 'fileA.php' => $code ),
+            array(
+                array('fileA.php', 'D', XRef::WARNING, 24),
+            )
+        );
+    }
+
 
     /**
      * @requires PHP 5.3

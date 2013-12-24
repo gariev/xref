@@ -26,16 +26,16 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
 
     private static $overrideInternalFunctions = array();
 
+    const FLAG_CALLS_USER_FUNC = 1;
+    const FLAG_CALLS_GET_ARGS = 2;
+
     public function __construct() {
         self::$lookupResultNotFound = new XRef_LookupResult(XRef_LookupResult::NOT_FOUND);
 
         // fix some weirdness - function signatures returned by reflection
         // (or by "php --rf <function-name>") are inaccurate and
         // different from documentation & from real world
-        $php_version = explode('.', phpversion());
-        $php_version_id = $php_version[0]*10000 + $php_version[1]*100 + $php_version[2];
-
-        if ($php_version_id < 50300) {
+        if (version_compare(phpversion(), "5.3", "<")) {
             // hate php 5.2 - introspection is so inaccurate,
             // so instead of relying on it, let's read prepared
             // descriptions of core functions
@@ -53,20 +53,23 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
             self::$overrideInternalFunctions = array_merge(self::$overrideInternalFunctions, $functions);
         }
 
-        if ($php_version_id < 50400) {
-            // php 5.3 has some weirdness too
-            self::$overrideInternalFunctions = array_merge(
-                self::$overrideInternalFunctions,
-                array(
-                    'define'                => 'define($constant_name, $value, $case_insensitive = false)',
-                    'implode'               => 'implode($glue, $pieces = null)',    // allow 1-arg version of implode
-                    'spl_autoload_register' => 'spl_autoload_register($autoload_function = null, $throw = true, $prepend = false)',
-                    // the first param must be passed by reference
-                    // all other parameters are optional and do not require pass-by-ref
-                    'array_multisort'       => 'array_multisort(&$array, ...)',
-                )
-            );
-        }
+        // php 5.3 has some weirdness too
+        self::$overrideInternalFunctions = array_merge(
+            self::$overrideInternalFunctions,
+            array(
+                // the first param must be passed by reference
+                // all other parameters are optional and do not require pass-by-ref
+                'array_multisort'       => 'array_multisort(&$array, ...)',
+                'debug_backtrace'       => 'debug_backtrace($options = null, $limit = null)',
+                'define'                => 'define($constant_name, $value, $case_insensitive = false)',
+                'implode'               => 'implode($glue, $pieces = null)',    // allow 1-arg version of implode
+                'json_decode'           => 'json_decode($json, $assoc = null, $depth = null, $options = null)',
+                'php_uname'             => 'php_uname($mode = null)',
+                'spl_autoload_register' => 'spl_autoload_register($autoload_function = null, $throw = true, $prepend = false)',
+                'stream_set_timeout'    => 'stream_set_timeout($stream, $seconds, $microseconds = 0)',
+                'strtok'                => 'strtok($str, $token = null)',       // allow 1-arg version
+            )
+        );
     }
 
     //
@@ -87,9 +90,36 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
 
         // filter functions that are not methods and not closures
         $functions = array();
-        foreach ($pf->getMethods() as /** @var XRef_Method $m*/ $m) {
+        foreach ($pf->getMethods() as /** @var XRef_Function $m */ $m) {
             if (!$m->className && $m->name) {
                 $functions[] = $m;
+            }
+        }
+
+        // check if function/method calls
+        // - call_user_func()/call_user_func_array()
+        //  (then can't reliable say if child class calls constructor of its base class)
+        // - func_get_args()/func_num_args()
+        //  (then can't tell the number of arguments)
+
+        foreach ($pf->getMethods() as /** @var XRef_Function $m */ $m) {
+            if ($m->bodyStarts > 0) {
+                $t = $pf->getTokenAt($m->bodyStarts);
+                // TODO: remove all token iteration; use a real parser that returns AST
+                while ($t->index < $m->bodyEnds) {
+                    if ($t->kind == T_STRING) {
+                        $text = $t->text;
+                        $t = $t->nextNS();
+                        if ($t->text == '(') {
+                            if ($text == 'call_user_func' || $text == 'call_user_func_array') {
+                                $m->flags |= self::FLAG_CALLS_USER_FUNC;
+                            } elseif ($text == 'func_get_args' || $text == 'func_get_arg' || $text == 'func_num_args') {
+                                $m->flags |= self::FLAG_CALLS_GET_ARGS;
+                            }
+                        }
+                    }
+                    $t = $t->nextNS();
+                }
             }
         }
 
@@ -295,6 +325,13 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
                 "apc_fetch"     => 'apc_fetch($key, &$success = null)',
                 'apc_dec'       => 'apc_dec($key, $step = 1, &$success = null)',
                 'apc_inc'       => 'apc_inc($key, $step = 1, &$success = null)',
+                'apc_exists'    => 'apc_exists($keys)',
+                'apc_store'     => 'apc_store($key, $var, $ttl = null)',
+                'apc_delete'    => 'apc_delete($keys)',
+                'apc_clear_cache' => 'apc_clear_cache($info = null)',
+                'apc_cache_info'=> 'apc_cache_info($type = null, $limited = null)',
+                'apc_sma_info'  => 'apc_sma_info($limited = null)',
+
                 'pcntl_waitpid' => 'pcntl_waitpid ( $pid, &$status, $options = 0)',
                 'pcntl_wait'    => 'pcntl_wait ( &$status, $options = 0)',
             );
@@ -404,7 +441,7 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
     private function getMethodByReflection(ReflectionMethod $rm) {
         $m = new XRef_Function();
         $m->name = $rm->getName();
-        $m->index = $m->bodyStarts = $m->bodyEnds = $m->nameIndex = $m->nameStartIndex = -1;
+        $m->index = $m->bodyStarts = $m->bodyEnds = $m->nameIndex = -1;
         $m->isDeclaration = false;
         $m->attributes = $this->getAttributes($rm, true);
         $m->returnsReference = $rm->returnsReference();
@@ -425,7 +462,7 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
     private function getFunctionByReflection(ReflectionFunction $rf) {
         $m = new XRef_Function();
         $m->name = $rf->getName();
-        $m->index = $m->bodyStarts = $m->bodyEnds = $m->nameIndex = $m->nameStartIndex = -1;
+        $m->index = $m->bodyStarts = $m->bodyEnds = $m->nameIndex = -1;
         $m->isDeclaration = false;
         $m->returnsReference = $rf->returnsReference();
         foreach ($rf->getParameters() as /** @var ReflectionParameter $param */ $rp) {
@@ -453,7 +490,7 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
         $function = new XRef_Function();
         $function->name = $matches[2];
         $function->className = ($matches[1]) ? $matches[1] : null;
-        $function->index = $function->bodyStarts = $function->bodyEnds = $function->nameIndex = $function->nameStartIndex = -1;
+        $function->index = $function->bodyStarts = $function->bodyEnds = $function->nameIndex = -1;
 
         if (strlen($matches[3])) {
             $arg_list = explode(',', $matches[3]);

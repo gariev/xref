@@ -482,9 +482,9 @@ class XRef_Function {
     /** @var bool */
     public $isDeclaration;
     /** @var int - bitmask of XRef::MASK_* for methods */
-    public $attributes;
-
-    public $nameStartIndex; // TODO: remove this
+    public $attributes = 0;
+    // internal use only, subject to change
+    public $flags = 0;
 }
 
 class XRef_FunctionParameter {
