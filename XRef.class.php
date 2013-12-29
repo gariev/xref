@@ -282,7 +282,7 @@ class XRef {
         if (!$parser) {
             throw new Exception("No parser is registered for filetype $file_type ($filename)");
         }
-        if ($content==null) {
+        if (is_null($content)) {
             $content = file_get_contents($filename);
         }
 
