@@ -651,5 +651,22 @@ Some introductory text
         );
         $this->checkPhpCode($testPhpCode, $expectedDefects);
     }
+
+    public function testOutOfOrderSkipToToken() {
+        $testPhpCode = '<?php
+
+            abstract class Foo {
+                abstract public function foo();
+                public static $something;
+                public function test() {
+                    echo "Ok\n";
+                }
+            }
+        ';
+
+        $expectedDefects = array();
+        $this->checkPhpCode($testPhpCode, $expectedDefects);
+    }
+
 }
 

@@ -352,7 +352,9 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                         break;
 
                     case self::CMD_SKIP_TO_TOKEN:
-                        $i = $cmd[2];
+                        if ($cmd[2] > $i) {
+                            $i = $cmd[2];
+                        }
                         break;
 
                     case self::CMD_CHECK_USED_VARIABLES:
