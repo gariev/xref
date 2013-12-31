@@ -392,6 +392,8 @@ class Foo {
 * <a name="xr065"></a> **Can't check members of class (%s) because its definition is missing** (severity: warning, code: xr065)
 
     Caused by reference to any member (property, method or constant) of a class which definition is missing.
+    If a single file being checked with enabled option **xref.project-check**, all referenced user-defined classes
+    that are defined elsewhere will trigger this warnings; in this case turning the option off may be advisable.
 
 ```php
     echo A::MY_CONST;   // warning
@@ -499,6 +501,8 @@ class Foo {
 
     Either the function's name is misspelled, or it's defined somewhere outside of reach of xref.
     Use **lint.add-function-signature[]** config directive to make the function known.
+    If a single file being checked with enabled option **xref.project-check**, all referenced user-defined functions
+    that are defined elsewhere will trigger this warnings; in this case turning the option off may be advisable.
 
 * <a name="xr092"></a> **Possible call of method (%s) of class (%s) as function** (severity: warning, code: xr092)
 
@@ -576,6 +580,12 @@ List of config file parameters:
 
     The path where to look for plugins;
     the default XRef library dir will be searched even if not specified.
+
+* **xref.project-check** (boolean; optional)
+
+    Option to choose between checking all files as a project (i.e. checking cross-reference consistency
+    of declarations/references in files), or just checking each file independently. It's enabled by default,
+    which results in longer run time but more accurate lint report.
 
 * **doc.output-dir** (path; required)
 

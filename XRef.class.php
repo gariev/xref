@@ -663,6 +663,7 @@ class XRef {
             'project.exclude-path'  => array(),
 
             'xref.storage-manager'  => 'XRef_Storage_File',
+            'xref.project-check'    => true,
 
             'doc.parsers'           => array('XRef_Parser_PHP'),
             'doc.plugins'           => array(
