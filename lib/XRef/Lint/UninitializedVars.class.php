@@ -417,6 +417,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                     $n = $t->nextNS(); // next non-space token
                     if ($n->text == '(') {
                         $this->addCommand(array($pf->getIndexOfPairedBracket( $n->index ), self::CMD_SWITCH_TO_RELAXED_MODE, $t));
+                        $this->addDefect($t, self::E_LOSS_OF_STRICT_MODE);
                         continue;
                     }
                 }
@@ -424,6 +425,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                 if ($t->kind == T_EVAL) {
                     $n = self::skipTillText($t, ';');
                     $this->addCommand(array($n->index, self::CMD_SWITCH_TO_RELAXED_MODE, $t));
+                    $this->addDefect($t, self::E_LOSS_OF_STRICT_MODE);
                     continue;
                 }
                 // $$var notation in assignment.
@@ -443,6 +445,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                         if ($nn->text == '=') {
                             $s = self::skipTillText($n, ';');           // find the end of the statement
                             $this->addCommand(array($s->index, self::CMD_SWITCH_TO_RELAXED_MODE, $n));
+                            $this->addDefect($t, self::E_LOSS_OF_STRICT_MODE);
                         }
                     }
                 }
@@ -452,6 +455,7 @@ class XRef_Lint_UninitializedVars extends XRef_ALintPlugin {
                     $s = self::skipTillText($t, ';');               // find the end of the statement
                     if ($s) {
                         $this->addCommand(array($s->index, self::CMD_SWITCH_TO_RELAXED_MODE, $t));
+                        $this->addDefect($t, self::E_LOSS_OF_STRICT_MODE);
                     }
                 }
             }
