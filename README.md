@@ -551,7 +551,12 @@ List of config file parameters:
 
 * **project.source-code-dir[]** (array of paths; required)
 
-    The set of paths where to look for source code of your project to create documentation
+    The set of paths where to look for source code of your project to create
+    documentation/lint report
+
+* **project.exclude-path** (array of paths; optional)
+
+    Exclude given files or directories from lint check
 
 * **xref.data-dir** (path, required)
 
