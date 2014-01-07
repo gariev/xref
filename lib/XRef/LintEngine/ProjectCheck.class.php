@@ -134,7 +134,7 @@ class XRef_LintEngine_ProjectCheck extends XRef_LintEngine_Simple {
         foreach ($files as $filename) {
             unset( $this->filesMap[$filename] );
             $this->report[$filename] = $this->getFileReportCached($to, $filename);
-            $this->slices[$filename] = $this->getFileSlicesCached($from, $filename);
+            $this->slices[$filename] = $this->getFileSlicesCached($to, $filename);
         }
         $new_report =  $this->collectReport();
 

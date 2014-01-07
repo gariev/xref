@@ -213,9 +213,47 @@ class LintEngineTest extends PHPUnit_Framework_TestCase {
         $this->assertTrue($report["fileB.php"][0]->tokenText == 'B');
 
         // and now something interesting - try to edit one file, get an error in another one
+        $lint_engine = new XRef_LintEngine_ProjectCheck($this->xref, false);
+        $file_provider1 = new XRef_FileProvider_InMemory( array(
+            'fileA.php' => '<?php class A { const FOO = 1; } ',
+            'fileB.php' => '<?php echo A::FOO; ',
+        ));
+        $file_provider2 = new XRef_FileProvider_InMemory( array(
+            'fileA.php' => '<?php class A { } ',
+            'fileB.php' => '<?php echo A::FOO; ',
+        ));
+        $report = $lint_engine->getIncrementalReport($file_provider1, $file_provider2, array("fileA.php", "fileB.php"));
+        $this->assertTrue(count($report) == 1);
+        $this->assertTrue(isset($report["fileB.php"]));
+        $this->assertTrue(count($report["fileB.php"]) == 1);
+        $this->assertTrue($report["fileB.php"][0]->tokenText == 'FOO');
 
     }
 
+    public function testIncrementalProjectCheckOnDeletedFile() {
+        // assert than there are no errors if both files are modified
+        $lint_engine = new XRef_LintEngine_ProjectCheck($this->xref, false);
+        $file_provider1 = new XRef_FileProvider_InMemory( array(
+            'fileA.php' => '<?php class A { const FOO = 1; } ',
+            'fileB.php' => '<?php echo A::FOO; ',
+        ));
+        $file_provider2 = new XRef_FileProvider_InMemory( array(
+            'fileA.php' => '<?php class A { } ',
+            'fileB.php' => '<?php echo "hi"; ',
+        ));
+        $report = $lint_engine->getIncrementalReport($file_provider1, $file_provider2, array("fileA.php", "fileB.php"));
+        $this->assertTrue(count($report) == 0);
 
-
+        // and no errors if one file is deleted
+        $lint_engine = new XRef_LintEngine_ProjectCheck($this->xref, false);
+        $file_provider1 = new XRef_FileProvider_InMemory( array(
+            'fileA.php' => '<?php class A { const FOO = 1; } ',
+            'fileB.php' => '<?php echo A::FOO; ',
+        ));
+        $file_provider2 = new XRef_FileProvider_InMemory( array(
+            'fileA.php' => '<?php class A { } ',
+        ));
+        $report = $lint_engine->getIncrementalReport($file_provider1, $file_provider2, array("fileA.php", "fileB.php"));
+        $this->assertTrue(count($report) == 0);
+    }
 }
