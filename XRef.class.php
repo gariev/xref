@@ -105,6 +105,13 @@ class XRef {
 
     /** constructor */
     public function __construct() {
+        if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+            // Installed via composer (standalone)
+            require_once __DIR__ . '/vendor/autoload.php';
+        } elseif (dirname(dirname(__DIR__)) . '/autoload.php') {
+            // Installed via composer (as dependency)
+            require_once dirname(dirname(__DIR__)) . '/autoload.php';
+        }
         spl_autoload_register(array($this, "autoload"), true);
 
         // compat mode
