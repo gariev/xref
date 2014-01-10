@@ -34,9 +34,10 @@ try {
 }
 
 if (XRef::needHelp()) {
+    $program = basename($argv[0]);
     XRef::showHelpScreen(
         "xref-lint - tool to find problems in PHP source code",
-        "$argv[0] [options] [files to check]"
+        "$program [options] [files to check]"
     );
     exit(1);
 }

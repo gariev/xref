@@ -1,0 +1,20 @@
+{
+    "name": "gariev/xref",
+    "description": "xref-lint",
+    "license": "Apache-2.0",
+    "require": {
+        "smarty/smarty": "3.1.*"
+    },
+    "bin": [
+        "bin/xref-ci",
+        "bin/git-xref-lint",
+        "bin/xref-doc",
+        "bin/xref-lint"
+    ],
+    "authors": [
+        {
+            "name": "gariev",
+            "email": "gariev@hotmail.com"
+        }
+    ]
+}

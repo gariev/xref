@@ -105,6 +105,13 @@ class XRef {
 
     /** constructor */
     public function __construct() {
+        if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+            // Installed via composer (standalone)
+            require_once __DIR__ . '/vendor/autoload.php';
+        } elseif (dirname(dirname(__DIR__)) . '/autoload.php') {
+            // Installed via composer (as dependency)
+            require_once dirname(dirname(__DIR__)) . '/autoload.php';
+        }
         spl_autoload_register(array($this, "autoload"), true);
 
         // compat mode
@@ -1219,7 +1226,7 @@ class XRef {
     public static function showHelpScreen($tool_name, $usage_string = null) {
         global $argv;
         if (!$usage_string) {
-            $usage_string = "$argv[0] [options]";
+            $usage_string = basename($argv[0]) . " [options]";
         }
 
         echo "$tool_name, v. " . self::version() . "\n";
