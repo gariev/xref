@@ -41,6 +41,15 @@ pear channel-discover pear.xref-lint.net
 pear install xref/XRef
 ```
 
+Composer installation
+---------------------
+
+```sh
+echo '{"require":{"gariev/xref":"@dev"}}' > composer.json
+php composer.phar install
+export PATH=$PATH:`pwd`/vendor/bin
+```
+
 Install from git/source code
 ----------------------------
 
@@ -68,11 +77,13 @@ will index files for faster checks.
 1.  Edit the config file (.xref/xref.ini). See section CONFIG FILE below;
     also see sample config in examples/xref.ini.sample
 
-2.  Download and install Smarty template engine. <http://www.smarty.net/>;
+2.  [If installed via Composer, Smarty will be installed as dependency and the step is not needed]
+    Download and install Smarty template engine. <http://www.smarty.net/>;
     any of versions 2.x or 3.x should work, version 2 takes less memory.
     Set the path to Smarty.class.php file in *xref.smarty-class* param of config file.
 
-3.  Configure web server to run scripts from web-scripts dir XRef/web-scripts/,
+3.  [The step is optional]
+    Configure web server to run scripts from web-scripts dir XRef/web-scripts/,
     see sample Apache config file in examples/httpd.conf. To view where
     examples and web-scripts are intalled, run 'xref-lint --help'.
 

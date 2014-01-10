@@ -1374,8 +1374,13 @@ class XRef {
      * @param array $templateParams
      */
     public function fillTemplate($templateName, $templateParams) {
-        $smartyClassPath = self::getConfigValue("xref.smarty-class");
-        require_once $smartyClassPath;
+
+        // when xref is installed by composer, Smarty is loaded as dependency.
+        // otherwise, use config to find out where it's installed.
+        if (! class_exists('Smarty')) {
+            $smartyClassPath = self::getConfigValue("xref.smarty-class");
+            require_once $smartyClassPath;
+        }
 
         $smartyTmpDir = self::getConfigValue("xref.data-dir");
         self::createDirIfNotExist($smartyTmpDir);

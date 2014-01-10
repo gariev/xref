@@ -12,7 +12,7 @@
 ## @licence http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
 ##
 
-for dir in '@php_dir@/XRef/bin-scripts' $(dirname $0)/../bin-scripts $(dirname $0)/../vendor/gariev/xref/bin-scripts
+for dir in '@php_dir@/XRef/bin-scripts' $(dirname $0)/../bin-scripts $(dirname $0)/../gariev/xref/bin-scripts
 do
     if [ -d "$dir" ]; then
         SCRIPTDIR="$dir"
