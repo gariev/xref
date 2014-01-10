@@ -18,13 +18,13 @@ do
     fi
 done
 
-if [ "@php_bin@" == @"php_bin@" ]; then
+if [ "@php_bin@" = @"php_bin@" ]; then
     PHP=php
 else
     PHP="@php_bin@"
 fi
 
-if [ "$XREF_MEMORY_LIMIT" == "" ]; then
+if [ "$XREF_MEMORY_LIMIT" = "" ]; then
 	XREF_MEMORY_LIMIT=1G
 fi
 
