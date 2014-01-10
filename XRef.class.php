@@ -1226,7 +1226,7 @@ class XRef {
     public static function showHelpScreen($tool_name, $usage_string = null) {
         global $argv;
         if (!$usage_string) {
-            $usage_string = "$argv[0] [options]";
+            $usage_string = basename($argv[0]) . " [options]";
         }
 
         echo "$tool_name, v. " . self::version() . "\n";
