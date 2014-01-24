@@ -105,12 +105,14 @@ class XRef {
 
     /** constructor */
     public function __construct() {
-        if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+        // note: __DIR__ is only defined in php 5.3+
+        $dir = dirname(__FILE__);
+        if (file_exists($dir . '/vendor/autoload.php')) {
             // Installed via composer (standalone)
-            require_once __DIR__ . '/vendor/autoload.php';
-        } elseif (file_exists(dirname(dirname(__DIR__)) . '/autoload.php')) {
+            require_once $dir . '/vendor/autoload.php';
+        } elseif (file_exists(dirname(dirname($dir)) . '/autoload.php')) {
             // Installed via composer (as dependency)
-            require_once dirname(dirname(__DIR__)) . '/autoload.php';
+            require_once dirname(dirname($dir)) . '/autoload.php';
         }
         spl_autoload_register(array($this, "autoload"), true);
 

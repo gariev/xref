@@ -24,7 +24,11 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
 
     private static $lookupResultNotFound;
 
+    /* map: string(function name) => string(function signature) */
     private static $overrideInternalFunctions = array();
+
+    /* map: string(class name) => array ( string(method name) => string(method signature) */
+    private static $overrideInternalClasses = array();
 
     const FLAG_CALLS_USER_FUNC = 1;
     const FLAG_CALLS_GET_ARGS = 2;
@@ -51,6 +55,11 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
                 throw new Exception("Can't unserialize data from '$php_52_functions_file'");
             }
             self::$overrideInternalFunctions = array_merge(self::$overrideInternalFunctions, $functions);
+
+            self::$overrideInternalClasses = array(
+                'DateTime'      => array('__construct' => '__construct($time=null, $object=null)'),
+                'DateTimeZone'  => array('__construct' => '__construct($timezone)'),
+            );
         }
 
         // php 5.3 has some weirdness too
@@ -416,7 +425,12 @@ class XRef_ProjectDatabase implements XRef_IProjectDatabase {
 
 
         foreach ($rc->getMethods() as $rm) {
-            $m = $this->getMethodByReflection($rm);
+            $method_name = $rm->getName();
+            if (isset(self::$overrideInternalClasses[$class_name]) && isset(self::$overrideInternalClasses[$class_name][$method_name])) {
+                $m = $this->getFunctionFromString(self::$overrideInternalClasses[$class_name][$method_name]);
+            } else {
+                $m = $this->getMethodByReflection($rm);
+            }
             $m->className = $class_name;
             $c->methods[] = $m;
         }

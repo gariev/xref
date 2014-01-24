@@ -149,6 +149,22 @@ class FunctionSignatureTest extends BaseLintClass {
         );
     }
 
+    public function testClassesWithBrokenReflections() {
+        $codeA =
+        '<?php
+            $a = new DateTime();        // ok
+            $b = new DateTime(1);       // ok
+            $c = new DateTime(1, new DateTimeZone("UTC")); // ok
+            $d = new DateTime(1, 2, 3); // warning
+        ';
+        $this->checkProject(
+            array( 'fileA.php' => $codeA ),
+            array(
+                array('fileA.php', 'DateTime',    XRef::WARNING, 5),
+            )
+        );
+    }
+
     public function testMethodsThis() {
         $codeA =
         '<?php
