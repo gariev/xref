@@ -45,8 +45,7 @@ Composer installation
 ---------------------
 
 ```sh
-echo '{"require":{"gariev/xref":"@dev"}}' > composer.json
-php composer.phar install
+php composer.phar --stability=dev create-project gariev/xref
 export PATH=$PATH:`pwd`/vendor/bin
 ```
 
