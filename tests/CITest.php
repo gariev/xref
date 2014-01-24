@@ -70,7 +70,7 @@ class CITest extends PHPUnit_Framework_TestCase {
         $expected_body = <<<END
             <html><body>
             Hi, you've got this e-mail as the author (gariev) of commit 190fc6a to branch tests-git.
-            It looks like there are problems in file(s) modified since previsous revision 377d2ed:
+            It looks like there are problems in file(s) modified since previous revision 377d2ed:
                 <ul>
                     <li>broken.php</li>
                     <ul>

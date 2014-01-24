@@ -1,7 +1,7 @@
 <html><body>
 
 Hi, you've got this e-mail as the author ({$commitInfo.an}) of commit {$currentRevShort} to branch {$branchName}.
-It looks like there are problems in file(s) modified since previsous revision {$oldRevShort}:
+It looks like there are problems in file(s) modified since previous revision {$oldRevShort}:
 
 {if $fileErrors}
 {include file="include-lint-errors-list.tmpl" fileList=$fileErrors revision=$currentRev}
